@@ -580,7 +580,7 @@ calc.cumulative.muts <- function(data, normalization.constant) {
 
 ###############################################################
 ## Examine the rate of cumulative accumulation of mutations over time in gene sets
-## selected based on the density and multinomial measures.
+## selected based on the multinomial measures.
 
 ## break REL606 genes into deciles, based both on mutation density, as well as
 ## based on p-values from the multinomial test.
@@ -619,7 +619,7 @@ bottom.by.nonindelsv.gene.length <- sum(bottom.by.nonindelsv.mutation.data$gene_
 
 
 
-## NOTE: The multinom analysis here is  based ONLY on distribution of dN.
+## NOTE: The multinom analysis here is based ONLY on distribution of dN.
 
 ## NOTE: rate of accumulation depends on the size of the gene set,
 ## when looking at the left and right tails.
@@ -813,151 +813,35 @@ intergenic.plot <- plot.cumulative.muts(c.intergenic.snp.mutations,logscale=TRUE
 intergenic.plot
 
 #############################################################################
-## TODO: cut these analyses and plots: results are circular and give little information.
-## (push onto github first though, just in case).
-
-
-### make plots for the top, median, and bottom genes by dN mutation density.
-## IMPORTANT NOTE: THE UNDERLYING SETS OF GENES NEED TO BE THE SAME.
-
-#### Plots for the median genes.
-c.median.by.dN.dN <- filter(median.by.dN.mutation.data, Annotation=='missense') %>%
-    calc.cumulative.muts(median.by.dN.gene.length)
-c.median.by.dN.dS <- filter(median.by.dN.mutation.data, Annotation=='synonymous') %>%
-    calc.cumulative.muts(median.by.dN.gene.length)
-c.median.by.dN.nonsense <- filter(median.by.dN.mutation.data, Annotation=='nonsense') %>%
-    calc.cumulative.muts(median.by.dN.gene.length)
-c.median.by.dN.nonsense.indel.sv <- filter(median.by.dN.mutation.data,
-                                           Annotation %in% c("nonsense","indel","sv")) %>%
-    calc.cumulative.muts(median.by.dN.gene.length)
-
-## Now make the plot.
-median.density.by.dN.plot <- plot.cumulative.muts(c.median.by.dN.dN, my.color="purple") %>%
-    add.cumulative.mut.layer(c.median.by.dN.dS, my.color="green") %>%
-    add.cumulative.mut.layer(c.median.by.dN.nonsense, my.color="gray") %>%
-    add.cumulative.mut.layer(c.median.by.dN.nonsense.indel.sv, my.color="black")
-
-median.density.by.dN.plot
-ggsave(median.density.by.dN.plot,filename="../results/figures/median-density-by-dN.pdf")
-
-
-#### Plots for the top genes.
-c.top.by.dN.dN <- filter(top.by.dN.mutation.data, Annotation=='missense') %>%
-    calc.cumulative.muts(top.by.dN.gene.length)
-c.top.by.dN.dS <- filter(top.by.dN.mutation.data, Annotation=='synonymous') %>%
-    calc.cumulative.muts(top.by.dN.gene.length)
-c.top.by.dN.nonsense <- filter(top.by.dN.mutation.data, Annotation=='nonsense') %>%
-    calc.cumulative.muts(top.by.dN.gene.length)
-c.top.by.dN.nonsense.indel.sv <- filter(top.by.dN.mutation.data,
-                                           Annotation %in% c("nonsense","indel","sv")) %>%
-    calc.cumulative.muts(top.by.dN.gene.length)
-
-## Now make the plot.
-top.density.by.dN.plot <- plot.cumulative.muts(c.top.by.dN.dN, my.color="purple") %>%
-    add.cumulative.mut.layer(c.top.by.dN.dS, my.color="green") %>%
-    add.cumulative.mut.layer(c.top.by.dN.nonsense, my.color="gray") %>%
-    add.cumulative.mut.layer(c.top.by.dN.nonsense.indel.sv, my.color="black")
-
-top.density.by.dN.plot
-ggsave(top.density.by.dN.plot,filename="../results/figures/top-density-by-dN.pdf")
-
-#### Plots for the bottom genes (no dN in these genes.)
-c.bottom.by.dN.dS <- filter(bottom.by.dN.mutation.data, Annotation=='synonymous') %>%
-    calc.cumulative.muts(bottom.by.dN.gene.length)
-c.bottom.by.dN.nonsense <- filter(bottom.by.dN.mutation.data, Annotation=='nonsense') %>%
-    calc.cumulative.muts(bottom.by.dN.gene.length)
-c.bottom.by.dN.nonsense.indel.sv <- filter(bottom.by.dN.mutation.data,
-                                           Annotation %in% c("nonsense","indel","sv")) %>%
-    calc.cumulative.muts(bottom.by.dN.gene.length)
-
-## Now make the plot.
-bottom.density.by.dN.plot <- plot.cumulative.muts(c.bottom.by.dN.dS, my.color="green") %>%
-    add.cumulative.mut.layer(c.bottom.by.dN.nonsense, my.color="gray") %>%
-    add.cumulative.mut.layer(c.bottom.by.dN.nonsense.indel.sv, my.color="black")
-
-bottom.density.by.dN.plot
-ggsave(bottom.density.by.dN.plot,filename="../results/figures/bottom-density-by-dN.pdf")
-
-
-
-#############################################################################
-### make plots for the top, median, and bottom genes by nonindelsv mutation density.
-## IMPORTANT NOTE: THE UNDERLYING SETS OF GENES NEED TO BE THE SAME.
-
-#### Plots for the median genes.
-c.median.by.nonindelsv.dN <- filter(median.by.nonindelsv.mutation.data, Annotation=='missense') %>%
-    calc.cumulative.muts(median.by.nonindelsv.gene.length)
-c.median.by.nonindelsv.dS <- filter(median.by.nonindelsv.mutation.data, Annotation=='synonymous') %>%
-    calc.cumulative.muts(median.by.nonindelsv.gene.length)
-
-
-## IMPORTANT: WHY DOESN'T THE MEDIAN HERE EXIST ???
-
-##c.median.by.nonindelsv.nonsense.indel.sv <- filter(median.by.nonindelsv.mutation.data,
- ##                                          Annotation %in% c("nonsense","indel","sv")) %>%
- ##   calc.cumulative.muts(median.by.nonindelsv.gene.length)
-
-## Now make the plot.
-median.density.by.nonindelsv.plot <- plot.cumulative.muts(c.median.by.nonindelsv.dN, my.color="purple") %>%
-    add.cumulative.mut.layer(c.median.by.nonindelsv.dS, my.color="green")
-
-median.density.by.nonindelsv.plot
-ggsave(median.density.by.nonindelsv.plot,filename="../results/figures/median-density-by-nonindelsv.pdf")
-
-
-#### Plots for the top genes.
-c.top.by.nonindelsv.dN <- filter(top.by.nonindelsv.mutation.data, Annotation=='missense') %>%
-    calc.cumulative.muts(top.by.nonindelsv.gene.length)
-c.top.by.nonindelsv.dS <- filter(top.by.nonindelsv.mutation.data, Annotation=='synonymous') %>%
-    calc.cumulative.muts(top.by.nonindelsv.gene.length)
-c.top.by.nonindelsv.nonsense <- filter(top.by.nonindelsv.mutation.data, Annotation=='nonsense') %>%
-    calc.cumulative.muts(top.by.nonindelsv.gene.length)
-c.top.by.nonindelsv.nonsense.indel.sv <- filter(top.by.nonindelsv.mutation.data,
-                                           Annotation %in% c("nonsense","indel","sv")) %>%
-    calc.cumulative.muts(top.by.nonindelsv.gene.length)
-
-## Now make the plot.
-top.density.by.nonindelsv.plot <- plot.cumulative.muts(c.top.by.nonindelsv.dN, my.color="purple") %>%
-    add.cumulative.mut.layer(c.top.by.nonindelsv.dS, my.color="green") %>%
-    add.cumulative.mut.layer(c.top.by.nonindelsv.nonsense, my.color="gray") %>%
-    add.cumulative.mut.layer(c.top.by.nonindelsv.nonsense.indel.sv, my.color="black")
-
-top.density.by.nonindelsv.plot
-ggsave(top.density.by.nonindelsv.plot,filename="../results/figures/top-density-by-nonindelsv.pdf")
-
-#### Plots for the bottom genes (no nonindelsv in these genes.)
-c.bottom.by.nonindelsv.dN <- filter(bottom.by.nonindelsv.mutation.data, Annotation=='missense') %>%
-    calc.cumulative.muts(bottom.by.nonindelsv.gene.length)
-
-c.bottom.by.nonindelsv.dS <- filter(bottom.by.nonindelsv.mutation.data, Annotation=='synonymous') %>%
-    calc.cumulative.muts(bottom.by.nonindelsv.gene.length)
-
-## Now make the plot.
-bottom.density.by.nonindelsv.plot <- plot.cumulative.muts(c.bottom.by.nonindelsv.dN, my.color="purple") %>%
-    add.cumulative.mut.layer(c.bottom.by.nonindelsv.dS, my.color="green")
-
-bottom.density.by.nonindelsv.plot
-ggsave(bottom.density.by.nonindelsv.plot,filename="../results/figures/bottom-density-by-nonindelsv.pdf")
-
-#####################################################
-
-
-
-
-
 ## examining the rates that genes in the left-hand tail and right-hand tail
 ## of the positive selection distribution get hit by mutations.
 ## TODO: what is the relationship, if any, between genes with dN (or not)
 ## and those with nonsense.indels.sv's, (or not), and rates of accumulation?
 ## Is there a relationship between genes under positive or purifying selection?
 
+### make plots for the top, median, and bottom genes by multinomial test.
+## IMPORTANT NOTE: THE UNDERLYING SETS OF GENES NEED TO BE THE SAME.
 
+#### Plots for multinom1to50 genes.
+c.multinom1to50.dN <- filter(multinom.1to50.mutation.data, Annotation=='missense') %>%
+    calc.cumulative.muts(multinom.1to50.length)
+c.multinom1to50.dS <- filter(multinom.1to50.mutation.data, Annotation=='synonymous') %>%
+    calc.cumulative.muts(multinom.1to50.length)
+c.multinom1to50.nonsense <- filter(multinom.1to50.mutation.data, Annotation=='nonsense') %>%
+    calc.cumulative.muts(multinom.1to50.length)
+c.multinom1to50.nonsense.indel.sv <- filter(multinom.1to50.mutation.data,
+                                           Annotation %in% c("nonsense","indel","sv")) %>%
+    calc.cumulative.muts(multinom.1to50.length)
 
+## Now make the plot.
+multinom1to50.plot <- plot.cumulative.muts(c.multinom1to50.dN, my.color="purple") %>%
+    add.cumulative.mut.layer(c.multinom1to50.dS, my.color="green") %>%
+    add.cumulative.mut.layer(c.multinom1to50.nonsense, my.color="gray") %>%
+    add.cumulative.mut.layer(c.multinom1to50.nonsense.indel.sv, my.color="black")
 
+multinom1to50.plot
+ggsave(multinom1to50.plot,filename="../results/figures/multinom-1to50.pdf")
 
-c.multi.mutations <- calc.cumulative.muts(left.tail.mutation.data,left.tail.length)
-c.left.tail2.mutations <- calc.cumulative.muts(left.tail2.mutation.data,left.tail2.length)
-c.right.tail.mutations <- calc.cumulative.muts(right.tail.mutation.data,right.tail.length)
 
 ##########################################################################
 ## can I "train" a model of relaxed selection on genes that we know are not under selection
