@@ -141,7 +141,6 @@ make.KS.Figure(cumsum.dN.over.metagenome)
 
 ## let's look at nonsense mutations.
 gene.nonsense.mutation.data <- gene.mutation.data %>%
-filter(Gene!='intergenic') %>%
 filter(Annotation=='nonsense')
 
 ## nonsense mutations don't fit the null expectation.
