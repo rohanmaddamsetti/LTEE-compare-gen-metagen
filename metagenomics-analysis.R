@@ -13,6 +13,8 @@
 ## TODO: It could be quite interesting to examine genes in prophage that
 ## Jeff Barrick has annotated as misc_regions.
 
+## TODO: measure the concentration/density of mutation as an empirical CDF.
+
 library(tidyverse)
 library(DescTools) ## for G-test implementation in the multinomial selection test.
 
@@ -25,7 +27,6 @@ library(DescTools) ## for G-test implementation in the multinomial selection tes
 ##python printEcoliIDs.py -i ../data/REL606.7.gbk > ../results/REL606_IDs.csv.
 REL606.genes <- read.csv('../results/REL606_IDs.csv',as.is=TRUE) %>%
 mutate(gene_length=strtoi(gene_length))
-
 
 ## IMPORTANT BUG: SEEMS LIKE BEN MASKED SOME REGIONS--
 ## including prophage starting at ECB_00814 --
@@ -71,7 +72,7 @@ write.csv(gene.mutation.data, "../results/gene-LTEE-metagenomic-mutations.csv")
 ks.analysis <- function (the.data,REL606.genes) {
   ## For each set of data (all data, non-mutators, MMR mutators, mutT mutators)
   ## do the following: 1) make a uniform cdf on mutation rate per base.
-  ## 2) make a thetaS cdf. 3) make an empirical cdf of mutations per gene.
+  ## 2) make an empirical cdf of mutations per gene.
   ## do K-S tests for goodness of fit of the empirical cdf with the cdfs for
   ## the uniform cdf and thetaS cdf hypotheses.
 
@@ -374,7 +375,6 @@ sig.multinom..nonsense.sv.indels <- filter(multinom.result,nonsense.sv.indel.pva
 ## not based on parallelism alone, from Ben Good Table S3.
 ## these may be candidates for contingency.
 Good.significant.genes <- read.csv('../ltee-metagenomics-paper/nature24287-s5.csv.txt')
-
 contingency.candidates <- filter(sig.multinom.dN,!(Gene %in% Good.significant.genes$Gene))
 ## of these genes, hflB, topA are in the Tenaillon top G-scoring
 ## genes. The rest are marginally significant.
@@ -464,7 +464,6 @@ cor.test(multinom.result.and.density$dN.mut.density,multinom.result.and.density$
 ## Also strong correlation with dS p-value: p < 10^-14.
 cor.test(multinom.result.and.density$dS.mut.density,multinom.result.and.density$dS.pvalue)
 
-
 #################################################
 ## PURIFYING SELECTION RESULTS.
 ## VERY PROMISING BUT WILL NEED TO RIGOROUSLY CHECK.
@@ -553,8 +552,6 @@ pur3.with.dS <- filter(pur3,dS.mut.count>0)
 ## I can double-check my purifying selection results against the
 ## LTEE genomics data at barricklab.org/shiny/LTEE-Ecoli
 ## to verify that those genes indeed don't have any mutations.
-
-
 ##############################################
 ################################################################################
 ## Now, look at accumulation of stars over time.
@@ -616,8 +613,6 @@ top.by.nonindelsv.gene.length <- sum(top.by.nonindelsv.mutation.data$gene_length
 bottom.by.nonindelsv.density.genes <- filter(gene.deciles.by.density,nonsense.indel.sv.decile == 1)
 bottom.by.nonindelsv.mutation.data <- filter(gene.mutation.data,Gene %in% bottom.by.nonindelsv.density.genes$Gene)
 bottom.by.nonindelsv.gene.length <- sum(bottom.by.nonindelsv.mutation.data$gene_length)
-
-
 
 ## NOTE: The multinom analysis here is based ONLY on distribution of dN.
 
@@ -710,7 +705,7 @@ add.cumulative.mut.layer <- function(p, layer.df, my.color, logscale=TRUE) {
     return(p)
 }
 
-########################
+#########################################################################
 
 ## Normalization constant calculations.
 ## IMPORTANT-- THIS STEP IS REALLY IMPORTANT.
@@ -834,12 +829,20 @@ c.multinom1to50.nonsense.indel.sv <- filter(multinom.1to50.mutation.data,
     calc.cumulative.muts(multinom.1to50.length)
 
 ## Now make the plot.
-multinom1to50.plot <- plot.cumulative.muts(c.multinom1to50.dN, my.color="purple") %>%
+log.multinom1to50.plot <- plot.cumulative.muts(c.multinom1to50.dN, my.color="purple") %>%
     add.cumulative.mut.layer(c.multinom1to50.dS, my.color="green") %>%
     add.cumulative.mut.layer(c.multinom1to50.nonsense, my.color="gray") %>%
     add.cumulative.mut.layer(c.multinom1to50.nonsense.indel.sv, my.color="black")
 
-multinom1to50.plot
+log.multinom1to50.plot
+ggsave(multinom1to50.plot,filename="../results/figures/log-multinom-1to50.pdf")
+
+multinom1to50.plot <- plot.cumulative.muts(c.multinom1to50.dN, my.color="purple",logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.multinom1to50.dS, my.color="green",logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.multinom1to50.nonsense, my.color="gray",logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.multinom1to50.nonsense.indel.sv, my.color="black",logscale=FALSE)
+
+log.multinom1to50.plot
 ggsave(multinom1to50.plot,filename="../results/figures/multinom-1to50.pdf")
 
 
@@ -869,11 +872,10 @@ ggsave(multinom1to50.plot,filename="../results/figures/multinom-1to50.pdf")
 proteome.assignments <- read.csv('../data/Hui-2015-proteome-section-assignments.csv',as.is=TRUE)
 REL606.proteome.assignments <- inner_join(REL606.genes,proteome.assignments)
 
-## add proteome assignment to mutation.data.
-sector.mut.data <- inner_join(mutation.data,REL606.proteome.assignments)
+## add proteome assignment to gene mutation.data.
+sector.mut.data <- inner_join(gene.mutation.data,REL606.proteome.assignments)
 
 ##six sectors:  "A" "S" "O" "U" "R" "C"
-
 A.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='A')
 S.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='S')
 O.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='O')
@@ -881,12 +883,12 @@ U.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='U')
 R.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='R')
 C.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='C')
 
-A.length <- sum(A.sector.mut.data$length)
-S.length <- sum(S.sector.mut.data$length)
-O.length <- sum(O.sector.mut.data$length)
-U.length <- sum(U.sector.mut.data$length)
-R.length <- sum(R.sector.mut.data$length)
-C.length <- sum(C.sector.mut.data$length)
+A.length <- sum(A.sector.mut.data$gene_length)
+S.length <- sum(S.sector.mut.data$gene_length)
+O.length <- sum(O.sector.mut.data$gene_length)
+U.length <- sum(U.sector.mut.data$gene_length)
+R.length <- sum(R.sector.mut.data$gene_length)
+C.length <- sum(C.sector.mut.data$gene_length)
 
 c.A.muts <- calc.cumulative.muts(A.sector.mut.data, A.length)
 c.S.muts <- calc.cumulative.muts(S.sector.mut.data, S.length)
@@ -895,38 +897,22 @@ c.U.muts <- calc.cumulative.muts(U.sector.mut.data, U.length)
 c.R.muts <- calc.cumulative.muts(R.sector.mut.data, R.length)
 c.C.muts <- calc.cumulative.muts(C.sector.mut.data, C.length)
 
-plot.sector.muts <- function(A.data,S.data,O.data,U.data,R.data,C.data,all.data,log=TRUE) {
-  my.plot <- ggplot(A.data) +
-  theme_classic() +
-  facet_wrap(.~Population,scales='fixed') +
-  ylab('Cumulative number of mutations, normalized by target size') +
-  xlab('Generations (x 10,000)')
-
-  if (log) {
-    my.plot <- my.plot +
-    geom_point(data=A.data,aes(x=Generation,y=log(normalized.cs)),color='black',size=0.2) +
-    geom_point(data=S.data,aes(x=Generation,y=log(normalized.cs)),color='red',size=0.2) +
-    geom_point(data=O.data,aes(x=Generation,y=log(normalized.cs)),color='blue',size=0.2) +
-    geom_point(data=U.data,aes(x=Generation,y=log(normalized.cs)),color='green',size=0.2) +
-    geom_point(data=R.data,aes(x=Generation,y=log(normalized.cs)),color='yellow',size=0.2) +
-    geom_point(data=all.data,aes(x=Generation,y=log(normalized.cs)),color='grey',size=0.2) +
-    geom_point(data=C.data,aes(x=Generation,y=log(normalized.cs)),color='orange',size=0.2)
-  } else {
-    my.plot <- my.plot +
-    geom_point(data=R.data,aes(x=Generation,y=normalized.cs),color='yellow',size=0.2) +
-    geom_point(data=C.data,aes(x=Generation,y=normalized.cs),color='orange',size=0.2) +
-    geom_point(data=O.data,aes(x=Generation,y=normalized.cs),color='blue',size=0.2) +
-    geom_point(data=S.data,aes(x=Generation,y=normalized.cs),color='red',size=0.2) +
-    geom_point(data=A.data,aes(x=Generation,y=normalized.cs),color='black',size=0.2) +
-    geom_point(data=all.data,aes(x=Generation,y=normalized.cs),color='grey',size=0.2) +
-    geom_point(data=U.data,aes(x=Generation,y=normalized.cs),color='green',size=0.2)
-  }
-}
-
-log.sector.plot <- plot.sector.muts(c.A.muts,c.S.muts,c.O.muts,c.U.muts,c.R.muts,c.C.muts,c.mutations,log=TRUE)
+log.sector.plot <- plot.cumulative.muts(c.A.muts, my.color="black", logscale=TRUE) %>%
+    add.cumulative.mut.layer(c.S.muts,my.color="red", logscale=TRUE) %>%
+    add.cumulative.mut.layer(c.O.muts,my.color="blue", logscale=TRUE) %>%
+    add.cumulative.mut.layer(c.U.muts,my.color="green", logscale=TRUE) %>%
+    add.cumulative.mut.layer(c.R.muts,my.color="yellow", logscale=TRUE) %>%
+    add.cumulative.mut.layer(c.C.muts,my.color="orange", logscale=TRUE) %>%
+    add.cumulative.mut.layer(c.mutations,my.color="grey", logscale=TRUE)
 ggsave(log.sector.plot,filename='../results/figures/log-sector-plot.pdf')
 
-sector.plot <- plot.sector.muts(c.A.muts,c.S.muts,c.O.muts,c.U.muts,c.R.muts,c.C.muts,c.mutations,log=FALSE)
+sector.plot <- plot.cumulative.muts(c.A.muts, my.color="black", logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.S.muts,my.color="red", logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.O.muts,my.color="blue", logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.U.muts,my.color="green", logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.R.muts,my.color="yellow", logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.C.muts,my.color="orange", logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.mutations,my.color="grey", logscale=FALSE)
 ggsave(sector.plot,filename='../results/figures/sector-plot.pdf')
 
 ##########################################################################
@@ -941,8 +927,8 @@ ggsave(sector.plot,filename='../results/figures/sector-plot.pdf')
 eigengenes <- read.csv('../data/Wytock2018-eigengenes.csv',as.is=TRUE)
 REL606.eigengenes <- inner_join(REL606.genes,eigengenes)
 
-## add eigengene assignment to mutation.data.
-eigengene.mut.data <- inner_join(mutation.data,REL606.eigengenes)
+## add eigengene assignment to gene.mutation.data.
+eigengene.mut.data <- inner_join(gene.mutation.data, REL606.eigengenes)
 
 eigengene1.mut.data <- filter(eigengene.mut.data,Eigengene==1)
 eigengene2.mut.data <- filter(eigengene.mut.data,Eigengene==2)
@@ -954,15 +940,15 @@ eigengene7.mut.data <- filter(eigengene.mut.data,Eigengene==7)
 eigengene8.mut.data <- filter(eigengene.mut.data,Eigengene==8)
 eigengene9.mut.data <- filter(eigengene.mut.data,Eigengene==9)
 
-eigen1.length <- sum(eigengene1.mut.data$length)
-eigen2.length <- sum(eigengene2.mut.data$length)
-eigen3.length <- sum(eigengene3.mut.data$length)
-eigen4.length <- sum(eigengene4.mut.data$length)
-eigen5.length <- sum(eigengene5.mut.data$length)
-eigen6.length <- sum(eigengene6.mut.data$length)
-eigen7.length <- sum(eigengene7.mut.data$length)
-eigen8.length <- sum(eigengene8.mut.data$length)
-eigen9.length <- sum(eigengene9.mut.data$length)
+eigen1.length <- sum(eigengene1.mut.data$gene_length)
+eigen2.length <- sum(eigengene2.mut.data$gene_length)
+eigen3.length <- sum(eigengene3.mut.data$gene_length)
+eigen4.length <- sum(eigengene4.mut.data$gene_length)
+eigen5.length <- sum(eigengene5.mut.data$gene_length)
+eigen6.length <- sum(eigengene6.mut.data$gene_length)
+eigen7.length <- sum(eigengene7.mut.data$gene_length)
+eigen8.length <- sum(eigengene8.mut.data$gene_length)
+eigen9.length <- sum(eigengene9.mut.data$gene_length)
 
 c.eigen1.muts <- calc.cumulative.muts(eigengene1.mut.data, eigen1.length)
 c.eigen2.muts <- calc.cumulative.muts(eigengene2.mut.data, eigen2.length)
@@ -974,81 +960,38 @@ c.eigen7.muts <- calc.cumulative.muts(eigengene7.mut.data, eigen7.length)
 c.eigen8.muts <- calc.cumulative.muts(eigengene8.mut.data, eigen8.length)
 c.eigen9.muts <- calc.cumulative.muts(eigengene9.mut.data, eigen9.length)
 
-plot.eigen.muts <- function(eigen1.data,
-                            eigen2.data,
-                            eigen3.data,
-                            eigen4.data,
-                            eigen5.data,
-                            eigen6.data,
-                            eigen7.data,
-                            eigen8.data,
-                            eigen9.data,
-                            all.data,
-                            log=TRUE) {
-  my.plot <- ggplot(eigen1.data) +
-  theme_classic() +
-  facet_wrap(.~Population,scales='fixed') +
-  ylab('Cumulative number of mutations, normalized by target size') +
-  xlab('Generations (x 10,000)')
-
-  if (log) {
-    my.plot <- my.plot +
-    geom_point(data=eigen1.data,aes(x=Generation,y=log(normalized.cs)),color='red',size=0.2) +
-    geom_point(data=eigen2.data,aes(x=Generation,y=log(normalized.cs)),color='orange',size=0.2) +
-    geom_point(data=eigen3.data,aes(x=Generation,y=log(normalized.cs)),color='yellow',size=0.2) +
-    geom_point(data=eigen4.data,aes(x=Generation,y=log(normalized.cs)),color='green',size=0.2) +
-    geom_point(data=eigen5.data,aes(x=Generation,y=log(normalized.cs)),color='cyan',size=0.2) +
-    geom_point(data=eigen6.data,aes(x=Generation,y=log(normalized.cs)),color='blue',size=0.2) +
-    geom_point(data=eigen7.data,aes(x=Generation,y=log(normalized.cs)),color='violet',size=0.2) +
-    geom_point(data=eigen8.data,aes(x=Generation,y=log(normalized.cs)),color='pink',size=0.2) +
-    geom_point(data=eigen9.data,aes(x=Generation,y=log(normalized.cs)),color='black',size=0.2) +
-    geom_point(data=all.data,aes(x=Generation,y=log(normalized.cs)),color='grey',size=0.2)
-  } else {
-    my.plot <- my.plot +
-    geom_point(data=eigen1.data,aes(x=Generation,y=normalized.cs),color='red',size=0.2) +
-    geom_point(data=eigen2.data,aes(x=Generation,y=normalized.cs),color='orange',size=0.2) +
-    geom_point(data=eigen3.data,aes(x=Generation,y=normalized.cs),color='yellow',size=0.2) +
-    geom_point(data=eigen4.data,aes(x=Generation,y=normalized.cs),color='green',size=0.2) +
-    geom_point(data=eigen5.data,aes(x=Generation,y=normalized.cs),color='cyan',size=0.2) +
-    geom_point(data=eigen6.data,aes(x=Generation,y=normalized.cs),color='blue',size=0.2) +
-    geom_point(data=eigen7.data,aes(x=Generation,y=normalized.cs),color='violet',size=0.2) +
-    geom_point(data=eigen8.data,aes(x=Generation,y=normalized.cs),color='pink',size=0.2) +
-    geom_point(data=eigen9.data,aes(x=Generation,y=normalized.cs),color='black',size=0.2) +
-    geom_point(data=all.data,aes(x=Generation,y=normalized.cs),color='grey',size=0.2)
-
-  }
-}
-
-log.eigen.plot <- plot.eigen.muts(c.eigen1.muts,
-                                c.eigen2.muts,
-                                c.eigen3.muts,
-                                c.eigen4.muts,
-                                c.eigen5.muts,
-                                c.eigen6.muts,
-                                c.eigen7.muts,
-                                c.eigen8.muts,
-                                c.eigen9.muts,
-                                c.mutations,log=TRUE)
+log.eigen.plot <- plot.cumulative.muts(c.eigen1.muts, my.color="red", logscale=TRUE) %>%
+    add.cumulative.mut.layer(c.eigen2.muts,my.color="orange", logscale=TRUE) %>%
+    add.cumulative.mut.layer(c.eigen3.muts,my.color="yellow", logscale=TRUE) %>%
+    add.cumulative.mut.layer(c.eigen4.muts,my.color="green", logscale=TRUE) %>%
+    add.cumulative.mut.layer(c.eigen5.muts,my.color="cyan", logscale=TRUE) %>%
+    add.cumulative.mut.layer(c.eigen6.muts,my.color="blue", logscale=TRUE) %>%
+    add.cumulative.mut.layer(c.eigen7.muts,my.color="violet", logscale=TRUE) %>%
+    add.cumulative.mut.layer(c.eigen8.muts,my.color="pink", logscale=TRUE) %>%
+    add.cumulative.mut.layer(c.eigen9.muts,my.color="black", logscale=TRUE) %>%
+    add.cumulative.mut.layer(c.mutations,my.color="grey", logscale=TRUE)
 ggsave(log.eigen.plot,filename='../results/figures/log-eigen-plot.pdf')
 
-eigen.plot <- plot.eigen.muts(c.eigen1.muts,
-                                c.eigen2.muts,
-                                c.eigen3.muts,
-                                c.eigen4.muts,
-                                c.eigen5.muts,
-                                c.eigen6.muts,
-                                c.eigen7.muts,
-                                c.eigen8.muts,
-                                c.eigen9.muts,
-                                c.mutations,log=FALSE)
+eigen.plot <- plot.cumulative.muts(c.eigen1.muts, my.color="red", logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.eigen2.muts,my.color="orange", logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.eigen3.muts,my.color="yellow", logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.eigen4.muts,my.color="green", logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.eigen5.muts,my.color="cyan", logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.eigen6.muts,my.color="blue", logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.eigen7.muts,my.color="violet", logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.eigen8.muts,my.color="pink", logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.eigen9.muts,my.color="black", logscale=FALSE) %>%
+    add.cumulative.mut.layer(c.mutations,my.color="grey", logscale=FALSE)
 ggsave(eigen.plot,filename='../results/figures/eigen-plot.pdf')
 
 ##########################################################################
-## look at accumulation of stars over time for random subsets of genes.
-## I want to plot the distribution of cumulative mutations over time for
-## say, 1000 or 10000 random subsets of genes.
-
-## Perhaps this idea could be used to bootstrap p-values for statistics?
+## Bootstrap a distribution for the distribution of the accumulation of stars
+## over time for random subsets of genes.
+## Say, 1000 or 10000 random subsets of genes.
+## This idea could be used to bootstrap p-values for statistics, by
+## comparing subsets of mutations in genes of interest to this random null model.
+## Distributions greater or lower than all 1000 curves is significantly greater or lesser
+## at a p = 0.001/2 (I think? check this calculation more rigorously.)
 
 plot.random.subsets <- function(data, subset.size=300, N=1000,log=TRUE) {
 
@@ -1062,7 +1005,7 @@ plot.random.subsets <- function(data, subset.size=300, N=1000,log=TRUE) {
   for (i in 1:N) {
     rando.genes <- sample(unique(data$Gene),subset.size)
     mut.subset <- filter(data,Gene %in% rando.genes)
-    subset.length <- sum(mut.subset$length)
+    subset.length <- sum(mut.subset$gene_length)
     c.mut.subset <- calc.cumulative.muts(mut.subset,subset.length)
     
     if (log) {
@@ -1076,10 +1019,10 @@ plot.random.subsets <- function(data, subset.size=300, N=1000,log=TRUE) {
   return(my.plot)
 }
 
-log.rando.plot <- plot.random.subsets(gene.mutation.data,log=TRUE)
-ggsave(log.rando.plot,filename='../results/figures/log-rando-plot.pdf')
+log.rando.plot <- plot.random.subsets(gene.mutation.data, log=TRUE)
+ggsave(log.rando.plot,filename='../results/figures/log-rando-plot.png')
 rando.plot <- plot.random.subsets(gene.mutation.data,log=FALSE)
-ggsave(rando.plot,filename='../results/figures/rando-plot.pdf')
+ggsave(rando.plot,filename='../results/figures/rando-plot.png')
 
 #######################################################################################
 ## TODO: infer cohorts using Haixu Tang's new algorithm.
