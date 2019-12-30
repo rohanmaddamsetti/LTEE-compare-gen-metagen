@@ -1,1 +1,1 @@
-# LTEE-compare-gen-metagen
+# LTEE-purifying-selection
