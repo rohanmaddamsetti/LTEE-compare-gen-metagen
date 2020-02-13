@@ -1,75 +1,272 @@
 ## metagenomics-analysis.R by Rohan Maddamsetti.
 
-## Basic premise.
-## count the cumulative number of stars over time, and plot.
-## examine different kinds of mutations and genes.
-
 ## MAKE SURE THAT ZEROS IN MUTATION COUNTS ARE NOT THROWN OUT BY DPLYR!
 
-## TODO: infer cohorts using Haixu Tang's new algorithm.
-## Then ask whether cohorts show functional enrichment using
-## STRING annotation.
+## TODO: measure the concentration/density of mutation as an empirical CDF.
+
+## TODO: MAKE SURE MASKED REGIONS ARE TREATED PROPERLY!
 
 ## TODO: It could be quite interesting to examine genes in prophage that
 ## Jeff Barrick has annotated as misc_regions.
-
-## TODO: measure the concentration/density of mutation as an empirical CDF.
 
 library(tidyverse)
 
 ##########################################################################
 ## FUNCTIONS
 ##########################################################################
-## Bootstrap a distribution for the distribution of the accumulation of stars
-## over time for random subsets of genes.
-## Say, 1000 or 10000 random subsets of genes.
-## This idea could be used to bootstrap p-values for statistics, by
-## comparing subsets of mutations in genes of interest to this random null model.
-## Distributions greater or lower than all 1000 curves is significantly greater or lesser
-## at a p = 0.001/2 (I think? check this calculation more rigorously.)
+## look at accumulation of stars over time.
+## in other words, look at the rates at which the mutations occur over time.
+## To normalize, we need to supply the number of sites at risk
+## (such as sum of gene length).
+calc.cumulative.muts <- function(data, normalization.constant=NA) {
 
-plot.random.subsets <- function(data, subset.size=300, N=1000,logscale=TRUE) {
-    
-  ## set up an empty plot then add random trajectories, one by one.
-    my.plot <- ggplot(data) +
-        theme_classic() +
-        facet_wrap(.~Population,scales='fixed',nrow=4) +
-        xlab('Generations (x 10,000)') +
-        xlim(0,6.3)
-
-    if (logscale) {
-        my.plot <- my.plot +
-            ylim(-7,-2) +
-            ylab('log[Cumulative number of mutations (normalized)]')
-    } else {
-        my.plot <- my.plot +
-            ylim(0,0.003) +
-            ylab('Cumulative number of mutations (normalized)')
+    cumsum.per.pop.helper.func <- function(df) {
+        df %>%
+            arrange(t0) %>%
+            group_by(Population,Generation) %>%
+            summarize(count=n()) %>%
+            mutate(cs=cumsum(count)) %>%
+            ungroup() 
     }
     
-    for (i in 1:N) {
+    ## if normalization.constant is not provided, then
+    ## calculate based on gene length by default.
+    if (is.na(normalization.constant)) {
+        my.genes <- data %>% select(Gene,gene_length) %>% distinct()
+        normalization.constant <- sum(my.genes$gene_length)
+    }
+    
+    c.dat <- data %>%
+        split(.$Population) %>%
+        map_dfr(.f=cumsum.per.pop.helper.func) %>%
+        mutate(normalized.cs=cs/normalization.constant) %>%
+        ## remove any NA values.
+        na.omit()
+    return(c.dat)
+}
+
+## calculate the tail probabilities of the true cumulative mutation trajectory
+## of a given vector of genes (a 'module'), based on resampling
+## random sets of genes. Returns both upper tail of null distribution,
+## or P(random trajectory >= the actual trajectory).
+## Output: a dataframe with three columns: Population, count, p.val
+calculate.trajectory.tail.probs <- function(data, gene.vec, N=10000, normalization.constant=NA) {
+
+    ## resamples have the same cardinality as the gene.vec.
+    subset.size <- length(gene.vec)
+    
+    ## This function takes the index for the current draw, and samples the data,
+    ## generating a random gene set for which to calculate cumulative mutations.
+    generate.cumulative.mut.subset <- function(idx) {
         rando.genes <- sample(unique(data$Gene),subset.size)
         mut.subset <- filter(data,Gene %in% rando.genes)
-        c.mut.subset <- calc.cumulative.muts(mut.subset)
-        
-        if (logscale) {
-            my.plot <- my.plot +
-                geom_point(data=c.mut.subset,aes(x=Generation,y=log10(normalized.cs)), color='gray',size=0.2,alpha = 0.1)                
-                } else {
-                    my.plot <- my.plot +
-                        geom_point(data=c.mut.subset,aes(x=Generation,y=normalized.cs), color='gray',size=0.2,alpha = 0.1)
-                }
+        c.mut.subset <- calc.cumulative.muts(mut.subset, normalization.constant) %>%
+            mutate(bootstrap_replicate=idx)
+        return(c.mut.subset)
     }
-    return(my.plot)
+
+    ## make a dataframe of bootstrapped trajectories.
+    ## look at accumulation of stars over time for random subsets of genes.
+
+    bootstrapped.trajectories <- map_dfr(.x=seq_len(N),.f=generate.cumulative.mut.subset)
+
+    gene.vec.data <- data %>% filter(Gene %in% gene.vec)
+    data.trajectory <- calc.cumulative.muts(gene.vec.data,normalization.constant)
+    data.trajectory.summary <- data.trajectory %>%
+        group_by(Population,.drop=FALSE) %>%
+        summarize(final.norm.cs=max(normalized.cs)) %>%
+        ungroup()
+    
+    trajectory.summary <- bootstrapped.trajectories %>%
+        ## important: don't drop empty groups.
+        group_by(bootstrap_replicate, Population,.drop=FALSE) %>%
+        summarize(final.norm.cs=max(normalized.cs)) %>%
+        ungroup() 
+
+    trajectory.filter.helper <- function(pop.trajectories) {
+        pop <- unique(pop.trajectories$Population)
+        data.traj <- filter(data.trajectory.summary,Population == pop)
+        final.data.norm.cs <- unique(data.traj$final.norm.cs)
+        tail.trajectories <- filter(pop.trajectories, final.norm.cs >= final.data.norm.cs)
+        return(tail.trajectories)
+    }
+    
+    ## split by Population, then filter for bootstraps > data trajectory.
+    uppertail.probs <- trajectory.summary %>%
+        split(.$Population) %>%
+        map_dfr(.f=trajectory.filter.helper) %>%
+        group_by(Population) %>%
+        summarize(count=n()) %>%
+        mutate(p.val=count/N)
+        
+    return(uppertail.probs)
+}
+
+## Calculate the derivative of the cumulative accumulation of mutation occurrence.
+## This is simply the rate of mutation occurrence in a class of genes.
+calc.slope.of.cumulative.muts <- function(c.muts) {
+
+    calc.slope.per.pop.helper.func <- function(df) {
+        df %>%
+            group_by(Population) %>%
+            mutate(D.cs = cs - lag(cs)) %>%
+            mutate(D.normalized.cs = normalized.cs - lag(normalized.cs))
+    }
+    
+    D.of.c.muts <- c.muts %>%
+        split(.$Population) %>%
+        map_dfr(.f=calc.slope.per.pop.helper.func) %>%
+        ## remove any NA values.
+        na.omit()
+    return(D.of.c.muts)
+}
+
+
+## This plot visualizes a two-tailed test (alpha = 0.05)
+## against a bootstrapped null distribution.
+## This is what we want to use for publication.
+plot.base.layer <- function(data, subset.size=300, N=1000, alpha = 0.05, logscale=FALSE, normalization.constant=NA) {
+
+    ## This function takes the index for the current draw, and samples the data,
+    ## generating a random gene set for which to calculate cumulative mutations.
+    generate.cumulative.mut.subset <- function(idx) {
+        rando.genes <- sample(unique(data$Gene),subset.size)
+        mut.subset <- filter(data,Gene %in% rando.genes)
+        c.mut.subset <- calc.cumulative.muts(mut.subset, normalization.constant) %>%
+            mutate(bootstrap_replicate=idx)
+        return(c.mut.subset)
+    }
+
+    ## make a dataframe of bootstrapped trajectories.
+    ## look at accumulation of stars over time for random subsets of genes.
+    ## I want to plot the distribution of cumulative mutations over time for
+    ## say, 1000 or 10000 random subsets of genes.
+
+    bootstrapped.trajectories <- map_dfr(.x=seq_len(N),.f=generate.cumulative.mut.subset)
+
+    ## filter out the top alpha/2 and bottom alpha/2 trajectories from each population,
+    ## for a two-sided test. default is alpha == 0.05.
+    
+    trajectory.summary <- bootstrapped.trajectories %>%
+        ## important: don't drop empty groups.
+        group_by(bootstrap_replicate, Population,.drop=FALSE) %>%
+        summarize(final.norm.cs=max(normalized.cs)) %>%
+        ungroup() 
+    
+    top.trajectories <- trajectory.summary %>%
+        group_by(Population) %>%
+        top_frac(alpha/2) %>%
+        select(-final.norm.cs) %>%
+        mutate(in.top=TRUE)
+    
+    bottom.trajectories <- trajectory.summary %>%
+        group_by(Population) %>%
+        top_frac(-alpha/2) %>%
+        select(-final.norm.cs) %>%
+        mutate(in.bottom=TRUE)
+    
+    filtered.trajectories <- bootstrapped.trajectories %>%
+        left_join(top.trajectories) %>%
+        left_join(bottom.trajectories) %>%
+        filter(is.na(in.top)) %>%
+        filter(is.na(in.bottom)) %>%
+        select(-in.top,-in.bottom)
+
+    if (logscale) {
+        p <- ggplot(filtered.trajectories,aes(x=Generation,y=log10(normalized.cs))) +
+            ylab('log[Cumulative number of mutations (normalized)]')
+    } else {
+        p <- ggplot(filtered.trajectories,aes(x=Generation,y=normalized.cs)) +
+            ylab('Cumulative number of mutations (normalized)')
+    }
+    p <- p +
+        theme_classic() +
+        geom_point(size=0.2, color='gray') +
+        facet_wrap(.~Population,scales='free',nrow=4) +
+        xlab('Generations (x 10,000)') +
+        xlim(0,6.3) +
+        theme(axis.title.x = element_text(size=14),
+              axis.title.y = element_text(size=14),
+              axis.text.x  = element_text(size=14),
+              axis.text.y  = element_text(size=14))
+    return(p)                
+}
+
+## take a ggplot object output by plot.cumulative.muts, and add an extra layer.
+add.cumulative.mut.layer <- function(p, layer.df, my.color, logscale=FALSE) {
+    if (logscale) {
+        p <- p +
+            geom_point(data=layer.df, aes(x=Generation,y=log10(normalized.cs)), color=my.color, size=0.2) +
+            geom_step(data=layer.df, aes(x=Generation,y=log10(normalized.cs)), size=0.2, color=my.color)
+        } else {
+            p <- p +
+                geom_point(data=layer.df, aes(x=Generation,y=normalized.cs), color=my.color, size=0.2) +
+                geom_step(data=layer.df, aes(x=Generation,y=normalized.cs), size=0.2, color=my.color)
+        }
+    return(p)
+}
+
+## calculate cumulative numbers of mutations in each category.
+## for vanilla plotting, without null distributions, as plotted by
+## plot.base.layer.
+plot.cumulative.muts <- function(mut.data,logscale=TRUE, my.color="black") {
+    if (logscale) {
+        p <- ggplot(mut.data,aes(x=Generation,y=log10(normalized.cs))) +
+            ##ylim(-7,-2) +
+            ylab('log[Cumulative number of mutations (normalized)]')
+    } else {
+        p <- ggplot(mut.data,aes(x=Generation,y=normalized.cs)) +
+            ##ylim(0,0.003) +
+            ylab('Cumulative number of mutations (normalized)')
+    }
+    p <- p +
+        theme_classic() +
+        geom_point(size=0.2, color=my.color) +
+        geom_step(size=0.2, color=my.color) +
+        facet_wrap(.~Population,scales='free',nrow=4) +
+        xlab('Generations (x 10,000)') +
+        xlim(0,6.3)
+    return(p)
+}
+
+## calculate derivative of cumulative numbers of mutations in each category.
+plot.slope.of.cumulative.muts <- function(mut.data,logscale=TRUE, my.color="black") {
+    if (logscale) {
+        p <- ggplot(mut.data,aes(x=Generation,y=log10(D.normalized.cs))) +
+            ylab('log[Slope of Cumulative number of mutations (normalized)]')
+    } else {
+        p <- ggplot(mut.data,aes(x=Generation,y=D.normalized.cs)) +
+            ylab('Slope of Cumulative number of mutations (normalized)')
+    }
+    p <- p +
+        theme_classic() +
+        geom_point(size=0.2, color=my.color) +
+        geom_step(size=0.2, color=my.color) +
+        geom_smooth(size=0.2, color=my.color) +
+        facet_wrap(.~Population,scales='free') +
+        xlab('Generations (x 10,000)') +
+        xlim(0,6.3)
+    return(p)
+}
+
+## take a ggplot object output by plot.cumulative.muts, and add an extra layer.
+add.slope.of.cumulative.mut.layer <- function(p, layer.df, my.color, logscale=TRUE) {
+    if (logscale) {
+        p <- p +
+            geom_point(data=layer.df, aes(x=Generation,y=log10(D.normalized.cs)), color=my.color, size=0.2) +
+            geom_step(data=layer.df, aes(x=Generation,y=log10(D.normalized.cs)), color=my.color, size=0.2) +
+            geom_smooth(size=0.2, color=my.color)
+        } else {
+            p <- p +
+                geom_point(data=layer.df, aes(x=Generation,y=D.normalized.cs), color=my.color, size=0.2) +
+                geom_step(data=layer.df, aes(x=Generation,y=D.normalized.cs), color=my.color, size=0.2) +
+                geom_smooth(size=0.2, color=my.color)
+        }
+    return(p)
 }
 
 ########################################################################
-## investigate dS across the genome in the metagenomics data.
-## revamp code from my 2015 Mol. Biol. Evol. paper.
-## in short, cannot reject null model that dS is uniform over the genome.
-## and dN fits the null extremely well-- even better than dS!
-## Probably because there are 3 times as many dN as dS throughout the
-## experiment.
+
 ks.analysis <- function(the.data, REL606.genes) {
   ## For each set of data (all data, non-mutators, MMR mutators, mutT mutators)
   ## do the following: 1) make a uniform cdf on mutation rate per base.
@@ -106,7 +303,7 @@ ks.analysis <- function(the.data, REL606.genes) {
 
 make.KS.Figure <- function(the.results.to.plot) { 
   ## for plotting convenience, add an index to the data frame.
-    the.results.to.plot$index <- seq_len(the.results.to.plot$locus_tag)
+    the.results.to.plot$index <- seq_len(nrow(the.results.to.plot))
   
     plot <- ggplot(the.results.to.plot, aes(x=index)) +
         geom_line(aes(y=empirical), colour="red") + 
@@ -133,80 +330,34 @@ calc.gene.mutation.density <- function(gene.mutation.data, mut_type_vec) {
         ungroup() %>%
         mutate(density=mut.count/gene_length) %>%
         arrange(desc(density))
+
+    ## CRITICAL STEP: replace NAs with zeros.
+    ## We need to keep track of genes that haven't been hit by any mutations
+    density.df[is.na(density.df)] <- 0
+    density.df <- tbl_df(density.df)
+
+    
     return(density.df)
 }
 
-################################################################################
-## Now, look at accumulation of stars over time.
-## in other words, look at the rates at which the mutations occur over time.
+## Examine the gene mutation density by population.
+pop.calc.gene.mutation.density <- function(gene.mutation.data, mut_type_vec) {
+    density.df <- gene.mutation.data %>%
+        filter(Annotation %in% mut_type_vec) %>%
+        filter(Gene!= "intergenic") %>%
+        mutate(Gene=as.factor(Gene)) %>%
+        group_by(Population, Gene, gene_length) %>%
+        summarize(mut.count=n()) %>%
+        ungroup() %>%
+        mutate(density=mut.count/gene_length) %>%
+        arrange(desc(density))
 
-## To normalize, we need to supply the number of sites at risk
-## (such as sum of gene length)
-
-cumsum.per.pop.helper.func <- function(df) {
-    df %>%
-        arrange(t0) %>%
-        group_by(Population,Generation) %>%
-        summarize(count=n()) %>%
-        mutate(cs=cumsum(count)) %>%
-        ungroup() 
-}
-
-calc.cumulative.muts <- function(data, normalization.constant=NA) {
-
-    ## if normalization.constant is not provided, then
-    ## calculate based on gene length by default.
-    if (is.na(normalization.constant)) {
-        my.genes <- data %>% select(Gene,gene_length) %>% distinct()
-        normalization.constant <- sum(my.genes$gene_length)
-    }
+    ## CRITICAL STEP: replace NAs with zeros.
+    ## We need to keep track of genes that haven't been hit by any mutations
+    density.df[is.na(density.df)] <- 0
+    density.df <- tbl_df(density.df)
     
-    c.dat <- data %>%
-        split(.$Population) %>%
-        map_dfr(.f=cumsum.per.pop.helper.func) %>%
-        mutate(normalized.cs=cs/normalization.constant) %>%
-        ## remove any NA values.
-        na.omit()
-    return(c.dat)
-}
-
-#########################################################################
-## Finally -- after all this prep work--
-## calculate cumulative numbers of mutations in each category.
-## Then, make plots to see if any interesting patterns emerge.
-
-plot.cumulative.muts <- function(mut.data,logscale=TRUE, my.color="black") {
-    if (logscale) {
-        p <- ggplot(mut.data,aes(x=Generation,y=log10(normalized.cs))) +
-            ylim(-7,-2) +
-            ylab('log[Cumulative number of mutations (normalized)]')
-    } else {
-        p <- ggplot(mut.data,aes(x=Generation,y=normalized.cs)) +
-            ylim(0,0.003) +
-            ylab('Cumulative number of mutations (normalized)')
-    }
-    p <- p +
-        theme_classic() +
-        geom_point(size=0.2, color=my.color) +
-        geom_step(size=0.2, color=my.color) +
-        facet_wrap(.~Population,scales='fixed') +
-        xlab('Generations (x 10,000)') +
-        xlim(0,6.3)
-    return(p)
-}
-
-## take a ggplot object output by plot.cumulative.muts, and add an extra layer.
-add.cumulative.mut.layer <- function(p, layer.df, my.color, logscale=TRUE) {
-    if (logscale) {
-        p <- p +
-            geom_point(data=layer.df, aes(x=Generation,y=log10(normalized.cs)), color=my.color, size=0.2) +
-            geom_step(data=layer.df, aes(x=Generation,y=log10(normalized.cs)), color=my.color, size=0.2)
-        } else {
-            p <- p +
-                geom_point(data=layer.df, aes(x=Generation,y=normalized.cs), color=my.color, size=0.2) +
-                geom_step(data=layer.df, aes(x=Generation,y=normalized.cs), color=my.color, size=0.2)
-        }
-    return(p)
+    return(density.df)
 }
 
 ##########################################################################
@@ -235,7 +386,6 @@ mutate(gene_length=strtoi(gene_length))
 nonmutator.pops <- c("Ara-5", "Ara-6", "Ara+1", "Ara+2", "Ara+4", "Ara+5")
 hypermutator.pops <- c("Ara-1", "Ara-2", "Ara-3", "Ara-4", "Ara+3", "Ara+6")
 
-
 ## import genes in the table created by:
 ## conda activate ltee-metagenomix
 ## cd LTEE-metagenomic-repo
@@ -249,6 +399,16 @@ mutation.data <- read.csv(
 
 
 gene.mutation.data <- inner_join(mutation.data,REL606.genes)
+
+#############!!!!!!!!!!!!!!!!!!!!!!!!!
+### IMPORTANT: THIS IS AN OBVIOUS SOURCE OF BUGS--
+## double-check whether intergenic mutations
+## are included or not-- as appropriate-- in all references to c.mutations
+## here and in the aerobic/anaerobic code.
+
+## for now, ONLY use mutation.data when examining mutation bias over the genome.
+## when examining evolution in different gene sets, use gene.mutation.data.
+
 
 ## It turns out that some gene names map to multiple genes!!!
 duplicate.genes <- gene.mutation.data %>%
@@ -275,40 +435,69 @@ gene.nonsense.sv.indels.mutation.data <- gene.mutation.data %>%
 sv.indel.nonsense.gene.mutation.data <- gene.mutation.data %>%
     filter(Annotation %in% c("sv", "indel", "nonsense"))
 
+## filter for point mutations (missense, synonymous, nonsense).
+gene.point.mutation.data <- gene.mutation.data %>%
+    filter(Gene!='intergenic') %>%
+    filter(Annotation %in% c('missense', 'synonymous', 'nonsense'))
 
-##########################################################################################
-## make base plot of null distributions by subsampling/bootstrapping.
+## look at distribution over the genome for different classes of mutations.
 
-## Base plots here of null distributions: add the data lines on top to compare.
-log.all.rando.plot <- plot.random.subsets(gene.mutation.data, logscale=TRUE)
-log.sv.indel.nonsen.rando.plot <- plot.random.subsets(sv.indel.nonsense.gene.mutation.data, logscale=TRUE)
-
-all.rando.plot <- plot.random.subsets(gene.mutation.data, logscale=FALSE)
-sv.indel.nonsen.rando.plot <- plot.random.subsets(sv.indel.nonsense.gene.mutation.data, logscale=FALSE)
-
-## for rapid testing.
-log.small.rando.plot <- plot.random.subsets(gene.mutation.data, logscale=TRUE,N=10)
-log.small.sv.indel.nonsen.rando.plot <- plot.random.subsets(sv.indel.nonsense.gene.mutation.data, logscale=TRUE,N=10)
-##########################################################################################
-
-
-## examine all mutations over genes in the genome.
 gene.only.mutation.data <- gene.mutation.data %>%
     filter(Annotation !='noncoding')
-cumsum.all.over.metagenome <- ks.analysis(gene.only.mutation.data,REL606.genes)
 
+gene.dS.mutation.data <- gene.mutation.data %>%
+    filter(Annotation=='synonymous')
+
+gene.dN.mutation.data <- gene.mutation.data %>%
+    filter(Annotation=='missense')
+
+gene.nonsense.mutation.data <- gene.mutation.data %>%
+    filter(Annotation=='nonsense')
+
+gene.noncoding.mutation.data <- gene.mutation.data %>%
+    filter(Annotation=='noncoding')
+
+gene.except.dS.mutation.data <- gene.mutation.data %>%
+    filter(Gene!='intergenic') %>%
+    filter(Annotation!='synonymous')
+
+gene.sv.mutation.data <- gene.mutation.data %>%
+    filter(Gene!='intergenic') %>%
+    filter(Annotation=='sv')
+
+gene.indel.mutation.data <- gene.mutation.data %>%
+    filter(Gene!='intergenic') %>%
+    filter(Annotation=='indel')
+##########################################################################################
+## make base plot of null distributions by subsampling/bootstrapping.
+## I will overlay data on top of these plots.
+
+## Base plots here of null distributions: add the data lines on top to compare.
+log.all.rando.plot <- plot.base.layer(gene.mutation.data,logscale=TRUE)
+
+log.sv.indel.nonsen.rando.plot <- plot.base.layer(sv.indel.nonsense.gene.mutation.data, logscale=TRUE)
+
+all.rando.plot <- plot.base.layer(gene.mutation.data, logscale=FALSE)
+sv.indel.nonsen.rando.plot <- plot.base.layer(sv.indel.nonsense.gene.mutation.data, logscale=FALSE)
+
+##########################################################################################
+## investigate dS (ano other classes of mutations) across the genome
+## in the metagenomics data.
+## revamp code from my 2015 Mol. Biol. Evol. paper.
+## in short, cannot reject null model that dS is uniform over the genome.
+## and dN fits the null extremely well-- even better than dS!
+## Probably because there are 3 times as many dN as dS throughout the
+## experiment.
+
+## examine all mutations over genes in the genome.
+cumsum.all.over.metagenome <- ks.analysis(gene.only.mutation.data,REL606.genes)
 all.KS.plot <- make.KS.Figure(cumsum.all.over.metagenome)
 
 ## examine dS over the genome.
-gene.dS.mutation.data <- gene.mutation.data %>%
-filter(Annotation=='synonymous')
-
 cumsum.dS.over.metagenome <- ks.analysis(gene.dS.mutation.data,REL606.genes)
 dS.KS.plot <- make.KS.Figure(cumsum.dS.over.metagenome)
 
 ## examing dN over the genome.
-gene.dN.mutation.data <- gene.mutation.data %>%
-filter(Annotation=='missense')
 
 ## dN fits the null even better than dS! But note that
 ## there are 18493 dN in the data, and 6792 dS in the data.
@@ -317,9 +506,6 @@ cumsum.dN.over.metagenome <- ks.analysis(gene.dN.mutation.data,REL606.genes)
 make.KS.Figure(cumsum.dN.over.metagenome)
 
 ## let's look at nonsense mutations.
-gene.nonsense.mutation.data <- gene.mutation.data %>%
-filter(Annotation=='nonsense')
-
 ## nonsense mutations don't fit the null expectation.
 ## opposite trend of indels or IS elements, though!
 ## not sure why.
@@ -328,17 +514,10 @@ make.KS.Figure(cumsum.nonsense.over.metagenome)
 
 ## examine non-coding mutations.
 ## very clear that the normalization by gene_length is not appropriate.
-gene.noncoding.mutation.data <- gene.mutation.data %>%
-    filter(Annotation=='noncoding')
-
 cumsum.noncoding.over.metagenome <- ks.analysis(gene.noncoding.mutation.data,REL606.genes)
 make.KS.Figure(cumsum.noncoding.over.metagenome)
 
 ## now let's look at all mutations except for dS.
-gene.except.dS.mutation.data <- gene.mutation.data %>%
-filter(Gene!='intergenic') %>%
-filter(Annotation!='synonymous')
-
 cumsum.no.dS.over.metagenome <- ks.analysis(gene.except.dS.mutation.data,REL606.genes)
 make.KS.Figure(cumsum.no.dS.over.metagenome)
 
@@ -375,21 +554,12 @@ ks.test(cumsum.dN.over.metagenome$empirical,
 ## VERY IMPORTANT TODO: EXCLUDE SV AND INDELS THAT ARE ANNOTATED BY A GENE,
 ## BUT ACTUALLY OCCUR IN PROMOTER REGIONS!
 
-
 ## examine structural mutations (IS elements) affecting genes.
-gene.sv.mutation.data <- gene.mutation.data %>%
-filter(Gene!='intergenic') %>%
-filter(Annotation=='sv')
-
 ## RESULT: longer genes are depleted in IS insertions!!
 cumsum.sv.over.metagenome <- ks.analysis(gene.sv.mutation.data,REL606.genes)
 make.KS.Figure(cumsum.sv.over.metagenome)
 
 ## examine indels.
-gene.indel.mutation.data <- gene.mutation.data %>%
-filter(Gene!='intergenic') %>%
-filter(Annotation=='indel')
-
 ## RESULT: longer genes are depleted in indels!
 cumsum.indel.over.metagenome <- ks.analysis(gene.indel.mutation.data,REL606.genes)
 make.KS.Figure(cumsum.indel.over.metagenome)
@@ -400,9 +570,19 @@ make.KS.Figure(cumsum.indel.over.metagenome)
 cumsum.nonsense.sv.indels.over.metagenome <- ks.analysis(gene.nonsense.sv.indels.mutation.data, REL606.genes)
 make.KS.Figure(cumsum.nonsense.sv.indels.over.metagenome)
 
-## Rough Figure 1:
+## Figure 1 will be a conceptual figure of the different evolutionary models
+## for different sets of genes.
+## (purifying selection, coupon collecting, neutral or mutation accumulation, etc.)
+
+## Figure 2 TODO: 
 ## combine these results to show distribution of different classes of mutations
 ## over the genome.
+
+##########################################################################################
+## MUTATION BIAS ANALYSIS.
+
+## TODO: plot distribution of structural variants and indels over the genome for each
+## population.
 
 ## TODO: I WILL HAVE TO DO MORE CAREFUL WORK TO EXAMINE THE EFFECTS OF MUTATION BIAS.
 ## look at structural variation. can I distinguish between
@@ -421,7 +601,9 @@ make.KS.Figure(cumsum.nonsense.sv.indels.over.metagenome)
 ## plot the distribution of indels and SV over the genome, separately for the
 ## different LTEE populations, and altogether.
 
-## cross-check these results with 50K genomes.
+
+##########################################################################################
+## cross-check the KS-test results with 50K genomes.
 ## These were downloaded from Jeff Barrick's shiny app:
 ## https://barricklab.org/shiny/LTEE-Ecoli.
 
@@ -433,62 +615,92 @@ gene.50K.mutations <- read.csv("../data/Gen50000_allMutations.csv",
     inner_join(REL606.genes) %>%
     filter(Gene!='intergenic')
 
-## cross-check with dS in 50K genomes.
 dS.50K <- filter(gene.50K.mutations, snp_type=='synonymous')
+no.dS.50K <- filter(gene.50K.mutations, snp_type!='synonymous')
+dN.50K <- filter(gene.50K.mutations, snp_type!='nonsynonymous')
+IS.50K <- filter(gene.50K.mutations, mutation_category=="mobile_element_insertion")
+indels.50K <- filter(gene.50K.mutations, mutation_category=="small_indel")
+nonsense.50K <- filter(gene.50K.mutations, mutation_category=="snp_nonsense")
+largedeletions.50K <- filter(gene.50K.mutations, mutation_category=="large_deletion")
+
+## cross-check with dS in 50K genomes.
 cumsum.dS.genome.50K <- ks.analysis(dS.50K, REL606.genes)
 make.KS.Figure(cumsum.dS.genome.50K)
 
 ## cross-check with everything except dS in 50K genomes.
-no.dS.50K <- filter(gene.50K.mutations, snp_type!='synonymous')
 cumsum.no.dS.genome.50K <- ks.analysis(no.dS.50K, REL606.genes)
 make.KS.Figure(cumsum.no.dS.genome.50K)
 
 ## cross-check with dN in 50K genomes.
-dN.50K <- filter(gene.50K.mutations, snp_type!='nonsynonymous')
 cumsum.dN.genome.50K <- ks.analysis(dN.50K, REL606.genes)
 make.KS.Figure(cumsum.dN.genome.50K)
 
 ## cross-check IS elements in the 50K genomes.
-IS.50K <- filter(gene.50K.mutations, mutation_category=="mobile_element_insertion")
 cumsum.IS.genome.50K <- ks.analysis(IS.50K,REL606.genes)
 make.KS.Figure(cumsum.IS.genome.50K)
 
 ## cross-check indels in the 50K genomes.
-indels.50K <- filter(gene.50K.mutations, mutation_category=="small_indel")
 cumsum.indels.genome.50K <- ks.analysis(indels.50K,REL606.genes)
 make.KS.Figure(cumsum.indels.genome.50K)
 
 ## cross-check nonsense SNPs in the 50K genomes.
-## OPPOSITE trend!!!
-nonsense.50K <- filter(gene.50K.mutations, mutation_category=="snp_nonsense")
+## OPPOSITE trend!!! Not sure how to interpret...
 cumsum.nonsense.genome.50K <- ks.analysis(nonsense.50K,REL606.genes)
 make.KS.Figure(cumsum.nonsense.genome.50K)
 
 ## large deletions in 50K genomes.
-largedeletions.50K <- filter(gene.50K.mutations, mutation_category=="large_deletion")
 cumsum.largedeletions.genome.50K <- ks.analysis(largedeletions.50K,REL606.genes)
 make.KS.Figure(cumsum.largedeletions.genome.50K)
-
-## The dynamics of mutations under relaxed selection should be
-## dragged by mutations under positive selection.
-## Also see Ville Mustonen's paper on 'emergent neutrality'.
-## so a better null hypothesis: dynamics of ALL mutations are driven by
-## positive selection, either as hitchhikers or as drivers.
-
-## Does the Ornstein-Uhlenbeck process require that effects of each
-## mutation is uncorrelated? If mutations affecting anaerobic fitness
-## are uncorrelated with mutations affecting aerobic fitness,
-## then would this Genotype-Phenotype Map be inconsistent
-## with Nkrumah's results?
 
 #################################################################################
 ### IMPORTANT BUG! GENES THAT SHOULD HAVE BEEN MASKED, WITH NO
 ### MUTATION CALLS IN THE GOOD ET AL. DATA, REAPPEAR IN REL606 GENES!!!
 ## PROPHAGE STARTING AT ECB_00814 is a good place to start debugging.
 ################################################################################
+
+## Let's look at mutation densities within populations (not summed over populations.)
+
+## add an index column to the dataframe.
+add_index_helper <- function(df) {
+    df %>% mutate(index = seq_len(nrow(.)))
+}
+
+pop.all.mutation.density <- gene.mutation.data %>%
+    pop.calc.gene.mutation.density(mut_type_vec=c("missense", "sv", "synonymous","noncoding", "indel", "nonsense")) %>% arrange(Population,desc(density)) %>%
+    split(.$Population) %>%
+    map_dfr(add_index_helper)
+
+pop.all.mutation.density.plot <- ggplot(pop.all.mutation.density,
+                                        aes(x=index,y=density)) +
+    geom_point(size=0.3) + theme_classic() + facet_wrap(.~Population,scale='fixed',nrow=4)
+
+pop.all.mutation.density.plot
+
+## look at dN now.
+pop.dN.mutation.density <- gene.mutation.data %>%
+    pop.calc.gene.mutation.density(mut_type_vec=c("missense")) %>% arrange(Population,desc(density)) %>%
+    split(.$Population) %>%
+    map_dfr(add_index_helper)
+
+pop.dN.mutation.density.plot <- ggplot(pop.dN.mutation.density,
+                                        aes(x=index,y=density)) +
+    geom_point(size=0.3) + theme_classic() + facet_wrap(.~Population,scale='fixed',nrow=4)
+
+pop.dN.mutation.density.plot
+
+
+################################################################################
+### DENSITIES SUMMED OVER ALL POPULATIONS.
+
+## IMPORTANT: these densities are summed over ALL LTEE populations,
+## so they don't correspond to single LTEE populations.
+
 ## just rank gene.mutation.density to see what it looks like!
 ## this is already a good indication of selection,
 ## and this is pretty much what Ben Good does in his Table S3.
+
+## IMPORTANT: these densities are summed over ALL LTEE populations,
+## so they don't correspond to single LTEE populations.
 
 all.mutation.density <- calc.gene.mutation.density(
     gene.mutation.data,
@@ -548,24 +760,41 @@ gene.mutation.densities <- REL606.genes %>%
 gene.mutation.densities[is.na(gene.mutation.densities)] <- 0
 gene.mutation.densities <- tbl_df(gene.mutation.densities)
 
-## plot density distribution.
-all.density.data <- arrange(gene.mutation.densities,desc(all.mut.density)) %>%
-    ## for plotting convenience, add an index to the data frame.
-    mutate(index = seq_len(nrow(.))) %>%
-    mutate(top150 = index<=150)
+##################################
+## break REL606 genes into deciles, based on mutation density.
 
-all.density.plot <- ggplot(all.density.data, aes(x=index,y=all.mut.density,color=top150)) +
-    geom_point() +
-    theme_classic()
+## decile = 1 means lowest density. decile = 10 means highest density.
+gene.deciles.by.density <- gene.mutation.densities %>%
+    mutate(all.mut.decile = ntile(all.mut.density, 10)) %>%
+    mutate(dN.decile = ntile(dN.mut.density, 10)) %>%
+    mutate(nonsense.indel.sv.decile = ntile(nonsense.indel.sv.mut.density, 10))
 
-all.density.plot
+## examine density tails by dN.
+median.by.dN.density.genes <- filter(gene.deciles.by.density,dN.decile %in% c(5,6))
+median.by.dN.mutation.data <- filter(gene.mutation.data,Gene %in% median.by.dN.density.genes$Gene)
+median.by.dN.gene.length <- sum(median.by.dN.mutation.data$gene_length)
 
-total.muts <- sum(all.density.data$all.mut.count)
-top150.gene.mut.total <- sum(filter(all.density.data,top150==TRUE)$all.mut.count)
-top150.mut.frac <- top150.gene.mut.total/total.muts
-top150.length.total <- sum(filter(all.density.data,top150==TRUE)$gene_length)
-total.length <- sum(all.density.data$gene_length)
-top150.length.frac <- top150.length.total/total.length
+top.by.dN.density.genes <- filter(gene.deciles.by.density,dN.decile == 10)
+top.by.dN.mutation.data <- filter(gene.mutation.data,Gene %in% top.by.dN.density.genes$Gene)
+top.by.dN.gene.length <- sum(top.by.dN.mutation.data$gene_length)
+
+bottom.by.dN.density.genes <- filter(gene.deciles.by.density,dN.decile == 1)
+bottom.by.dN.mutation.data <- filter(gene.mutation.data,Gene %in% bottom.by.dN.density.genes$Gene)
+bottom.by.dN.gene.length <- sum(bottom.by.dN.mutation.data$gene_length)
+
+## examine density tails by nonsense, indels, and sv.
+median.by.nonindelsv.density.genes <- filter(gene.deciles.by.density,nonsense.indel.sv.decile %in% c(5,6))
+median.by.nonindelsv.mutation.data <- filter(gene.mutation.data,Gene %in% median.by.nonindelsv.density.genes$Gene)
+median.by.nonindelsv.gene.length <- sum(median.by.nonindelsv.mutation.data$gene_length)
+
+top.by.nonindelsv.density.genes <- filter(gene.deciles.by.density,nonsense.indel.sv.decile == 10)
+top.by.nonindelsv.mutation.data <- filter(gene.mutation.data,Gene %in% top.by.nonindelsv.density.genes$Gene)
+top.by.nonindelsv.gene.length <- sum(top.by.nonindelsv.mutation.data$gene_length)
+
+bottom.by.nonindelsv.density.genes <- filter(gene.deciles.by.density,nonsense.indel.sv.decile == 1)
+bottom.by.nonindelsv.mutation.data <- filter(gene.mutation.data,Gene %in% bottom.by.nonindelsv.density.genes$Gene)
+bottom.by.nonindelsv.gene.length <- sum(bottom.by.nonindelsv.mutation.data$gene_length)
+
 
 ## seems like a lot of the all.density.data results are driven by repeated IS
 ## insertions.
@@ -573,28 +802,85 @@ top150.length.frac <- top150.length.total/total.length
 ## TODO: plot IS insertions over the genome, and indels over the genome, when
 ## examining mutation bias.
 
+## let's look at nonsense, sv, and indels, and see what the distribution looks like.
+nonindelsv.density.data <- arrange(gene.mutation.densities,desc(nonsense.indel.sv.mut.density)) %>%     ## for plotting convenience, add an index to the data frame.
+    mutate(index = seq_len(nrow(.)))
+
+nonindelsv.density.plot <- ggplot(nonindelsv.density.data, aes(x=index,y=nonsense.indel.sv.mut.density)) +
+    geom_point() + theme_classic()
+
+nonindelsv.density.plot
+
+## 2,735 genes have no nonsense, indels, or structural variants throughout the LTEE.
+zero.nonindelsv.density.data <- nonindelsv.density.data %>%
+    filter(nonsense.indel.sv.mut.density==0)
+
+top.nonindelsv.density.data <- nonindelsv.density.data %>%
+    filter(nonsense.indel.sv.mut.density>0.01) %>%
+    select(Gene,locus_tag,blattner,gene_length,product,nonsense.indel.sv.mut.density,nonsense.indel.sv.mut.count)
+
+
+
 ## let's just look at dN and see what the distribution looks like.
 dN.density.data <- arrange(gene.mutation.densities,desc(dN.mut.density)) %>%
     ## for plotting convenience, add an index to the data frame.
     mutate(index = seq_len(nrow(.))) %>%
-    mutate(top150 = index<=150)
+    mutate(top=index<=420)
 
-dN.density.plot <- ggplot(dN.density.data, aes(x=index,y=dN.mut.density,color=top150)) +
-    geom_point() +
-    theme_classic()
-
-top.dN <- filter(dN.density.data,top150==TRUE)
+dN.density.plot <- ggplot(dN.density.data, aes(x=index,y=dN.mut.density,color=top)) +
+    geom_point() + theme_classic()
 
 dN.density.plot
 
-## 
-top.dN.gene.mutation.data <- filter(dN.gene.mutation.data,Gene %in% top.dN$Gene)
+## let's quickly plot cumulative numbers of mutations in the top genes
+## (damn the circularity, full speed ahead!)
+
+top.dN.gene.mutation.data <- filter(gene.dN.mutation.data,Gene %in% top.by.dN.density.genes$Gene)
+
+c.top.dN.gene.mutations <- calc.cumulative.muts(top.dN.gene.mutation.data)
+
+log.c.top.dN.gene.plot <- log.small.dN.rando.plot %>%
+    add.cumulative.mut.layer(c.top.dN.gene.mutations, my.color="black",logscale=TRUE)
+
+c.top.dN.gene.plot <- small.dN.rando.plot %>%
+    add.cumulative.mut.layer(c.top.dN.gene.mutations, my.color="black",logscale=FALSE)
+
+## what are these top genes?
+top.by.dN.density.genes
+
+## let's filter further on dN.mut.density.
+top_dN_checkme <- top.by.dN.density.genes %>% select(Gene,locus_tag,blattner, gene_length,
+                                                 product, dN.mut.count,dN.mut.density,
+                                                 dN.decile) %>%
+    filter(dN.mut.density>0.01) %>%
+    arrange(desc(dN.mut.density))
+## Curious list of genes... let's check STRING.
+write.csv(top_dN_checkme,file="../results/dN_checkme.csv")
 
 ## Probably better to import gene lists from Tenaillon and Good papers to avoid the
-## obvious circularity...
+## obvious circularity. But EVEN better to compare these lists. When are they the same;
+## when are they different? Where do the genes from Tenaillon and Good papers
+## fall in the dN density distribution?
 
+## interesting: ribosomal genes are in both the top as well as the bottom
+## (purifying selection results).
 
+top.dN.ribosome.genes <- c('yceD', 'yeiP', 'rplL', 'rpsD', 'rpsE', 'infB', 'rplF', 'rplS',
+                           'rplP', 'rplY', 'ykgM')
+top.dN.ribosome.mutations <- filter(gene.dN.mutation.data,Gene %in% top.dN.ribosome.genes)
+c.top.dN.ribosome.mutations <- calc.cumulative.muts(top.dN.ribosome.mutations)
 
+log.c.top.dN.ribosome.plot <- log.small.dN.rando.plot %>%
+    add.cumulative.mut.layer(c.top.dN.ribosome.mutations, my.color="black",logscale=TRUE)
+
+c.top.dN.ribosome.plot <- small.dN.rando.plot %>%
+    add.cumulative.mut.layer(c.top.dN.ribosome.mutations, my.color="black",logscale=FALSE)
+
+## quick random check: look for nucleotide-level parallelism in the Good dataset.
+nuc.parallel.data <- gene.mutation.data %>% group_by(Gene, Position, Annotation, gene_length, product, blattner, locus_tag) %>% summarize(count=n()) %>%
+    filter(count>=3) %>% arrange(desc(count))
+
+write.csv(nuc.parallel.data,'../results/parallel-nuc-summary.csv')
 
 #######################################################################################
 ## INITIAL PURIFYING SELECTION RESULTS.
@@ -677,50 +963,12 @@ pur3.with.dS <- filter(pur3,dS.mut.count>0)
 
 ## I'll need to dig deeper into these results.
 
-
 ## IMPORTANT BUG: SEEMS LIKE BEN MASKED SOME REGIONS--
 ## including prophage starting at ECB_00814 --
 ## THAT I MISS!!!
 ## I can double-check my purifying selection results against the
 ## LTEE genomics data at barricklab.org/shiny/LTEE-Ecoli
 ## to verify that those genes indeed don't have any mutations.
-###############################################################
-
-## break REL606 genes into deciles, based on mutation density.
-
-## decile = 1 means lowest density. decile = 10 means highest density.
-gene.deciles.by.density <- gene.mutation.densities %>%
-    mutate(all.mut.decile = ntile(all.mut.density, 10)) %>%
-    mutate(dN.decile = ntile(dN.mut.density, 10)) %>%
-    mutate(nonsense.indel.sv.decile = ntile(nonsense.indel.sv.mut.density, 10))
-
-## examine density tails by dN.
-median.by.dN.density.genes <- filter(gene.deciles.by.density,dN.decile %in% c(5,6))
-median.by.dN.mutation.data <- filter(gene.mutation.data,Gene %in% median.by.dN.density.genes$Gene)
-median.by.dN.gene.length <- sum(median.by.dN.mutation.data$gene_length)
-
-top.by.dN.density.genes <- filter(gene.deciles.by.density,dN.decile == 10)
-top.by.dN.mutation.data <- filter(gene.mutation.data,Gene %in% top.by.dN.density.genes$Gene)
-top.by.dN.gene.length <- sum(top.by.dN.mutation.data$gene_length)
-
-bottom.by.dN.density.genes <- filter(gene.deciles.by.density,dN.decile == 1)
-bottom.by.dN.mutation.data <- filter(gene.mutation.data,Gene %in% bottom.by.dN.density.genes$Gene)
-bottom.by.dN.gene.length <- sum(bottom.by.dN.mutation.data$gene_length)
-
-## examine density tails by nonsense, indels, and sv.
-median.by.nonindelsv.density.genes <- filter(gene.deciles.by.density,nonsense.indel.sv.decile %in% c(5,6))
-median.by.nonindelsv.mutation.data <- filter(gene.mutation.data,Gene %in% median.by.nonindelsv.density.genes$Gene)
-median.by.nonindelsv.gene.length <- sum(median.by.nonindelsv.mutation.data$gene_length)
-
-top.by.nonindelsv.density.genes <- filter(gene.deciles.by.density,nonsense.indel.sv.decile == 10)
-top.by.nonindelsv.mutation.data <- filter(gene.mutation.data,Gene %in% top.by.nonindelsv.density.genes$Gene)
-top.by.nonindelsv.gene.length <- sum(top.by.nonindelsv.mutation.data$gene_length)
-
-bottom.by.nonindelsv.density.genes <- filter(gene.deciles.by.density,nonsense.indel.sv.decile == 1)
-bottom.by.nonindelsv.mutation.data <- filter(gene.mutation.data,Gene %in% bottom.by.nonindelsv.density.genes$Gene)
-bottom.by.nonindelsv.gene.length <- sum(bottom.by.nonindelsv.mutation.data$gene_length)
-
-
 #########################################################################
 
 ## Normalization constant calculations.
@@ -750,28 +998,12 @@ bottom.by.nonindelsv.gene.length <- sum(bottom.by.nonindelsv.mutation.data$gene_
 
 
 ########################
-## let's first look at the accumulation of all sv, indels, and nonsense mutations
+## look at the accumulation of all sv, indels, and nonsense mutations
 ## in each population.
 
-#############!!!!!!!!!!!!!!!!!!!!!!!!!
-### IMPORTANT: THIS IS AN OBVIOUS SOURCE OF BUGS--
-## double-check whether intergenic mutations
-## are included or not-- as appropriate-- in all references to c.mutations
-## here and in the aerobic/anaerobic code.
-
-##sv.indel.nonsense.mutation.data <- mutation.data %>%
-##    filter(Annotation %in% c("sv", "indel", "nonsense"))
-
-##c.sv.indel.nonsense.mutations <- calc.cumulative.muts(sv.indel.nonsense.mutation.data,total)
-
-##c.sv.indel.nonsense.plot <- plot.cumulative.muts(c.sv.indel.nonsense.mutations)
-##c.sv.indel.nonsense.plot <- plot.cumulative.muts(c.sv.indel.nonsense.mutations,logscale=FALSE)
-##c.sv.indel.nonsense.plot
-
 c.sv.indel.nonsense.gene.mutations <- calc.cumulative.muts(sv.indel.nonsense.gene.mutation.data)
-
-c.sv.indel.nonsense.gene.plot <- plot.cumulative.muts(c.sv.indel.nonsense.gene.mutations)
-c.sv.indel.nonsense.gene.plot <- plot.cumulative.muts(c.sv.indel.nonsense.gene.mutations,logscale=FALSE)
+c.sv.indel.nonsense.gene.plot <- sv.indel.nonsen.rando.plot %>%
+    add.cumulative.mut.layer(c.sv.indel.nonsense.gene.mutations,my.color='black')
 
 
 ########################
@@ -782,6 +1014,15 @@ c.sv.indel.nonsense.gene.plot <- plot.cumulative.muts(c.sv.indel.nonsense.gene.m
 ## are included or not-- as appropriate-- in all references to c.mutations
 ## here and in the aerobic/anaerobic code.
 c.mutations <- calc.cumulative.muts(gene.mutation.data)
+
+##########################
+## let's calculate the rate of mutation occurrence
+## (this is the derivative of the cumulative number of mutations over time).
+
+D.of.c.mutations <- calc.slope.of.cumulative.muts(c.mutations)
+D.of.c.mutations.plot <- plot.slope.of.cumulative.muts(D.of.c.mutations, logscale=TRUE)
+
+D.of.c.mutations.plot
 
 c.mutation.plot <- plot.cumulative.muts(c.mutations, logscale=TRUE)
 c.mutation.plot2 <- plot.cumulative.muts(c.mutations, logscale=FALSE)
@@ -828,21 +1069,6 @@ intergenic.plot <- plot.cumulative.muts(c.intergenic.snp.mutations,logscale=TRUE
     add.cumulative.mut.layer(c.intergenic.indel.mutations, "light blue", logscale=TRUE)
 
 intergenic.plot
-
-##########################################################################
-## can I "train" a model of relaxed selection on genes that we know are not under selection
-## in the LTEE? That is, metabolic operons that are never used?
-
-## Then perhaps I can use this model to disentangle positive selection from
-## relaxed selection (if I am lucky.)
-
-
-## I could use Brian Wade's genomes as a test set to validate
-## predictions of genes under purifying selection (as a paper 3).
-
-## based on redoing the binomial test on genomes, it seems the difference in result
-## is NOT driven by target size. rather, it is whether or not all kinds of mutations
-## are included, and not just restricting to point mutations.
 
 ##########################################################################
 ## look at accumulation of stars over time for genes in the different proteome
@@ -1079,7 +1305,38 @@ eigen.sv.indel.nonsen.testplot <- sv.indel.nonsen.rando.plot %>%
     add.cumulative.mut.layer(c.sv.indel.nonsen.eigen9.muts,my.color="black", logscale=FALSE)
 ggsave(eigen.sv.indel.nonsen.testplot,filename='../results/figures/eigen-sv-indel-nonsen-testplot.png')
 
-#######################################################################################
-## TODO: infer cohorts using Haixu Tang's new algorithm.
-## Then ask whether cohorts show functional enrichment using
-## STRING annotation.
+##########################################################################
+## NOTES:
+##########################################################################
+## can I "train" a model of relaxed selection on genes that we know are not under selection
+## in the LTEE? That is, metabolic operons that are never used?
+
+## Then perhaps I can use this model to disentangle positive selection from
+## relaxed selection (if I am lucky.)
+
+## I think so! just bootstrap/resample trajectories from a training set of
+## metabolic operons whose function decay in the LTEE from previous work.
+## This could be a good baseline for comparing other sets of genes.
+## (of course, result depends on how well this set is chosen.
+## bootstrapping random sets from the whole genome may be a safer comparison).
+
+
+## I could use Brian Wade's genomes as a test set to validate
+## predictions of genes under purifying selection (as a paper 3).
+
+## based on redoing the binomial test on genomes, it seems the difference in result
+## is NOT driven by target size. rather, it is whether or not all kinds of mutations
+## are included, and not just restricting to point mutations.
+
+## The dynamics of mutations under relaxed selection should be
+## dragged by mutations under positive selection.
+## Also see Ville Mustonen's paper on 'emergent neutrality'.
+## so a better null hypothesis: dynamics of ALL mutations are driven by
+## positive selection, either as hitchhikers or as drivers.
+
+## Does the Ornstein-Uhlenbeck process require that effects of each
+## mutation is uncorrelated? If mutations affecting anaerobic fitness
+## are uncorrelated with mutations affecting aerobic fitness,
+## then would this Genotype-Phenotype Map be inconsistent
+## with Nkrumah's results?
+
