@@ -473,10 +473,6 @@ gene.indel.mutation.data <- gene.mutation.data %>%
 ## I will overlay data on top of these plots.
 
 ## Base plots here of null distributions: add the data lines on top to compare.
-log.all.rando.plot <- plot.base.layer(gene.mutation.data,logscale=TRUE)
-
-log.sv.indel.nonsen.rando.plot <- plot.base.layer(sv.indel.nonsense.gene.mutation.data, logscale=TRUE)
-
 all.rando.plot <- plot.base.layer(gene.mutation.data, logscale=FALSE)
 sv.indel.nonsen.rando.plot <- plot.base.layer(sv.indel.nonsense.gene.mutation.data, logscale=FALSE)
 
@@ -997,79 +993,6 @@ pur3.with.dS <- filter(pur3,dS.mut.count>0)
 ##intergenic.length <- 487863
 
 
-########################
-## look at the accumulation of all sv, indels, and nonsense mutations
-## in each population.
-
-c.sv.indel.nonsense.gene.mutations <- calc.cumulative.muts(sv.indel.nonsense.gene.mutation.data)
-c.sv.indel.nonsense.gene.plot <- sv.indel.nonsen.rando.plot %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsense.gene.mutations,my.color='black')
-
-
-########################
-## Examine ALL mutations, including intergenic regions.
-#############!!!!!!!!!!!!!!!!!!!!!!!!!
-### IMPORTANT: THIS IS AN OBVIOUS SOURCE OF BUGS--
-## double-check whether intergenic mutations
-## are included or not-- as appropriate-- in all references to c.mutations
-## here and in the aerobic/anaerobic code.
-c.mutations <- calc.cumulative.muts(gene.mutation.data)
-
-##########################
-## let's calculate the rate of mutation occurrence
-## (this is the derivative of the cumulative number of mutations over time).
-
-D.of.c.mutations <- calc.slope.of.cumulative.muts(c.mutations)
-D.of.c.mutations.plot <- plot.slope.of.cumulative.muts(D.of.c.mutations, logscale=TRUE)
-
-D.of.c.mutations.plot
-
-c.mutation.plot <- plot.cumulative.muts(c.mutations, logscale=TRUE)
-c.mutation.plot2 <- plot.cumulative.muts(c.mutations, logscale=FALSE)
-
-## Examine dN mutations.
-##c.dN.mutations <- calc.cumulative.muts(dN.mutation.data,total.nonsynon.sites)
-##dN.normalization.const <- total.length * total.nonsynon.sites/(total.synon.sites+total.nonsynon.sites)
-c.dN.mutations <- calc.cumulative.muts(gene.dN.mutation.data)
-
-## Examine dS mutations.
-##c.dS.mutations <- calc.cumulative.muts(dS.mutation.data,total.synon.sites)
-##dS.normalization.const <- total.length * total.synon.sites/(total.synon.sites+total.nonsynon.sites)
-c.dS.mutations <- calc.cumulative.muts(gene.dS.mutation.data)
-
-## Compare dN, dS, and  in the whole population!
-c.total.dN.dS.plot <- plot.cumulative.muts(c.dN.mutations, my.color="purple", logscale=TRUE) %>%
-add.cumulative.mut.layer(c.dS.mutations, my.color="green", logscale=TRUE)    
-
-## add a layer for nonsense + indel + sv.
-c.dN.dS.nonsense.indel.sv.plot <- c.total.dN.dS.plot %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsense.gene.mutations, "red", logscale=TRUE)
-
-c.dN.dS.nonsense.indel.sv.plot
-ggsave(c.dN.dS.nonsense.indel.sv.plot,filename="../results/figures/dN-dS-nonsenseindelsv.pdf")
-
-## IMPORTANT TODO: look at Ben Good's code, and modify to calculate the number of missense,
-## synonymous, and nonsense sites for normalization.
-
-
-## As a comparison, look at distribution of mutations in intergenic regions.
-## use this to study regulatory evolution, or perhaps relaxed selection?
-intergenic.mutation.data <- filter(mutation.data, Gene=='intergenic')
-intergenic.snp.data <- filter(intergenic.mutation.data,Annotation=='noncoding')
-intergenic.sv.data <- filter(intergenic.mutation.data, Annotation=='sv')
-intergenic.indel.data <- filter(intergenic.mutation.data, Annotation=='indel')
-
-c.intergenic.mutations <- calc.cumulative.muts(intergenic.mutation.data,intergenic.length)
-c.intergenic.snp.mutations <- calc.cumulative.muts(intergenic.snp.data,intergenic.length)
-c.intergenic.sv.mutations <- calc.cumulative.muts(intergenic.sv.data,intergenic.length)
-c.intergenic.indel.mutations <- calc.cumulative.muts(intergenic.indel.data,intergenic.length)
-
-intergenic.plot <- plot.cumulative.muts(c.intergenic.snp.mutations,logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.intergenic.sv.mutations, "orange", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.intergenic.indel.mutations, "light blue", logscale=TRUE)
-
-intergenic.plot
-
 ##########################################################################
 ## look at accumulation of stars over time for genes in the different proteome
 ## sectors.
@@ -1099,26 +1022,17 @@ c.U.muts <- calc.cumulative.muts(U.sector.mut.data)
 c.R.muts <- calc.cumulative.muts(R.sector.mut.data)
 c.C.muts <- calc.cumulative.muts(C.sector.mut.data)
 
-log.sector.plot <- plot.cumulative.muts(c.A.muts, my.color="black", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.S.muts,my.color="red", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.O.muts,my.color="blue", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.U.muts,my.color="green", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.R.muts,my.color="yellow", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.C.muts,my.color="orange", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.mutations,my.color="grey", logscale=TRUE)
-ggsave(log.sector.plot,filename='../results/figures/log-sector-plot.pdf')
-
-sector.plot <- plot.cumulative.muts(c.A.muts, my.color="black", logscale=FALSE) %>%
+## plot for proteome sectors.
+sector.plot <- all.rando.plot %>%
+    add.cumulative.mut.layer(c.A.muts, my.color="black", logscale=FALSE) %>%
     add.cumulative.mut.layer(c.S.muts,my.color="red", logscale=FALSE) %>%
     add.cumulative.mut.layer(c.O.muts,my.color="blue", logscale=FALSE) %>%
     add.cumulative.mut.layer(c.U.muts,my.color="green", logscale=FALSE) %>%
     add.cumulative.mut.layer(c.R.muts,my.color="yellow", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.C.muts,my.color="orange", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.mutations,my.color="grey", logscale=FALSE)
+    add.cumulative.mut.layer(c.C.muts,my.color="orange", logscale=FALSE)
 ggsave(sector.plot,filename='../results/figures/sector-plot.pdf')
 
 ## just plot sv, indels, and nonsense mutations.
-
 A.sv.indel.nonsen.muts <- filter(A.sector.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
 S.sv.indel.nonsen.muts <- filter(S.sector.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
 O.sv.indel.nonsen.muts <- filter(O.sector.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
@@ -1133,37 +1047,7 @@ c.U.sv.indel.nonsen.muts <- calc.cumulative.muts(U.sv.indel.nonsen.muts)
 c.R.sv.indel.nonsen.muts <- calc.cumulative.muts(R.sv.indel.nonsen.muts)
 c.C.sv.indel.nonsen.muts <- calc.cumulative.muts(C.sv.indel.nonsen.muts)
 
-
-## plot cumulative plots for proteome sectors.
-log.sector.testplot <- log.all.rando.plot %>%
-    add.cumulative.mut.layer(c.A.muts, my.color="black", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.S.muts,my.color="red", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.O.muts,my.color="blue", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.U.muts,my.color="green", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.R.muts,my.color="yellow", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.C.muts,my.color="orange", logscale=TRUE)
-ggsave(log.sector.testplot,filename='../results/figures/log-sector-testplot.png')
-
-sector.testplot <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.A.muts, my.color="black", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.S.muts,my.color="red", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.O.muts,my.color="blue", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.U.muts,my.color="green", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.R.muts,my.color="yellow", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.C.muts,my.color="orange", logscale=FALSE)
-ggsave(sector.testplot,filename='../results/figures/sector-testplot.png')
-
-
 ## now plot sv, indel, nonsense mutations on top.
-log.sector.sv.indel.nonsen.testplot <- log.sv.indel.nonsen.rando.plot %>%
-    add.cumulative.mut.layer(c.A.sv.indel.nonsen.muts, my.color="black", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.S.sv.indel.nonsen.muts,my.color="red", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.O.sv.indel.nonsen.muts,my.color="blue", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.U.sv.indel.nonsen.muts,my.color="green", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.R.sv.indel.nonsen.muts,my.color="yellow", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.C.sv.indel.nonsen.muts,my.color="orange", logscale=TRUE)
-ggsave(log.sector.sv.indel.nonsen.testplot,filename='../results/figures/log-sector-sv-indel-nonsen-testplot.png')
-
 sector.sv.indel.nonsen.testplot <- sv.indel.nonsen.rando.plot %>%
     add.cumulative.mut.layer(c.A.sv.indel.nonsen.muts, my.color="black", logscale=FALSE) %>%
     add.cumulative.mut.layer(c.S.sv.indel.nonsen.muts,my.color="red", logscale=FALSE) %>%
@@ -1208,19 +1092,8 @@ c.eigen7.muts <- calc.cumulative.muts(eigengene7.mut.data)
 c.eigen8.muts <- calc.cumulative.muts(eigengene8.mut.data)
 c.eigen9.muts <- calc.cumulative.muts(eigengene9.mut.data)
 
-log.eigen.plot <- plot.cumulative.muts(c.eigen1.muts, my.color="red", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.eigen2.muts,my.color="orange", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.eigen3.muts,my.color="yellow", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.eigen4.muts,my.color="green", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.eigen5.muts,my.color="cyan", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.eigen6.muts,my.color="blue", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.eigen7.muts,my.color="violet", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.eigen8.muts,my.color="pink", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.eigen9.muts,my.color="black", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.mutations,my.color="grey", logscale=TRUE)
-ggsave(log.eigen.plot,filename='../results/figures/log-eigen-plot.pdf')
-
-eigen.plot <- plot.cumulative.muts(c.eigen1.muts, my.color="red", logscale=FALSE) %>%
+eigen.plot <- all.rando.plot %>%
+    add.cumulative.mut.layer(c.eigen1.muts, my.color="red", logscale=FALSE) %>%
     add.cumulative.mut.layer(c.eigen2.muts,my.color="orange", logscale=FALSE) %>%
     add.cumulative.mut.layer(c.eigen3.muts,my.color="yellow", logscale=FALSE) %>%
     add.cumulative.mut.layer(c.eigen4.muts,my.color="green", logscale=FALSE) %>%
@@ -1228,8 +1101,7 @@ eigen.plot <- plot.cumulative.muts(c.eigen1.muts, my.color="red", logscale=FALSE
     add.cumulative.mut.layer(c.eigen6.muts,my.color="blue", logscale=FALSE) %>%
     add.cumulative.mut.layer(c.eigen7.muts,my.color="violet", logscale=FALSE) %>%
     add.cumulative.mut.layer(c.eigen8.muts,my.color="pink", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen9.muts,my.color="black", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.mutations,my.color="grey", logscale=FALSE)
+    add.cumulative.mut.layer(c.eigen9.muts,my.color="black", logscale=FALSE)
 ggsave(eigen.plot,filename='../results/figures/eigen-plot.pdf')
 
 ## just plot sv, indels, and nonsense mutations.
@@ -1253,47 +1125,17 @@ c.sv.indel.nonsen.eigen7.muts <- calc.cumulative.muts(sv.indel.nonsen.eigengene7
 c.sv.indel.nonsen.eigen8.muts <- calc.cumulative.muts(sv.indel.nonsen.eigengene8.muts)
 c.sv.indel.nonsen.eigen9.muts <- calc.cumulative.muts(sv.indel.nonsen.eigengene9.muts)
 
-
-
-log.eigen.testplot <- log.all.rando.plot %>%
-    add.cumulative.mut.layer(c.eigen1.muts,my.color="red", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.eigen2.muts,my.color="orange", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.eigen3.muts,my.color="yellow", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.eigen4.muts,my.color="green", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.eigen5.muts,my.color="cyan", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.eigen6.muts,my.color="blue", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.eigen7.muts,my.color="violet", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.eigen8.muts,my.color="pink", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.eigen9.muts,my.color="black", logscale=TRUE)
-ggsave(log.eigen.testplot,filename='../results/figures/log-eigen-testplot.png')
-
-eigen.testplot <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.eigen1.muts,my.color="red", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen2.muts,my.color="orange", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen3.muts,my.color="yellow", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen4.muts,my.color="green", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen5.muts,my.color="cyan", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen6.muts,my.color="blue", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen7.muts,my.color="violet", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen8.muts,my.color="pink", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen9.muts,my.color="black", logscale=FALSE)
-ggsave(eigen.testplot,filename='../results/figures/eigen-testplot.png')
+## why does Ara+3 show apparent selection in eigengene 6?
+## Seems to be entirely driven by an excess of mutations in entF.
+## at a first glance, maybe caused by gene conversion or homologous recombination
+## with some other locus in the genome?
+## If so, all these mutations should be linked in a cohort in the metagenomics data.
+eigengene6.mut.data %>% filter(Population=='Ara+3') %>%
+    group_by(Gene) %>% summarize(count=n())
 
 
 ## plot eigen sv, indels, nonsense.
-log.eigen.sv.indel.nonsen.testplot <- log.sv.indel.nonsen.rando.plot %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen1.muts,my.color="red", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen2.muts,my.color="orange", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen3.muts,my.color="yellow", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen4.muts,my.color="green", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen5.muts,my.color="cyan", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen6.muts,my.color="blue", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen7.muts,my.color="violet", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen8.muts,my.color="pink", logscale=TRUE) %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen9.muts,my.color="black", logscale=TRUE)
-ggsave(log.eigen.sv.indel.nonsen.testplot,filename='../results/figures/log-eigen-sv-indel-nonsen-testplot.png')
-
-eigen.sv.indel.nonsen.testplot <- sv.indel.nonsen.rando.plot %>%
+eigen.sv.indel.nonsen.plot <- sv.indel.nonsen.rando.plot %>%
     add.cumulative.mut.layer(c.sv.indel.nonsen.eigen1.muts,my.color="red", logscale=FALSE) %>%
     add.cumulative.mut.layer(c.sv.indel.nonsen.eigen2.muts,my.color="orange", logscale=FALSE) %>%
     add.cumulative.mut.layer(c.sv.indel.nonsen.eigen3.muts,my.color="yellow", logscale=FALSE) %>%
@@ -1303,7 +1145,7 @@ eigen.sv.indel.nonsen.testplot <- sv.indel.nonsen.rando.plot %>%
     add.cumulative.mut.layer(c.sv.indel.nonsen.eigen7.muts,my.color="violet", logscale=FALSE) %>%
     add.cumulative.mut.layer(c.sv.indel.nonsen.eigen8.muts,my.color="pink", logscale=FALSE) %>%
     add.cumulative.mut.layer(c.sv.indel.nonsen.eigen9.muts,my.color="black", logscale=FALSE)
-ggsave(eigen.sv.indel.nonsen.testplot,filename='../results/figures/eigen-sv-indel-nonsen-testplot.png')
+ggsave(eigen.sv.indel.nonsen.plot,filename='../results/figures/eigen-sv-indel-nonsen-plot.png')
 
 ##########################################################################
 ## NOTES:
@@ -1339,4 +1181,3 @@ ggsave(eigen.sv.indel.nonsen.testplot,filename='../results/figures/eigen-sv-inde
 ## are uncorrelated with mutations affecting aerobic fitness,
 ## then would this Genotype-Phenotype Map be inconsistent
 ## with Nkrumah's results?
-
