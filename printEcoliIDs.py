@@ -94,7 +94,7 @@ def main():
 
     ## now parse the genome for CDS.
     genome = next(SeqIO.parse(args.input, "genbank"))
-    print(','.join(['Gene','locus_tag','blattner','gene_length','product']))    
+    print(','.join(['Gene','locus_tag','blattner','gene_length','product', 'start', 'end']))    
     for feat in genome.features:
         if feat.type != 'CDS': continue ## only consider protein-coding genes
         my_start = feat.location.start
@@ -122,8 +122,8 @@ def main():
         product = re.sub('[,;()]', '', product)
         ## I should not have to do this next-- fix these corner cases later.
         blattner = re.sub('[,;()]', '', blattner)
-        
-        print(','.join([str(x) for x in (gene,locus_tag,blattner,length,product)]))
+        ## start+1 (but end+0) to be consistent with genbank format.
+        print(','.join([str(x) for x in (gene,locus_tag,blattner,length,product, my_start+1, my_end )]))
 
 
 main()
