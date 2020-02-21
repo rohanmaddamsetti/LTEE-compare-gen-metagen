@@ -2,6 +2,11 @@
 
 ## MAKE SURE THAT ZEROS IN MUTATION COUNTS ARE NOT THROWN OUT BY DPLYR!
 
+## TODO: do hierarchical modeling of point mutations in genes based on:
+## 1) gene length
+## 2) distance from peak in Ara+3.
+## Question is to quantify contribution of mutation rate variation.
+
 ## TODO: Add Sastry modules to the analysis.
 
 ## TODO: measure the concentration/density of mutation as an empirical CDF.
@@ -11,7 +16,12 @@
 ## TODO: It could be quite interesting to examine genes in prophage that
 ## Jeff Barrick has annotated as misc_regions.
 
+## TODO: look at accumulation of mutations in 57 genes under selection
+## in non-mutators in genomics data. Might as well look at top
+## genes in the mutators and for other kinds of mutations as well.
+
 library(tidyverse)
+library(data.table)
 
 ##########################################################################
 ## FUNCTIONS
@@ -148,7 +158,6 @@ calc.slope.of.cumulative.muts <- function(c.muts) {
         na.omit()
     return(D.of.c.muts)
 }
-
 
 ## This plot visualizes a two-tailed test (alpha = 0.05)
 ## against a bootstrapped null distribution.
@@ -336,10 +345,41 @@ ks.analysis <- function(the.data, REL606.genes, order_by_oriC=FALSE) {
     return(results.to.plot)
 }
 
+make.KS.Figure <- function(the.results.to.plot, order_by_oriC=FALSE) {
+    
+    if (order_by_oriC) {
+        the.results.to.plot <- the.results.to.plot %>% arrange(oriC_start)
+    } else {
+        the.results.to.plot <- the.results.to.plot %>% arrange(gene_length)
+    }
+    
+    ## for plotting convenience, add an index to the data frame.
+    the.results.to.plot$index <- seq_len(nrow(the.results.to.plot))
+  
+    p <- ggplot(the.results.to.plot, aes(x=index)) +
+        geom_line(aes(y=empirical), colour="red") + 
+        geom_line(aes(y=null), linetype=2) + 
+        scale_y_continuous('Cumulative proportion of mutations',limits=c(0,1)) +
+        theme_classic() +
+        theme(axis.title=element_text(size=18),axis.text=element_text(size=12))
+
+    if (order_by_oriC) {
+        p <- p + scale_x_continuous('Genes ranked by chromosomal location',
+                                    limits=c(0,4400))
+    } else {
+        p <- p + scale_x_continuous('Genes ranked by length',limits=c(0,4400))
+    }
+    return(p)
+}
+
+
 ## IMPORTANT NOTE: THIS WILL ONLY WORK ON CORE GENES.
 ## TODO: add use.maddamsetti parameter to use one or other set of parameter estimates.
-thetaS.KS.analysis <- function(the.data, REL606.genes) {
+thetaS.KS.analysis <- function(the.data, REL606.genes, rank_by="length") {
 
+    ## rank_by can have three values: "length", "thetaS", or "oriC".
+    stopifnot(rank_by %in% c("length","thetaS","oriC"))
+    
     ## 1) make an empirical cdf of mutations per core gene.
     ## do K-S tests for goodness of fit of the empirical cdf with cdfs for
     ## thetaS.
@@ -354,9 +394,20 @@ thetaS.KS.analysis <- function(the.data, REL606.genes) {
         mutate(thetaS=Martincorena_thetaS) %>%
         ##mutate(thetaS=Maddamsetti_thetaS) %>%
         filter(!(is.na(thetaS))) %>% ## only keep core genes.
-        replace_na(list(hits=0)) %>%
-        arrange(oriC_start) ## oriC will be roughly in the middle
+        replace_na(list(hits=0))
 
+    if (rank_by == "oriC") {
+        hit.genes.df <- hit.genes.df %>%
+            arrange(oriC_start) ## oriC will be roughly in the middle
+    } else if (rank_by == "length") {
+        hit.genes.df <- hit.genes.df %>%
+            arrange(gene_length)
+    } else if (rank_by == "thetaS") {
+        hit.genes.df <- hit.genes.df %>%
+            arrange(thetaS)        
+    } else {
+        stop("error in thetaS.KS.analysis.")
+    }
     
     ## Calculate the empirical distribution of synonymous substitutions per gene.
     hit.genes.length <- sum(hit.genes.df$gene_length)
@@ -383,6 +434,7 @@ thetaS.KS.analysis <- function(the.data, REL606.genes) {
     results.to.plot <- data.frame(locus_tag=hit.genes.df$locus_tag,
                                   Gene=hit.genes.df$Gene,
                                   gene_length=hit.genes.df$gene_length,
+                                  thetaS=hit.genes.df$thetaS,
                                   empirical=empirical.cdf,
                                   null=null.cdf,
                                   alt1=alt1.cdf,
@@ -392,46 +444,24 @@ thetaS.KS.analysis <- function(the.data, REL606.genes) {
 }
 
 
-make.KS.Figure <- function(the.results.to.plot, order_by_oriC=FALSE) {
+make.thetaS.KS.Figure <- function(the.results.to.plot, rank_by="length") {
 
-    if (order_by_oriC) { ## oriC will be roughly in the middle
+    ## rank_by can have three values: "length", "thetaS", or "oriC".
+    stopifnot(rank_by %in% c("length","thetaS","oriC"))
+
+    if (rank_by == "oriC") {
+        ## oriC will be roughly in the middle
         the.results.to.plot <- the.results.to.plot %>% arrange(oriC_start)
-    }
-    ## for plotting convenience, add an index to the data frame.
-    the.results.to.plot$index <- seq_len(nrow(the.results.to.plot))
-  
-    plot <- ggplot(the.results.to.plot, aes(x=index)) +
-        geom_line(aes(y=empirical), colour="red") + 
-        geom_line(aes(y=null), linetype=2) + 
-        scale_y_continuous('Cumulative proportion of mutations',limits=c(0,1)) +
-        theme_classic() +
-        theme(axis.title=element_text(size=18),axis.text=element_text(size=12))
-
-    if (order_by_oriC) {
-        ## find the index for gidA and mioC, which sandwich oriC.
-        ## use these to plot the location of oriC.
-        gidA.index <- filter(the.results.to.plot,Gene=='gidA')$index
-        mioC.index <- filter(the.results.to.plot,Gene=='mioC')$index
-        plot <- plot + scale_x_continuous('Genes ranked by chromosomal location',limits=c(0,4400)) + geom_vline(xintercept=(gidA.index+mioC.index)/2,linetype='dotted',color='grey')
+    } else if (rank_by == "length") {
+        the.results.to.plot <- the.results.to.plot %>% arrange(gene_length)
+    } else if (rank_by == "thetaS") {
+        the.results.to.plot <- the.results.to.plot %>% arrange(thetaS)
     } else {
-        plot <- plot + scale_x_continuous('Genes ranked by length',limits=c(0,4400))
+        stop("error in make.KS.Figure.")
     }
-    
-    return(plot)
-}
 
-make.thetaS.KS.Figure <- function(the.results.to.plot) {
-
-    ## oriC will be roughly in the middle
-    the.results.to.plot <- the.results.to.plot %>% arrange(oriC_start)
-    
     ## for plotting convenience, add an index to the data frame.
     the.results.to.plot$index <- seq_len(nrow(the.results.to.plot))
-
-    ## find the index for gidA and mioC, which sandwich oriC.
-    ## use these to plot the location of oriC.
-    gidA.index <- filter(the.results.to.plot,Gene=='gidA')$index
-    mioC.index <- filter(the.results.to.plot,Gene=='mioC')$index
     
     plot <- ggplot(the.results.to.plot, aes(x=index)) +
         geom_line(aes(y=empirical), colour="red") + 
@@ -440,9 +470,21 @@ make.thetaS.KS.Figure <- function(the.results.to.plot) {
         geom_line(aes(y=alt2), linetype='dotted') + 
         scale_y_continuous('Cumulative proportion of mutations',limits=c(0,1)) +
         theme_classic() +
-        theme(axis.title=element_text(size=18),axis.text=element_text(size=12)) +
-        scale_x_continuous('Genes ranked by chromosomal location') +
-        geom_vline(xintercept=(gidA.index+mioC.index)/2,linetype='dotted',color='grey')
+        theme(axis.title=element_text(size=18),axis.text=element_text(size=12))
+
+    if (rank_by == "oriC") {
+        ## find the index for gidA and mioC, which sandwich oriC.
+        ## use these to plot the location of oriC.
+        gidA.index <- filter(the.results.to.plot,Gene=='gidA')$index
+        mioC.index <- filter(the.results.to.plot,Gene=='mioC')$index
+        plot <- plot + scale_x_continuous('Genes ranked by chromosomal location') + geom_vline(xintercept=(gidA.index+mioC.index)/2,linetype='dotted',color='grey')
+    } else if (rank_by == "length") {
+        plot <- plot + scale_x_continuous('Genes ranked by length')
+    } else if (rank_by == "thetaS") {
+        plot <- plot + scale_x_continuous('Genes ranked by thetaS')
+    } else {
+        stop("error 2 in make.KS.Figure.")
+    }
     
     return(plot)
 }
@@ -539,7 +581,6 @@ mutation.data <- read.csv(
     mutate(oriC.coordinate=rotate.REL606.chr(Position,"oriC")) %>%
     mutate(terB.coordinate=rotate.REL606.chr(Position,"terB"))
 
-
 gene.mutation.data <- inner_join(mutation.data,REL606.genes)
 
 #############!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -573,7 +614,7 @@ gene.nonsense.sv.indels.mutation.data <- gene.mutation.data %>%
     filter(Gene!='intergenic') %>%
     filter(Annotation %in% c('indel', 'sv', 'nonsense'))
 
-## Now filter for nonsense, sv, and indels in genes (of course nonsense are always in genes.)
+## Now filter for nonsense, sv, and indels in genes (of course nonsense are always in genes)
 sv.indel.nonsense.gene.mutation.data <- gene.mutation.data %>%
     filter(Annotation %in% c("sv", "indel", "nonsense"))
 
@@ -610,12 +651,18 @@ gene.sv.mutation.data <- gene.mutation.data %>%
 gene.indel.mutation.data <- gene.mutation.data %>%
     filter(Gene!='intergenic') %>%
     filter(Annotation=='indel')
+
+## we treat nonsense as a nonsynonymous mutation-- for comparison to Tenaillon 2016 data.
+gene.nodNdS.mutation.data <- gene.mutation.data %>%
+    filter(Gene!='intergenic') %>%
+    filter(Annotation %in% c("sv", "indel", "noncoding"))
 ##########################################################################################
 ## make base plot of null distributions by subsampling/bootstrapping.
 ## I will overlay data on top of these plots.
 
 ## Base plots here of null distributions: add the data lines on top to compare.
 all.rando.plot <- plot.base.layer(gene.mutation.data, logscale=FALSE)
+nodNdS.rando.plot <- plot.base.layer(gene.nodNdS.mutation.data, logscale=FALSE)
 sv.indel.nonsen.rando.plot <- plot.base.layer(sv.indel.nonsense.gene.mutation.data, logscale=FALSE)
 
 ##########################################################################################
@@ -653,7 +700,6 @@ terB.mut.plot <- ggplot(mutation.data,aes(x=terB.coordinate,fill=Annotation)) +
     theme_classic() +
     facet_wrap(.~Population,scales="free") 
 ggsave("../results/figures/terB-mutation-bias-histogram.pdf",terB.mut.plot,width=11,height=8)
-
 
 ## plot point mutations over the genome: dN, dS, nonsense, noncoding
 point.mut.data <- mutation.data %>%
@@ -728,22 +774,46 @@ gene.length.location.plot
 ## Probably because there are 3 times as many dN as dS throughout the
 ## experiment... but could the mutation bias seen in Ara+3 be a factor?
 
+## IMPORTANT ISSUE: changing the CDF (by changing rank on x-axis),
+## while keeping the same set of probability masses for each gene
+## changes K-S test statistics! How do I interpret this?
+## Perhaps because K-S is for continuous and not discrete distributions?
+## Try using the bootstrap K-S test described here to see if this solves
+## the problem.
+## http://sekhon.berkeley.edu/matching/ks.boot.html
+
 ## examine all mutations over genes in the genome.
 cumsum.all.over.metagenome <- ks.analysis(gene.only.mutation.data,REL606.genes)
 
-## NOTE: thetaS KS analysis will only work for core genes! 
-cumsum.all.core.metagenome <- thetaS.KS.analysis(gene.only.mutation.data,REL606.genes)
-cumsum.dS.core.metagenome <- thetaS.KS.analysis(gene.dS.mutation.data,REL606.genes)
-cumsum.dN.core.metagenome <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes)
+## NOTE: thetaS KS analysis will only work for core genes!
+## IMPORTANT!! RESULTS DEPEND ON X-AXIS ORDERING!
+cumsum.dS.core1 <- thetaS.KS.analysis(gene.dS.mutation.data,REL606.genes,"length")
+cumsum.dS.core2 <- thetaS.KS.analysis(gene.dS.mutation.data,REL606.genes,"oriC")
+cumsum.dS.core3 <- thetaS.KS.analysis(gene.dS.mutation.data,REL606.genes,"thetaS")
 
-dN.thetaS.KS.plot <- make.thetaS.KS.Figure(cumsum.dN.core.metagenome)
-dS.thetaS.KS.plot <- make.thetaS.KS.Figure(cumsum.dS.core.metagenome)
-all.KS.plot <- make.KS.Figure(cumsum.all.over.metagenome)
-ggsave("../results/figures/all_KS.plot.pdf",all.KS.plot)
+cumsum.dN.core1 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"length")
+cumsum.dN.core2 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"oriC")
+cumsum.dN.core3 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"thetaS")
+
+dS.thetaS.plot1 <- make.thetaS.KS.Figure(cumsum.dS.core1,"length")
+ggsave("../results/figures/dS_thetaS_plot1.pdf",dS.thetaS.plot1)
+dS.thetaS.plot2 <- make.thetaS.KS.Figure(cumsum.dS.core2,"oriC")
+ggsave("../results/figures/dS_thetaS_plot2.pdf",dS.thetaS.plot2)
+dS.thetaS.plot3 <- make.thetaS.KS.Figure(cumsum.dS.core3,"thetaS")
+ggsave("../results/figures/dS_thetaS_plot3.pdf",dS.thetaS.plot3)
+
+dN.thetaS.plot1 <- make.thetaS.KS.Figure(cumsum.dN.core1,"length")
+ggsave("../results/figures/dN_thetaS_plot1.pdf",dN.thetaS.plot1)
+dN.thetaS.plot2 <- make.thetaS.KS.Figure(cumsum.dN.core2,"oriC")
+ggsave("../results/figures/dN_thetaS_plot2.pdf",dN.thetaS.plot2)
+dN.thetaS.plot3 <- make.thetaS.KS.Figure(cumsum.dN.core3,"thetaS")
+ggsave("../results/figures/dN_thetaS_plot3.pdf",dN.thetaS.plot3)
+
 
 ## not significant: but marginal result: p-value = 0.095.
 cumsum.all.over.metagenome.by.oriC <- ks.analysis(gene.only.mutation.data,REL606.genes,TRUE)
 all.KS.plot.by.oriC <- make.KS.Figure(cumsum.all.over.metagenome.by.oriC, TRUE)
+ggsave("../results/figures/all_KS.plot_by_oriC.pdf",all.KS.plot.by.oriC)
 
 ## plot all mutations for Ara+3.
 ara.plus3.all.muts <- filter(gene.only.mutation.data,Population=='Ara+3')
@@ -778,22 +848,35 @@ ggsave("../results/figures/dS_KS.plot.pdf",dS.KS.plot)
 ## dS is significantly different from null, when ordered by chromosomal location!
 ## p = 0.002231.
 cumsum.dS.over.metagenome.by.oriC <- ks.analysis(gene.dS.mutation.data,REL606.genes,TRUE)
-dS.KS.plot <- make.KS.Figure(cumsum.dS.over.metagenome)
+dS.KS.plot.by.oriC <- make.KS.Figure(cumsum.dS.over.metagenome.by.oriC,TRUE)
+ggsave("../results/figures/dS_KS.plot_by_oriC.pdf",dS.KS.plot.by.oriC)
+
 ## plot dS for Ara+3.
 ara.plus3.dS.muts <- filter(gene.dS.mutation.data,Population=='Ara+3')
-cumsum.ara.plus3.dS.metagenome <- thetaS.KS.analysis(ara.plus3.dS.muts,REL606.genes)
-ara.plus3.dS.thetaS.KS.plot <- make.thetaS.KS.Figure(cumsum.ara.plus3.dS.metagenome)
 
 cumsum.dS.over.ara.plus3 <- ks.analysis(ara.plus3.dS.muts,REL606.genes)
 ara.plus3.dS.KS.plot <- make.KS.Figure(cumsum.dS.over.ara.plus3)
 ggsave("../results/figures/Ara+3_dS_KS.plot.pdf",ara.plus3.dS.KS.plot)
+
+cumsum.dS.over.ara.plus3.by.oriC <- ks.analysis(ara.plus3.dS.muts,REL606.genes,TRUE)
+ara.plus3.dS.KS.plot.by.oriC <- make.KS.Figure(cumsum.dS.over.ara.plus3.by.oriC,TRUE)
+ggsave("../results/figures/Ara+3_dS_KS_by_oriC.plot.pdf",ara.plus3.dS.KS.plot.by.oriC)
+
+
+cumsum.ara.plus3.dS.metagenome <- thetaS.KS.analysis(ara.plus3.dS.muts,REL606.genes)
+ara.plus3.dS.thetaS.KS.plot <- make.thetaS.KS.Figure(cumsum.ara.plus3.dS.metagenome)
+
 
 ## examine dN over the genome.
 ## dN fits the null even better than dS! But note that
 ## there are 18493 dN in the data, and 6792 dS in the data.
 ## so the better fit is probably best explained by the larger sample size.
 cumsum.dN.over.metagenome <- ks.analysis(gene.dN.mutation.data,REL606.genes)
-make.KS.Figure(cumsum.dN.over.metagenome)
+dN.KS.plot <- make.KS.Figure(cumsum.dN.over.metagenome)
+cumsum.dN.over.metagenome.by.oriC <- ks.analysis(gene.dN.mutation.data,REL606.genes,TRUE)
+dN.KS.plot.by.oriC <- make.KS.Figure(cumsum.dN.over.metagenome.by.oriC,TRUE)
+ggsave("../results/figures/dN_KS_plot.pdf",dN.KS.plot)
+ggsave("../results/figures/dN_KS_plot_by_oriC.pdf",dN.KS.plot.by.oriC)
 
 ## dN is not different from null, when ordered by chromosomal location.
 ## p = 0.3705.
@@ -1156,6 +1239,7 @@ nuc.parallel.data <- gene.mutation.data %>% group_by(Gene, Position, Annotation,
 
 write.csv(nuc.parallel.data,'../results/parallel-nuc-summary.csv')
 
+
 #######################################################################################
 ## INITIAL PURIFYING SELECTION RESULTS.
 ## VERY PROMISING BUT WILL NEED TO RIGOROUSLY CHECK.
@@ -1244,6 +1328,148 @@ pur3.with.dS <- filter(pur3,dS.mut.count>0)
 ## LTEE genomics data at barricklab.org/shiny/LTEE-Ecoli
 ## to verify that those genes indeed don't have any mutations.
 #########################################################################
+#########################################################################
+## look at the accumulation of stars over time for top genes in the
+## Tenaillon et al. (2016) genomics data.
+
+## also look at the derivative of the accumulation of stars over time.
+D.all.rando.plot <- plot.slope.of.base.layer(gene.mutation.data)
+##all.rando.plot <- plot.base.layer(gene.mutation.data, logscale=FALSE)
+
+##(data, subset.size=300, N=1000, alpha = 0.05, normalization.constant=NA) {
+
+## 1) plot top genes in non-mutators.
+nonmut.genomics <- read.csv('../data/tenaillon2016-nonmutator-parallelism.csv')
+top.nonmut.genomics <- top_n(nonmut.genomics, 50, wt=G.score)
+
+top.nonmut.mutation.data <- gene.mutation.data %>%
+                                   filter(Gene %in% top.nonmut.genomics$Gene.name)
+c.top.nonmut.muts <- calc.cumulative.muts(top.nonmut.mutation.data)
+
+tenaillon.plot1 <- all.rando.plot %>%
+    add.cumulative.mut.layer(c.top.nonmut.muts,my.color="black",logscale=FALSE)
+
+## 2a) plot top genes in non-mutators, after excluding dN and dS mutations.
+nonmut.nodNdS <- read.csv('../data/tenaillon2016-nonmutator-parallelism-nodSdN.csv')
+top.nonmut.nodNdS <- top_n(nonmut.nodNdS, 50) ## using excluding dN dS column by default.
+
+top.nonmut.nodNdS.mutation.data <- gene.mutation.data %>%
+                                   filter(Gene %in% top.nonmut.nodNdS$Gene.name)
+c.top.nonmut.nodNdS.muts <- calc.cumulative.muts(top.nonmut.nodNdS.mutation.data)
+
+tenaillon.plot2a <- all.rando.plot %>%
+    add.cumulative.mut.layer(c.top.nonmut.nodNdS.muts,my.color="black",logscale=FALSE)
+
+## 2b) exclude dN and dS in random comparison.
+top.nonmut.nodNdS.mutation.data.2b <- gene.nodNdS.mutation.data %>%
+                                   filter(Gene %in% top.nonmut.nodNdS$Gene.name)
+c.top.nonmut.nodNdS.muts.2b <- calc.cumulative.muts(top.nonmut.nodNdS.mutation.data.2b)
+
+tenaillon.plot2b <- nodNdS.rando.plot %>%
+    add.cumulative.mut.layer(c.top.nonmut.nodNdS.muts.2b,my.color="black",logscale=FALSE)
+
+
+
+## 3) plot top genes in hypermutators.
+mut.genomics <- read.csv('../data/tenaillon2016-mutator-parallelism.csv')
+top.mut.genomics <- top_n(mut.genomics, 50, wt=G.score)
+
+top.mut.mutation.data <- gene.mutation.data %>%
+                                   filter(Gene %in% top.mut.genomics$Gene.name)
+c.top.mut.muts <- calc.cumulative.muts(top.mut.mutation.data)
+
+tenaillon.plot3 <- all.rando.plot %>%
+    add.cumulative.mut.layer(c.top.mut.muts,my.color="black",logscale=FALSE)
+
+
+## 4a) plot top genes in hypermutators, after excluding dN and dS mutations.
+
+mut.nodNdS <- read.csv('../data/tenaillon2016-mutator-parallelism-nodSdN.csv')
+top.mut.nodNdS <- top_n(mut.nodNdS, 50) ## using excluding dN dS column by default.
+
+top.mut.nodNdS.mutation.data <- gene.mutation.data %>%
+                                   filter(Gene %in% top.mut.nodNdS$Gene.name)
+c.top.mut.nodNdS.muts <- calc.cumulative.muts(top.mut.nodNdS.mutation.data)
+
+tenaillon.plot4a <- all.rando.plot %>%
+    add.cumulative.mut.layer(c.top.mut.nodNdS.muts,my.color="black",logscale=FALSE)
+
+## 4b) exclude dN and dS in random comparison.
+top.mut.nodNdS.mutation.data.4b <- gene.nodNdS.mutation.data %>%
+                                   filter(Gene %in% top.mut.nodNdS$Gene.name)
+c.top.mut.nodNdS.muts.4b <- calc.cumulative.muts(top.mut.nodNdS.mutation.data.4b)
+
+tenaillon.plot4b <- nodNdS.rando.plot %>%
+    add.cumulative.mut.layer(c.top.mut.nodNdS.muts.4b,my.color="black",logscale=FALSE)
+
+## let's compare rates of mutation too, by looking at derivatives.
+
+## This plot visualizes a two-tailed test (alpha = 0.05)
+## against a bootstrapped null distribution for the derivative of cumulative mutations.
+## This is what we want to use for publication.
+plot.slope.of.base.layer <- function(data, subset.size=300, N=1000, alpha = 0.05, normalization.constant=NA) {
+
+    ## This function takes the index for the current draw, and samples the data,
+    ## generating a random gene set for which to calculate cumulative mutations,
+    ## and then its derivative.
+    generate.slope.of.cumulative.mut.subset <- function(idx) {
+        rando.genes <- sample(unique(data$Gene),subset.size)
+        mut.subset <- filter(data,Gene %in% rando.genes)
+        D.c.mut.subset <- calc.cumulative.muts(mut.subset, normalization.constant) %>%
+            calc.slope.of.cumulative.muts() %>%
+            mutate(bootstrap_replicate=idx)
+        return(D.c.mut.subset)
+    }
+
+    ## make a dataframe of bootstrapped trajectories.
+    ## look at accumulation of stars over time for random subsets of genes.
+    ## I want to plot the distribution of cumulative mutations over time for
+    ## say, 1000 or 10000 random subsets of genes.
+
+    bootstrapped.trajectories <- map_dfr(.x=seq_len(N),.f=generate.slope.of.cumulative.mut.subset)
+
+    ## filter out the top alpha/2 and bottom alpha/2 trajectories from each population,
+    ## for a two-sided test. default is alpha == 0.05.
+    
+    trajectory.summary <- bootstrapped.trajectories %>%
+        ## important: don't drop empty groups.
+        group_by(bootstrap_replicate, Population,.drop=FALSE) %>%
+        summarize(final.D.norm.cs=max(D.normalized.cs)) %>%
+        ungroup() 
+    
+    top.trajectories <- trajectory.summary %>%
+        group_by(Population) %>%
+        top_frac(alpha/2) %>%
+        select(-final.D.norm.cs) %>%
+        mutate(in.top=TRUE)
+    
+    bottom.trajectories <- trajectory.summary %>%
+        group_by(Population) %>%
+        top_frac(-alpha/2) %>%
+        select(-final.D.norm.cs) %>%
+        mutate(in.bottom=TRUE)
+    
+    filtered.trajectories <- bootstrapped.trajectories %>%
+        left_join(top.trajectories) %>%
+        left_join(bottom.trajectories) %>%
+        filter(is.na(in.top)) %>%
+        filter(is.na(in.bottom)) %>%
+        select(-in.top,-in.bottom)
+
+    p <- ggplot(filtered.trajectories,aes(x=Generation,y=D.normalized.cs)) +
+        ylab('slope of cumulative number of mutations (normalized)') +
+        theme_classic() +
+        geom_point(size=0.2, color='gray') +
+        facet_wrap(.~Population,scales='free',nrow=4) +
+        xlab('Generations (x 10,000)') +
+        xlim(0,6.3) +
+        theme(axis.title.x = element_text(size=14),
+              axis.title.y = element_text(size=14),
+              axis.text.x  = element_text(size=14),
+              axis.text.y  = element_text(size=14))
+    return(p)
+}
+
 ##########################################################################
 ## look at accumulation of stars over time for genes in the different proteome
 ## sectors.
@@ -1402,6 +1628,126 @@ ggsave(eigen.sv.indel.nonsen.plot,filename='../results/figures/eigen-sv-indel-no
 ## look at accumulation of stars over time for genes in different transcriptional
 ## modules inferred by Sastry et al. (2020) paper from Bernhard Palsson's group.
 
+
+##########################################################################
+## examine parallelism in dS-- is there evidence of positive selection on dS?
+## more rigor is needed to disentangle mutation from selection as causes.
+
+## normalize by gene length to make a density, and then make a
+## histogram of densities. Plot for dS and dN.
+
+dS.mutation.density <- calc.gene.mutation.density(
+    gene.mutation.data, c("synonymous")) %>%
+    rename(dS.mut.count = mut.count) %>%
+    rename(dS.mut.density = density) %>%
+    arrange(desc(dS.mut.density)) %>% left_join(REL606.genes) %>%
+    dplyr::select(Gene,gene_length,dS.mut.count,dS.mut.density,product)
+
+dS.density.hist <- ggplot(dS.mutation.density,
+                          aes(x=dS.mut.density,fill='red')) +
+    geom_histogram() + theme_classic() + guides(fill=FALSE)
+
+dS.point.plot <- ggplot(dS.mutation.density,
+                        aes(x=dS.mut.count,y=gene_length)) + geom_point() +
+    geom_smooth() + theme_classic()
+
+## comparison with dN.
+
+dN.mutation.density <- calc.gene.mutation.density(
+    gene.mutation.data, c("missense")) %>%
+    rename(dN.mut.count = mut.count) %>%
+    rename(dN.mut.density = density) %>%
+    arrange(desc(dN.mut.density)) %>% left_join(REL606.genes) %>%
+    dplyr::select(Gene,gene_length,dN.mut.count,dN.mut.density,product)
+
+dN.density.hist <- ggplot(dN.mutation.density,
+                          aes(x=dN.mut.density)) + geom_histogram() + theme_classic()
+
+dN.point.plot <- ggplot(dN.mutation.density,
+                        aes(x=gene_length,y=dN.mut.count)) + geom_point() +
+    geom_smooth() + theme_classic() #+ geom_abline(intercept=0)
+
+dS.dN.density.hist <- dS.density.hist +
+    geom_histogram(data=dN.mutation.density,aes(x=dN.mut.density),fill='blue',alpha=0.5)
+
+
+## Is there any correlation between dS density and dN density?
+## such a correlation could be caused by either mutation or selection.
+## remove genes with zeros in either category, to avoid biases associated
+## with either purifying selection, or masked regions of the genome.
+
+dS.dN.mutation.density <- inner_join(dS.mutation.density, dN.mutation.density) %>%
+    filter(dS.mut.count>0) %>%
+    filter(dN.mut.count>0)
+
+dS.dN.density.cor.plot <- ggplot(dS.dN.mutation.density,
+                                 aes(dS.mut.density,dN.mut.density)) +
+    theme_classic() + geom_point()
+
+## dN and dS densities are positively correlated. p = 3.433 * 10^-5.
+cor.test(dS.dN.mutation.density$dS.mut.density,dS.dN.mutation.density$dN.mut.density, method="kendall")
+
+## Do a randomization test to see if the tail is fatter than expected if
+## all dS (or dN) were neutrally falling over the genome. Do this to set a cutoff to find
+## genes under selection (see code for parallyze.)
+## have to take this approach to take varying gene length into account.
+
+null.dS.parallel.density <- function(mut.dS.density.df,
+                                  empirical.max.density=0.0167,
+                                  replicates=10000) {
+
+    max.dS.hit.density <- function(mut.dS.density.df) {
+        ## generate a null distribution based on gene length.
+        tot.gene.length <- sum(mut.dS.density.df$gene_length)
+        mut.dS.density.df <- mut.dS.density.df %>%
+            mutate(prob=gene_length/tot.gene.length)
+        total.dS <- sum(mut.dS.density.df$dS.mut.count)
+        my.sample <- sample(x=mut.dS.density.df$Gene,
+                            size=total.dS,replace=TRUE,prob=mut.dS.density.df$prob)
+        my.sample.parallel.hits <- data.table(my.sample)[, .N, keyby = my.sample] %>%
+            mutate(Gene=my.sample) %>%
+            left_join(dplyr::select(mut.dS.density.df,gene_length,Gene)) %>%
+            mutate(density = N/gene_length)
+        max.sampled.density <- max(my.sample.parallel.hits$density)
+        return(max.sampled.density)
+    }
+
+    max.hit.vec <- unlist(map(seq_len(replicates), ~max.dS.hit.density(mut.dS.density.df)))
+    max.hit.df.col <- data.frame('max.density'=max.hit.vec)
+    past.threshold <- nrow(filter(max.hit.df.col,max.density>=empirical.max.density))
+    return(past.threshold/replicates)
+}
+
+
+## to what extent is there evidence of intragenomic recombination between partially replicated chromosomes? intragenomic recombination/gene conversion?
+## candidates for gene conversion: multiple dS in the same Population, in the same gene,
+## and in the same cohort of mutations.
+dS.in.same.cohort.summary <- gene.dS.mutation.data %>% group_by(Population,Gene,t0,tf) %>% summarize(cohort=n()) %>% arrange(desc(cohort)) %>% filter(cohort>1) %>%
+    filter(Gene!='ydfQ')
+
+test2 <- filter(test,!(Gene %in% dS.in.same.cohort.summary$Gene)) %>%
+    filter(Gene!='ydfQ')
+
+## parallelism in dS at the same position
+test3 <- gene.dS.mutation.data %>% group_by(Gene,Position) %>% summarize(count=n()) %>% arrange(desc(count)) %>% filter(count>2)
+
+## parallelism in dS at gene level in the same population
+test4 <- gene.dS.mutation.data %>% group_by(Population,Gene) %>% summarize(count=n()) %>% arrange(desc(count)) %>% filter(count>3) %>%
+    ## filter out genes with dS in same cohort (no change)
+    filter(!(Gene %in% dS.in.same.cohort.summary)) %>%
+    filter(Gene!='ydfQ')
+
+## Two genes show parallelism within and between pops:
+## mfd, ygeY.
+dS.parallel.in.and.among.pops <- test4 %>% group_by(Gene) %>%
+    summarize(parallel.pops=n()) %>% filter(parallel.pops>1)
+mfd.ygeY.mutations <- gene.dS.mutation.data %>% filter(Gene %in% c('mfd','ygeY'))
+
+## parallelism in dS at the same position in the same population
+## we get exactly one gene: ydfQ--
+## BUT THIS IS A BUG TO BE FIXED, CAUSED BY TWO LOCI WITH THE SAME BLATTNER NUMBER.
+test5 <- gene.dS.mutation.data %>% group_by(Population,Gene,Position) %>% summarize(count=n()) %>% arrange(desc(count)) %>% filter(count>1)
+buggy.ydfQ.mutations <- gene.dS.mutation.data %>% filter(Gene=='ydfQ')
 
 
 ##########################################################################
