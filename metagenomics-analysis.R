@@ -21,7 +21,6 @@
 ## genes in the mutators and for other kinds of mutations as well.
 
 library(tidyverse)
-library(data.table)
 
 ##########################################################################
 ## FUNCTIONS
@@ -70,7 +69,7 @@ calc.cumulative.muts <- function(data, normalization.constant=NA) {
     ## if normalization.constant is not provided, then
     ## calculate based on gene length by default.
     if (is.na(normalization.constant)) {
-        my.genes <- data %>% select(Gene,gene_length) %>% distinct()
+        my.genes <- data %>% dplyr::select(Gene,gene_length) %>% distinct()
         normalization.constant <- sum(my.genes$gene_length)
     }
     
@@ -193,13 +192,13 @@ plot.base.layer <- function(data, subset.size=300, N=1000, alpha = 0.05, logscal
     top.trajectories <- trajectory.summary %>%
         group_by(Population) %>%
         top_frac(alpha/2) %>%
-        select(-final.norm.cs) %>%
+        dplyr::select(-final.norm.cs) %>%
         mutate(in.top=TRUE)
     
     bottom.trajectories <- trajectory.summary %>%
         group_by(Population) %>%
         top_frac(-alpha/2) %>%
-        select(-final.norm.cs) %>%
+        dplyr::select(-final.norm.cs) %>%
         mutate(in.bottom=TRUE)
     
     filtered.trajectories <- bootstrapped.trajectories %>%
@@ -207,7 +206,7 @@ plot.base.layer <- function(data, subset.size=300, N=1000, alpha = 0.05, logscal
         left_join(bottom.trajectories) %>%
         filter(is.na(in.top)) %>%
         filter(is.na(in.bottom)) %>%
-        select(-in.top,-in.bottom)
+        dplyr::select(-in.top,-in.bottom)
 
     if (logscale) {
         p <- ggplot(filtered.trajectories,aes(x=Generation,y=log10(normalized.cs))) +
@@ -267,15 +266,9 @@ plot.cumulative.muts <- function(mut.data,logscale=TRUE, my.color="black") {
 }
 
 ## calculate derivative of cumulative numbers of mutations in each category.
-plot.slope.of.cumulative.muts <- function(mut.data,logscale=TRUE, my.color="black") {
-    if (logscale) {
-        p <- ggplot(mut.data,aes(x=Generation,y=log10(D.normalized.cs))) +
-            ylab('log[Slope of Cumulative number of mutations (normalized)]')
-    } else {
-        p <- ggplot(mut.data,aes(x=Generation,y=D.normalized.cs)) +
-            ylab('Slope of Cumulative number of mutations (normalized)')
-    }
-    p <- p +
+plot.slope.of.cumulative.muts <- function(mut.data, my.color="black") {
+    p <- ggplot(mut.data,aes(x=Generation,y=D.normalized.cs)) +
+        ylab('Slope of Cumulative number of mutations (normalized)') +
         theme_classic() +
         geom_point(size=0.2, color=my.color) +
         geom_step(size=0.2, color=my.color) +
@@ -287,18 +280,11 @@ plot.slope.of.cumulative.muts <- function(mut.data,logscale=TRUE, my.color="blac
 }
 
 ## take a ggplot object output by plot.cumulative.muts, and add an extra layer.
-add.slope.of.cumulative.mut.layer <- function(p, layer.df, my.color, logscale=TRUE) {
-    if (logscale) {
-        p <- p +
-            geom_point(data=layer.df, aes(x=Generation,y=log10(D.normalized.cs)), color=my.color, size=0.2) +
-            geom_step(data=layer.df, aes(x=Generation,y=log10(D.normalized.cs)), color=my.color, size=0.2) +
-            geom_smooth(size=0.2, color=my.color)
-        } else {
-            p <- p +
-                geom_point(data=layer.df, aes(x=Generation,y=D.normalized.cs), color=my.color, size=0.2) +
-                geom_step(data=layer.df, aes(x=Generation,y=D.normalized.cs), color=my.color, size=0.2) +
-                geom_smooth(size=0.2, color=my.color)
-        }
+add.slope.of.cumulative.mut.layer <- function(p, layer.df, my.color) {
+    p <- p +
+        geom_point(data=layer.df, aes(x=Generation,y=D.normalized.cs), color=my.color, size=0.2) +
+        geom_step(data=layer.df, aes(x=Generation,y=D.normalized.cs), color=my.color, size=0.2) +
+        geom_smooth(data=layer.df,size=0.2, color=my.color)
     return(p)
 }
 
@@ -681,8 +667,6 @@ sv.indel.nonsen.rando.plot <- plot.base.layer(sv.indel.nonsense.gene.mutation.da
 ## of dS over LTEE genomes reflect unwinding/loosening of chromosomal
 ## proteins packing up the DNA.
 
-## TODO: plot cumulative mutations over the genome.
-
 mut.plot <- ggplot(mutation.data,aes(x=oriC.coordinate,fill=Annotation)) +
     geom_histogram(bins=100) + 
     theme_classic() +
@@ -778,9 +762,6 @@ gene.length.location.plot
 ## while keeping the same set of probability masses for each gene
 ## changes K-S test statistics! How do I interpret this?
 ## Perhaps because K-S is for continuous and not discrete distributions?
-## Try using the bootstrap K-S test described here to see if this solves
-## the problem.
-## http://sekhon.berkeley.edu/matching/ks.boot.html
 
 ## examine all mutations over genes in the genome.
 cumsum.all.over.metagenome <- ks.analysis(gene.only.mutation.data,REL606.genes)
@@ -1175,7 +1156,7 @@ zero.nonindelsv.density.data <- nonindelsv.density.data %>%
 
 top.nonindelsv.density.data <- nonindelsv.density.data %>%
     filter(nonsense.indel.sv.mut.density>0.01) %>%
-    select(Gene,locus_tag,blattner,gene_length,product,nonsense.indel.sv.mut.density,nonsense.indel.sv.mut.count)
+    dplyr::select(Gene,locus_tag,blattner,gene_length,product,nonsense.indel.sv.mut.density,nonsense.indel.sv.mut.count)
 
 
 ## let's just look at dN and see what the distribution looks like.
@@ -1206,7 +1187,7 @@ c.top.dN.gene.plot <- small.dN.rando.plot %>%
 top.by.dN.density.genes
 
 ## let's filter further on dN.mut.density.
-top_dN_checkme <- top.by.dN.density.genes %>% select(Gene,locus_tag,blattner, gene_length,
+top_dN_checkme <- top.by.dN.density.genes %>% dplyr::select(Gene,locus_tag,blattner, gene_length,
                                                  product, dN.mut.count,dN.mut.density,
                                                  dN.decile) %>%
     filter(dN.mut.density>0.01) %>%
@@ -1273,7 +1254,7 @@ write.csv(only.dS.allowed.genes,file="../results/only-dS-allowed-genes.csv")
 ## As an added confirmation, let's compare essentiality from KEIO collection to these
 ## gene sets.
 KEIO.data <- read.csv("../data/KEIO_Essentiality.csv", header=TRUE,as.is=TRUE) %>%
-    select(-JW_id)
+    dplyr::select(-JW_id)
 
 KEIO.gene.mutation.densities <- left_join(gene.mutation.densities,KEIO.data)
 
@@ -1332,77 +1313,12 @@ pur3.with.dS <- filter(pur3,dS.mut.count>0)
 ## look at the accumulation of stars over time for top genes in the
 ## Tenaillon et al. (2016) genomics data.
 
-## also look at the derivative of the accumulation of stars over time.
-D.all.rando.plot <- plot.slope.of.base.layer(gene.mutation.data)
-##all.rando.plot <- plot.base.layer(gene.mutation.data, logscale=FALSE)
+## These curves are so far above the average, that comparing slopes is
+## challenging. To solve this issue let's compare rates of mutation
+## by looking at derivative itself.
 
-##(data, subset.size=300, N=1000, alpha = 0.05, normalization.constant=NA) {
-
-## 1) plot top genes in non-mutators.
-nonmut.genomics <- read.csv('../data/tenaillon2016-nonmutator-parallelism.csv')
-top.nonmut.genomics <- top_n(nonmut.genomics, 50, wt=G.score)
-
-top.nonmut.mutation.data <- gene.mutation.data %>%
-                                   filter(Gene %in% top.nonmut.genomics$Gene.name)
-c.top.nonmut.muts <- calc.cumulative.muts(top.nonmut.mutation.data)
-
-tenaillon.plot1 <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.top.nonmut.muts,my.color="black",logscale=FALSE)
-
-## 2a) plot top genes in non-mutators, after excluding dN and dS mutations.
-nonmut.nodNdS <- read.csv('../data/tenaillon2016-nonmutator-parallelism-nodSdN.csv')
-top.nonmut.nodNdS <- top_n(nonmut.nodNdS, 50) ## using excluding dN dS column by default.
-
-top.nonmut.nodNdS.mutation.data <- gene.mutation.data %>%
-                                   filter(Gene %in% top.nonmut.nodNdS$Gene.name)
-c.top.nonmut.nodNdS.muts <- calc.cumulative.muts(top.nonmut.nodNdS.mutation.data)
-
-tenaillon.plot2a <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.top.nonmut.nodNdS.muts,my.color="black",logscale=FALSE)
-
-## 2b) exclude dN and dS in random comparison.
-top.nonmut.nodNdS.mutation.data.2b <- gene.nodNdS.mutation.data %>%
-                                   filter(Gene %in% top.nonmut.nodNdS$Gene.name)
-c.top.nonmut.nodNdS.muts.2b <- calc.cumulative.muts(top.nonmut.nodNdS.mutation.data.2b)
-
-tenaillon.plot2b <- nodNdS.rando.plot %>%
-    add.cumulative.mut.layer(c.top.nonmut.nodNdS.muts.2b,my.color="black",logscale=FALSE)
-
-
-
-## 3) plot top genes in hypermutators.
-mut.genomics <- read.csv('../data/tenaillon2016-mutator-parallelism.csv')
-top.mut.genomics <- top_n(mut.genomics, 50, wt=G.score)
-
-top.mut.mutation.data <- gene.mutation.data %>%
-                                   filter(Gene %in% top.mut.genomics$Gene.name)
-c.top.mut.muts <- calc.cumulative.muts(top.mut.mutation.data)
-
-tenaillon.plot3 <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.top.mut.muts,my.color="black",logscale=FALSE)
-
-
-## 4a) plot top genes in hypermutators, after excluding dN and dS mutations.
-
-mut.nodNdS <- read.csv('../data/tenaillon2016-mutator-parallelism-nodSdN.csv')
-top.mut.nodNdS <- top_n(mut.nodNdS, 50) ## using excluding dN dS column by default.
-
-top.mut.nodNdS.mutation.data <- gene.mutation.data %>%
-                                   filter(Gene %in% top.mut.nodNdS$Gene.name)
-c.top.mut.nodNdS.muts <- calc.cumulative.muts(top.mut.nodNdS.mutation.data)
-
-tenaillon.plot4a <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.top.mut.nodNdS.muts,my.color="black",logscale=FALSE)
-
-## 4b) exclude dN and dS in random comparison.
-top.mut.nodNdS.mutation.data.4b <- gene.nodNdS.mutation.data %>%
-                                   filter(Gene %in% top.mut.nodNdS$Gene.name)
-c.top.mut.nodNdS.muts.4b <- calc.cumulative.muts(top.mut.nodNdS.mutation.data.4b)
-
-tenaillon.plot4b <- nodNdS.rando.plot %>%
-    add.cumulative.mut.layer(c.top.mut.nodNdS.muts.4b,my.color="black",logscale=FALSE)
-
-## let's compare rates of mutation too, by looking at derivatives.
+## Look at these pictures carefully. Some indicate positive selection,
+## while others indicate mutation accumulation.
 
 ## This plot visualizes a two-tailed test (alpha = 0.05)
 ## against a bootstrapped null distribution for the derivative of cumulative mutations.
@@ -1440,13 +1356,13 @@ plot.slope.of.base.layer <- function(data, subset.size=300, N=1000, alpha = 0.05
     top.trajectories <- trajectory.summary %>%
         group_by(Population) %>%
         top_frac(alpha/2) %>%
-        select(-final.D.norm.cs) %>%
+        dplyr::select(-final.D.norm.cs) %>%
         mutate(in.top=TRUE)
     
     bottom.trajectories <- trajectory.summary %>%
         group_by(Population) %>%
         top_frac(-alpha/2) %>%
-        select(-final.D.norm.cs) %>%
+        dplyr::select(-final.D.norm.cs) %>%
         mutate(in.bottom=TRUE)
     
     filtered.trajectories <- bootstrapped.trajectories %>%
@@ -1454,12 +1370,13 @@ plot.slope.of.base.layer <- function(data, subset.size=300, N=1000, alpha = 0.05
         left_join(bottom.trajectories) %>%
         filter(is.na(in.top)) %>%
         filter(is.na(in.bottom)) %>%
-        select(-in.top,-in.bottom)
+        dplyr::select(-in.top,-in.bottom)
 
     p <- ggplot(filtered.trajectories,aes(x=Generation,y=D.normalized.cs)) +
         ylab('slope of cumulative number of mutations (normalized)') +
         theme_classic() +
         geom_point(size=0.2, color='gray') +
+        geom_smooth() +
         facet_wrap(.~Population,scales='free',nrow=4) +
         xlab('Generations (x 10,000)') +
         xlim(0,6.3) +
@@ -1469,6 +1386,107 @@ plot.slope.of.base.layer <- function(data, subset.size=300, N=1000, alpha = 0.05
               axis.text.y  = element_text(size=14))
     return(p)
 }
+
+## also look at the derivative of the accumulation of stars over time.
+## base plot of null distribution for comparison.
+D.of.all.rando.plot <- plot.slope.of.base.layer(gene.mutation.data)
+D.of.nodNdS.rando.plot <- plot.slope.of.base.layer(gene.nodNdS.mutation.data)
+
+
+## 1) plot top genes in non-mutators.
+nonmut.genomics <- read.csv('../data/tenaillon2016-nonmutator-parallelism.csv')
+top.nonmut.genomics <- top_n(nonmut.genomics, 50, wt=G.score)
+
+top.nonmut.mutation.data <- gene.mutation.data %>%
+                                   filter(Gene %in% top.nonmut.genomics$Gene.name)
+c.top.nonmut.muts <- calc.cumulative.muts(top.nonmut.mutation.data)
+D.of.c.top.nonmut.muts <- calc.slope.of.cumulative.muts(c.top.nonmut.muts)
+
+tenaillon.plot1 <- all.rando.plot %>%
+    add.cumulative.mut.layer(c.top.nonmut.muts,my.color="black",logscale=FALSE)
+
+## evidence of continual fine tuning!
+D.of.tenaillon.plot1 <- D.of.all.rando.plot %>%
+    add.slope.of.cumulative.mut.layer(D.of.c.top.nonmut.muts,
+                                      my.color='red')
+
+## 2a) plot top genes in non-mutators, after excluding dN and dS mutations.
+nonmut.nodNdS <- read.csv('../data/tenaillon2016-nonmutator-parallelism-nodSdN.csv')
+top.nonmut.nodNdS <- top_n(nonmut.nodNdS, 50) ## using excluding dN dS column by default.
+
+top.nonmut.nodNdS.mutation.data <- gene.mutation.data %>%
+                                   filter(Gene %in% top.nonmut.nodNdS$Gene.name)
+c.top.nonmut.nodNdS.muts <- calc.cumulative.muts(top.nonmut.nodNdS.mutation.data)
+D.of.c.top.nonmut.nodNdS.muts <- calc.slope.of.cumulative.muts(c.top.nonmut.nodNdS.muts)
+
+tenaillon.plot2a <- all.rando.plot %>%
+    add.cumulative.mut.layer(c.top.nonmut.nodNdS.muts,my.color="black",logscale=FALSE)
+
+D.of.tenaillon.plot2a <- D.of.all.rando.plot %>%
+    add.slope.of.cumulative.mut.layer(D.of.c.top.nonmut.nodNdS.muts,
+                                      my.color='red')
+
+
+## 2b) exclude dN and dS in random comparison.
+top.nonmut.nodNdS.mutation.data.2b <- gene.nodNdS.mutation.data %>%
+                                   filter(Gene %in% top.nonmut.nodNdS$Gene.name)
+c.top.nonmut.nodNdS.muts.2b <- calc.cumulative.muts(top.nonmut.nodNdS.mutation.data.2b)
+
+tenaillon.plot2b <- nodNdS.rando.plot %>%
+    add.cumulative.mut.layer(c.top.nonmut.nodNdS.muts.2b,my.color="black",logscale=FALSE)
+
+D.of.tenaillon.plot2b <- D.of.nodNdS.rando.plot %>%
+    add.slope.of.cumulative.mut.layer(D.of.c.top.nonmut.nodNdS.muts,
+                                      my.color='red')
+
+
+## 3) plot top genes in hypermutators.
+mut.genomics <- read.csv('../data/tenaillon2016-mutator-parallelism.csv')
+top.mut.genomics <- top_n(mut.genomics, 50, wt=G.score)
+
+top.mut.mutation.data <- gene.mutation.data %>%
+    filter(Gene %in% top.mut.genomics$Gene.name)
+
+c.top.mut.muts <- calc.cumulative.muts(top.mut.mutation.data)
+D.of.c.top.mut.muts <- calc.slope.of.cumulative.muts(c.top.mut.muts)
+
+tenaillon.plot3 <- all.rando.plot %>%
+    add.cumulative.mut.layer(c.top.mut.muts,my.color="black",logscale=FALSE)
+
+D.of.tenaillon.plot3 <- D.of.all.rando.plot %>%
+    add.slope.of.cumulative.mut.layer(D.of.c.top.mut.muts,
+                                      my.color='red')
+
+
+## 4a) plot top genes in hypermutators, after excluding dN and dS mutations.
+
+mut.nodNdS <- read.csv('../data/tenaillon2016-mutator-parallelism-nodSdN.csv')
+top.mut.nodNdS <- top_n(mut.nodNdS, 50) ## using excluding dN dS column by default.
+
+top.mut.nodNdS.mutation.data <- gene.mutation.data %>%
+                                   filter(Gene %in% top.mut.nodNdS$Gene.name)
+c.top.mut.nodNdS.muts <- calc.cumulative.muts(top.mut.nodNdS.mutation.data)
+D.of.c.top.mut.nodNdS.muts <- calc.slope.of.cumulative.muts(c.top.mut.nodNdS.muts)
+
+tenaillon.plot4a <- all.rando.plot %>%
+    add.cumulative.mut.layer(c.top.mut.nodNdS.muts,my.color="black",logscale=FALSE)
+
+D.of.tenaillon.plot4a <- D.of.all.rando.plot %>%
+    add.slope.of.cumulative.mut.layer(D.of.c.top.mut.nodNdS.muts,my.color="red")
+
+
+## 4b) exclude dN and dS in random comparison.
+top.mut.nodNdS.mutation.data.4b <- gene.nodNdS.mutation.data %>%
+                                   filter(Gene %in% top.mut.nodNdS$Gene.name)
+c.top.mut.nodNdS.muts.4b <- calc.cumulative.muts(top.mut.nodNdS.mutation.data.4b)
+
+tenaillon.plot4b <- nodNdS.rando.plot %>%
+    add.cumulative.mut.layer(c.top.mut.nodNdS.muts.4b,my.color="black",logscale=FALSE)
+
+D.of.tenaillon.plot4b <- D.of.nodNdS.rando.plot %>%
+    add.slope.of.cumulative.mut.layer(D.of.c.top.mut.nodNdS.muts,my.color="red")
+
+
 
 ##########################################################################
 ## look at accumulation of stars over time for genes in the different proteome
@@ -1630,125 +1648,25 @@ ggsave(eigen.sv.indel.nonsen.plot,filename='../results/figures/eigen-sv-indel-no
 
 
 ##########################################################################
-## examine parallelism in dS-- is there evidence of positive selection on dS?
-## more rigor is needed to disentangle mutation from selection as causes.
-
-## normalize by gene length to make a density, and then make a
-## histogram of densities. Plot for dS and dN.
-
-dS.mutation.density <- calc.gene.mutation.density(
-    gene.mutation.data, c("synonymous")) %>%
-    rename(dS.mut.count = mut.count) %>%
-    rename(dS.mut.density = density) %>%
-    arrange(desc(dS.mut.density)) %>% left_join(REL606.genes) %>%
-    dplyr::select(Gene,gene_length,dS.mut.count,dS.mut.density,product)
-
-dS.density.hist <- ggplot(dS.mutation.density,
-                          aes(x=dS.mut.density,fill='red')) +
-    geom_histogram() + theme_classic() + guides(fill=FALSE)
-
-dS.point.plot <- ggplot(dS.mutation.density,
-                        aes(x=dS.mut.count,y=gene_length)) + geom_point() +
-    geom_smooth() + theme_classic()
-
-## comparison with dN.
-
-dN.mutation.density <- calc.gene.mutation.density(
-    gene.mutation.data, c("missense")) %>%
-    rename(dN.mut.count = mut.count) %>%
-    rename(dN.mut.density = density) %>%
-    arrange(desc(dN.mut.density)) %>% left_join(REL606.genes) %>%
-    dplyr::select(Gene,gene_length,dN.mut.count,dN.mut.density,product)
-
-dN.density.hist <- ggplot(dN.mutation.density,
-                          aes(x=dN.mut.density)) + geom_histogram() + theme_classic()
-
-dN.point.plot <- ggplot(dN.mutation.density,
-                        aes(x=gene_length,y=dN.mut.count)) + geom_point() +
-    geom_smooth() + theme_classic() #+ geom_abline(intercept=0)
-
-dS.dN.density.hist <- dS.density.hist +
-    geom_histogram(data=dN.mutation.density,aes(x=dN.mut.density),fill='blue',alpha=0.5)
-
-
-## Is there any correlation between dS density and dN density?
-## such a correlation could be caused by either mutation or selection.
-## remove genes with zeros in either category, to avoid biases associated
-## with either purifying selection, or masked regions of the genome.
-
-dS.dN.mutation.density <- inner_join(dS.mutation.density, dN.mutation.density) %>%
-    filter(dS.mut.count>0) %>%
-    filter(dN.mut.count>0)
-
-dS.dN.density.cor.plot <- ggplot(dS.dN.mutation.density,
-                                 aes(dS.mut.density,dN.mut.density)) +
-    theme_classic() + geom_point()
-
-## dN and dS densities are positively correlated. p = 3.433 * 10^-5.
-cor.test(dS.dN.mutation.density$dS.mut.density,dS.dN.mutation.density$dN.mut.density, method="kendall")
-
-## Do a randomization test to see if the tail is fatter than expected if
-## all dS (or dN) were neutrally falling over the genome. Do this to set a cutoff to find
-## genes under selection (see code for parallyze.)
-## have to take this approach to take varying gene length into account.
-
-null.dS.parallel.density <- function(mut.dS.density.df,
-                                  empirical.max.density=0.0167,
-                                  replicates=10000) {
-
-    max.dS.hit.density <- function(mut.dS.density.df) {
-        ## generate a null distribution based on gene length.
-        tot.gene.length <- sum(mut.dS.density.df$gene_length)
-        mut.dS.density.df <- mut.dS.density.df %>%
-            mutate(prob=gene_length/tot.gene.length)
-        total.dS <- sum(mut.dS.density.df$dS.mut.count)
-        my.sample <- sample(x=mut.dS.density.df$Gene,
-                            size=total.dS,replace=TRUE,prob=mut.dS.density.df$prob)
-        my.sample.parallel.hits <- data.table(my.sample)[, .N, keyby = my.sample] %>%
-            mutate(Gene=my.sample) %>%
-            left_join(dplyr::select(mut.dS.density.df,gene_length,Gene)) %>%
-            mutate(density = N/gene_length)
-        max.sampled.density <- max(my.sample.parallel.hits$density)
-        return(max.sampled.density)
-    }
-
-    max.hit.vec <- unlist(map(seq_len(replicates), ~max.dS.hit.density(mut.dS.density.df)))
-    max.hit.df.col <- data.frame('max.density'=max.hit.vec)
-    past.threshold <- nrow(filter(max.hit.df.col,max.density>=empirical.max.density))
-    return(past.threshold/replicates)
-}
-
+## overall, no evidence of selection on dS.
+## randomization tests show neutrality cannot be rejected when
+## looking at dS density per gene (p = 0.14).
 
 ## to what extent is there evidence of intragenomic recombination between partially replicated chromosomes? intragenomic recombination/gene conversion?
 ## candidates for gene conversion: multiple dS in the same Population, in the same gene,
 ## and in the same cohort of mutations.
-dS.in.same.cohort.summary <- gene.dS.mutation.data %>% group_by(Population,Gene,t0,tf) %>% summarize(cohort=n()) %>% arrange(desc(cohort)) %>% filter(cohort>1) %>%
+dS.in.same.cohort <- gene.dS.mutation.data %>% group_by(Population,Gene,t0,tf) %>% summarize(cohort=n()) %>% arrange(desc(cohort)) %>% filter(cohort>1) %>%
     filter(Gene!='ydfQ')
 
-test2 <- filter(test,!(Gene %in% dS.in.same.cohort.summary$Gene)) %>%
-    filter(Gene!='ydfQ')
-
-## parallelism in dS at the same position
-test3 <- gene.dS.mutation.data %>% group_by(Gene,Position) %>% summarize(count=n()) %>% arrange(desc(count)) %>% filter(count>2)
-
-## parallelism in dS at gene level in the same population
-test4 <- gene.dS.mutation.data %>% group_by(Population,Gene) %>% summarize(count=n()) %>% arrange(desc(count)) %>% filter(count>3) %>%
-    ## filter out genes with dS in same cohort (no change)
-    filter(!(Gene %in% dS.in.same.cohort.summary)) %>%
-    filter(Gene!='ydfQ')
-
-## Two genes show parallelism within and between pops:
-## mfd, ygeY.
-dS.parallel.in.and.among.pops <- test4 %>% group_by(Gene) %>%
-    summarize(parallel.pops=n()) %>% filter(parallel.pops>1)
-mfd.ygeY.mutations <- gene.dS.mutation.data %>% filter(Gene %in% c('mfd','ygeY'))
+## might these be larger recombination events? Examine all kinds of mutations, where
+## multiple mutations in the same gene in the same cohort.
+multiple.muts.in.same.cohort <- gene.mutation.data %>% group_by(Population,Gene,t0,tf) %>% summarize(cohort=n()) %>% filter(cohort>1) %>% arrange(Population,t0,tf) %>% arrange(Gene)
 
 ## parallelism in dS at the same position in the same population
 ## we get exactly one gene: ydfQ--
 ## BUT THIS IS A BUG TO BE FIXED, CAUSED BY TWO LOCI WITH THE SAME BLATTNER NUMBER.
-test5 <- gene.dS.mutation.data %>% group_by(Population,Gene,Position) %>% summarize(count=n()) %>% arrange(desc(count)) %>% filter(count>1)
+bug.to.fix <- gene.dS.mutation.data %>% group_by(Population,Gene,Position) %>% summarize(count=n()) %>% arrange(desc(count)) %>% filter(count>1)
 buggy.ydfQ.mutations <- gene.dS.mutation.data %>% filter(Gene=='ydfQ')
-
 
 ##########################################################################
 ## NOTES:
