@@ -16,10 +16,6 @@
 ## TODO: It could be quite interesting to examine genes in prophage that
 ## Jeff Barrick has annotated as misc_regions.
 
-## TODO: look at accumulation of mutations in 57 genes under selection
-## in non-mutators in genomics data. Might as well look at top
-## genes in the mutators and for other kinds of mutations as well.
-
 library(tidyverse)
 
 ##########################################################################
