@@ -2,19 +2,23 @@
 
 ## MAKE SURE THAT ZEROS IN MUTATION COUNTS ARE NOT THROWN OUT BY DPLYR!
 
-## TODO: do hierarchical modeling of point mutations in genes based on:
-## 1) gene length
-## 2) distance from peak in Ara+3.
-## Question is to quantify contribution of mutation rate variation.
-
-## TODO: Add Sastry modules to the analysis.
-
 ## TODO: measure the concentration/density of mutation as an empirical CDF.
 
 ## TODO: MAKE SURE MASKED REGIONS ARE TREATED PROPERLY!
 
+## IMPORTANT TODO: SOMETIMES FIGURES ARE MISLEADING W.R.T. ACTUAL STATISTICS!
+## calculate the statistics, and fix figures so that they are more accurate
+## (will probably have to generate individual base plots, when only one set of genes
+## is of interest in the plot).
+
 ## TODO: It could be quite interesting to examine genes in prophage that
 ## Jeff Barrick has annotated as misc_regions.
+
+## TODO: do hierarchical modeling of point mutations in genes based on:
+## 1) gene length
+## 2) distance from peak in Ara+3.
+## Question is to quantify (or set an upper bound) on
+## the contribution of mutation rate variation.
 
 library(tidyverse)
 
@@ -157,7 +161,7 @@ calc.slope.of.cumulative.muts <- function(c.muts) {
 ## This plot visualizes a two-tailed test (alpha = 0.05)
 ## against a bootstrapped null distribution.
 ## This is what we want to use for publication.
-plot.base.layer <- function(data, subset.size=300, N=1000, alpha = 0.05, logscale=FALSE, normalization.constant=NA) {
+plot.base.layer <- function(data, subset.size=300, N=1000, alpha = 0.05, normalization.constant=NA) {
 
     ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations.
@@ -204,14 +208,8 @@ plot.base.layer <- function(data, subset.size=300, N=1000, alpha = 0.05, logscal
         filter(is.na(in.bottom)) %>%
         dplyr::select(-in.top,-in.bottom)
 
-    if (logscale) {
-        p <- ggplot(filtered.trajectories,aes(x=Generation,y=log10(normalized.cs))) +
-            ylab('log[Cumulative number of mutations (normalized)]')
-    } else {
-        p <- ggplot(filtered.trajectories,aes(x=Generation,y=normalized.cs)) +
-            ylab('Cumulative number of mutations (normalized)')
-    }
-    p <- p +
+    p <- ggplot(filtered.trajectories,aes(x=Generation,y=normalized.cs)) +
+        ylab('Cumulative number of mutations (normalized)') +
         theme_classic() +
         geom_point(size=0.2, color='gray') +
         facet_wrap(.~Population,scales='free',nrow=4) +
@@ -225,33 +223,22 @@ plot.base.layer <- function(data, subset.size=300, N=1000, alpha = 0.05, logscal
 }
 
 ## take a ggplot object output by plot.cumulative.muts, and add an extra layer.
-add.cumulative.mut.layer <- function(p, layer.df, my.color, logscale=FALSE) {
-    if (logscale) {
-        p <- p +
-            geom_point(data=layer.df, aes(x=Generation,y=log10(normalized.cs)), color=my.color, size=0.2) +
-            geom_step(data=layer.df, aes(x=Generation,y=log10(normalized.cs)), size=0.2, color=my.color)
-        } else {
-            p <- p +
-                geom_point(data=layer.df, aes(x=Generation,y=normalized.cs), color=my.color, size=0.2) +
-                geom_step(data=layer.df, aes(x=Generation,y=normalized.cs), size=0.2, color=my.color)
-        }
+add.cumulative.mut.layer <- function(p, layer.df, my.color) {
+    p <- p +
+        geom_point(data=layer.df,
+                   aes(x=Generation,y=normalized.cs),
+                   color=my.color, size=0.2) +
+        geom_step(data=layer.df, aes(x=Generation,y=normalized.cs),
+                  size=0.2, color=my.color)
     return(p)
 }
 
 ## calculate cumulative numbers of mutations in each category.
 ## for vanilla plotting, without null distributions, as plotted by
 ## plot.base.layer.
-plot.cumulative.muts <- function(mut.data,logscale=TRUE, my.color="black") {
-    if (logscale) {
-        p <- ggplot(mut.data,aes(x=Generation,y=log10(normalized.cs))) +
-            ##ylim(-7,-2) +
-            ylab('log[Cumulative number of mutations (normalized)]')
-    } else {
-        p <- ggplot(mut.data,aes(x=Generation,y=normalized.cs)) +
-            ##ylim(0,0.003) +
-            ylab('Cumulative number of mutations (normalized)')
-    }
-    p <- p +
+plot.cumulative.muts <- function(mut.data, my.color="black") {
+    p <- ggplot(mut.data,aes(x=Generation,y=normalized.cs)) +
+        ylab('Cumulative number of mutations (normalized)') +
         theme_classic() +
         geom_point(size=0.2, color=my.color) +
         geom_step(size=0.2, color=my.color) +
@@ -354,9 +341,10 @@ make.KS.Figure <- function(the.results.to.plot, order_by_oriC=FALSE) {
     return(p)
 }
 
-
 ## IMPORTANT NOTE: THIS WILL ONLY WORK ON CORE GENES.
 ## TODO: add use.maddamsetti parameter to use one or other set of parameter estimates.
+## for experimenting with how the ranking on the x-axis changes the statistics,
+## I added the rev parameter to reverse the order of genes on the x-axis.
 thetaS.KS.analysis <- function(the.data, REL606.genes, rank_by="length") {
 
     ## rank_by can have three values: "length", "thetaS", or "oriC".
@@ -386,7 +374,7 @@ thetaS.KS.analysis <- function(the.data, REL606.genes, rank_by="length") {
             arrange(gene_length)
     } else if (rank_by == "thetaS") {
         hit.genes.df <- hit.genes.df %>%
-            arrange(thetaS)        
+            arrange(thetaS)
     } else {
         stop("error in thetaS.KS.analysis.")
     }
@@ -425,7 +413,8 @@ thetaS.KS.analysis <- function(the.data, REL606.genes, rank_by="length") {
     return(results.to.plot)
 }
 
-
+## for experimenting with how the ranking on the x-axis changes the statistics,
+## I added the rev parameter to reverse the order of genes on the x-axis.
 make.thetaS.KS.Figure <- function(the.results.to.plot, rank_by="length") {
 
     ## rank_by can have three values: "length", "thetaS", or "oriC".
@@ -470,7 +459,6 @@ make.thetaS.KS.Figure <- function(the.results.to.plot, rank_by="length") {
     
     return(plot)
 }
-
 
 ################################################################################
 ## Examine the distribution of various classes of mutations across genes in the
@@ -643,9 +631,9 @@ gene.nodNdS.mutation.data <- gene.mutation.data %>%
 ## I will overlay data on top of these plots.
 
 ## Base plots here of null distributions: add the data lines on top to compare.
-all.rando.plot <- plot.base.layer(gene.mutation.data, logscale=FALSE)
-nodNdS.rando.plot <- plot.base.layer(gene.nodNdS.mutation.data, logscale=FALSE)
-sv.indel.nonsen.rando.plot <- plot.base.layer(sv.indel.nonsense.gene.mutation.data, logscale=FALSE)
+all.rando.plot <- plot.base.layer(gene.mutation.data)
+nodNdS.rando.plot <- plot.base.layer(gene.nodNdS.mutation.data)
+sv.indel.nonsen.rando.plot <- plot.base.layer(sv.indel.nonsense.gene.mutation.data)
 
 ##########################################################################################
 ## MUTATION BIAS ANALYSIS.
@@ -786,6 +774,7 @@ ggsave("../results/figures/dN_thetaS_plot2.pdf",dN.thetaS.plot2)
 dN.thetaS.plot3 <- make.thetaS.KS.Figure(cumsum.dN.core3,"thetaS")
 ggsave("../results/figures/dN_thetaS_plot3.pdf",dN.thetaS.plot3)
 
+##########################
 
 ## not significant: but marginal result: p-value = 0.095.
 cumsum.all.over.metagenome.by.oriC <- ks.analysis(gene.only.mutation.data,REL606.genes,TRUE)
@@ -1173,11 +1162,8 @@ top.dN.gene.mutation.data <- filter(gene.dN.mutation.data,Gene %in% top.by.dN.de
 
 c.top.dN.gene.mutations <- calc.cumulative.muts(top.dN.gene.mutation.data)
 
-log.c.top.dN.gene.plot <- log.small.dN.rando.plot %>%
-    add.cumulative.mut.layer(c.top.dN.gene.mutations, my.color="black",logscale=TRUE)
-
 c.top.dN.gene.plot <- small.dN.rando.plot %>%
-    add.cumulative.mut.layer(c.top.dN.gene.mutations, my.color="black",logscale=FALSE)
+    add.cumulative.mut.layer(c.top.dN.gene.mutations, my.color="black")
 
 ## what are these top genes?
 top.by.dN.density.genes
@@ -1204,11 +1190,9 @@ top.dN.ribosome.genes <- c('yceD', 'yeiP', 'rplL', 'rpsD', 'rpsE', 'infB', 'rplF
 top.dN.ribosome.mutations <- filter(gene.dN.mutation.data,Gene %in% top.dN.ribosome.genes)
 c.top.dN.ribosome.mutations <- calc.cumulative.muts(top.dN.ribosome.mutations)
 
-log.c.top.dN.ribosome.plot <- log.small.dN.rando.plot %>%
-    add.cumulative.mut.layer(c.top.dN.ribosome.mutations, my.color="black",logscale=TRUE)
 
 c.top.dN.ribosome.plot <- small.dN.rando.plot %>%
-    add.cumulative.mut.layer(c.top.dN.ribosome.mutations, my.color="black",logscale=FALSE)
+    add.cumulative.mut.layer(c.top.dN.ribosome.mutations, my.color="black")
 
 ## quick random check: look for nucleotide-level parallelism in the Good dataset.
 nuc.parallel.data <- gene.mutation.data %>% group_by(Gene, Position, Annotation, gene_length, product, blattner, locus_tag) %>% summarize(count=n()) %>%
@@ -1399,7 +1383,7 @@ c.top.nonmut.muts <- calc.cumulative.muts(top.nonmut.mutation.data)
 D.of.c.top.nonmut.muts <- calc.slope.of.cumulative.muts(c.top.nonmut.muts)
 
 tenaillon.plot1 <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.top.nonmut.muts,my.color="black",logscale=FALSE)
+    add.cumulative.mut.layer(c.top.nonmut.muts,my.color="black")
 
 ## evidence of continual fine tuning!
 D.of.tenaillon.plot1 <- D.of.all.rando.plot %>%
@@ -1416,7 +1400,7 @@ c.top.nonmut.nodNdS.muts <- calc.cumulative.muts(top.nonmut.nodNdS.mutation.data
 D.of.c.top.nonmut.nodNdS.muts <- calc.slope.of.cumulative.muts(c.top.nonmut.nodNdS.muts)
 
 tenaillon.plot2a <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.top.nonmut.nodNdS.muts,my.color="black",logscale=FALSE)
+    add.cumulative.mut.layer(c.top.nonmut.nodNdS.muts,my.color="black")
 
 D.of.tenaillon.plot2a <- D.of.all.rando.plot %>%
     add.slope.of.cumulative.mut.layer(D.of.c.top.nonmut.nodNdS.muts,
@@ -1429,7 +1413,7 @@ top.nonmut.nodNdS.mutation.data.2b <- gene.nodNdS.mutation.data %>%
 c.top.nonmut.nodNdS.muts.2b <- calc.cumulative.muts(top.nonmut.nodNdS.mutation.data.2b)
 
 tenaillon.plot2b <- nodNdS.rando.plot %>%
-    add.cumulative.mut.layer(c.top.nonmut.nodNdS.muts.2b,my.color="black",logscale=FALSE)
+    add.cumulative.mut.layer(c.top.nonmut.nodNdS.muts.2b,my.color="black")
 
 D.of.tenaillon.plot2b <- D.of.nodNdS.rando.plot %>%
     add.slope.of.cumulative.mut.layer(D.of.c.top.nonmut.nodNdS.muts,
@@ -1447,7 +1431,7 @@ c.top.mut.muts <- calc.cumulative.muts(top.mut.mutation.data)
 D.of.c.top.mut.muts <- calc.slope.of.cumulative.muts(c.top.mut.muts)
 
 tenaillon.plot3 <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.top.mut.muts,my.color="black",logscale=FALSE)
+    add.cumulative.mut.layer(c.top.mut.muts,my.color="black")
 
 D.of.tenaillon.plot3 <- D.of.all.rando.plot %>%
     add.slope.of.cumulative.mut.layer(D.of.c.top.mut.muts,
@@ -1465,7 +1449,7 @@ c.top.mut.nodNdS.muts <- calc.cumulative.muts(top.mut.nodNdS.mutation.data)
 D.of.c.top.mut.nodNdS.muts <- calc.slope.of.cumulative.muts(c.top.mut.nodNdS.muts)
 
 tenaillon.plot4a <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.top.mut.nodNdS.muts,my.color="black",logscale=FALSE)
+    add.cumulative.mut.layer(c.top.mut.nodNdS.muts,my.color="black")
 
 D.of.tenaillon.plot4a <- D.of.all.rando.plot %>%
     add.slope.of.cumulative.mut.layer(D.of.c.top.mut.nodNdS.muts,my.color="red")
@@ -1477,7 +1461,7 @@ top.mut.nodNdS.mutation.data.4b <- gene.nodNdS.mutation.data %>%
 c.top.mut.nodNdS.muts.4b <- calc.cumulative.muts(top.mut.nodNdS.mutation.data.4b)
 
 tenaillon.plot4b <- nodNdS.rando.plot %>%
-    add.cumulative.mut.layer(c.top.mut.nodNdS.muts.4b,my.color="black",logscale=FALSE)
+    add.cumulative.mut.layer(c.top.mut.nodNdS.muts.4b,my.color="black")
 
 D.of.tenaillon.plot4b <- D.of.nodNdS.rando.plot %>%
     add.slope.of.cumulative.mut.layer(D.of.c.top.mut.nodNdS.muts,my.color="red")
@@ -1515,12 +1499,12 @@ c.C.muts <- calc.cumulative.muts(C.sector.mut.data)
 
 ## plot for proteome sectors.
 sector.plot <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.A.muts, my.color="black", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.S.muts,my.color="red", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.O.muts,my.color="blue", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.U.muts,my.color="green", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.R.muts,my.color="yellow", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.C.muts,my.color="orange", logscale=FALSE)
+    add.cumulative.mut.layer(c.A.muts, my.color="black") %>%
+    add.cumulative.mut.layer(c.S.muts,my.color="red") %>%
+    add.cumulative.mut.layer(c.O.muts,my.color="blue") %>%
+    add.cumulative.mut.layer(c.U.muts,my.color="green") %>%
+    add.cumulative.mut.layer(c.R.muts,my.color="yellow") %>%
+    add.cumulative.mut.layer(c.C.muts,my.color="orange")
 ggsave(sector.plot,filename='../results/figures/sector-plot.pdf')
 
 ## just plot sv, indels, and nonsense mutations.
@@ -1540,12 +1524,12 @@ c.C.sv.indel.nonsen.muts <- calc.cumulative.muts(C.sv.indel.nonsen.muts)
 
 ## now plot sv, indel, nonsense mutations on top.
 sector.sv.indel.nonsen.testplot <- sv.indel.nonsen.rando.plot %>%
-    add.cumulative.mut.layer(c.A.sv.indel.nonsen.muts, my.color="black", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.S.sv.indel.nonsen.muts,my.color="red", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.O.sv.indel.nonsen.muts,my.color="blue", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.U.sv.indel.nonsen.muts,my.color="green", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.R.sv.indel.nonsen.muts,my.color="yellow", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.C.sv.indel.nonsen.muts,my.color="orange", logscale=FALSE)
+    add.cumulative.mut.layer(c.A.sv.indel.nonsen.muts, my.color="black") %>%
+    add.cumulative.mut.layer(c.S.sv.indel.nonsen.muts,my.color="red") %>%
+    add.cumulative.mut.layer(c.O.sv.indel.nonsen.muts,my.color="blue") %>%
+    add.cumulative.mut.layer(c.U.sv.indel.nonsen.muts,my.color="green") %>%
+    add.cumulative.mut.layer(c.R.sv.indel.nonsen.muts,my.color="yellow") %>%
+    add.cumulative.mut.layer(c.C.sv.indel.nonsen.muts,my.color="orange")
 ggsave(sector.sv.indel.nonsen.testplot,filename='../results/figures/sector-sv-indel-nonsen-testplot.png')
 
 ##########################################################################
@@ -1582,15 +1566,15 @@ c.eigen8.muts <- calc.cumulative.muts(eigengene8.mut.data)
 c.eigen9.muts <- calc.cumulative.muts(eigengene9.mut.data)
 
 eigen.plot <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.eigen1.muts, my.color="red", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen2.muts,my.color="orange", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen3.muts,my.color="yellow", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen4.muts,my.color="green", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen5.muts,my.color="cyan", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen6.muts,my.color="blue", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen7.muts,my.color="violet", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen8.muts,my.color="pink", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.eigen9.muts,my.color="black", logscale=FALSE)
+    add.cumulative.mut.layer(c.eigen1.muts, my.color="red") %>%
+    add.cumulative.mut.layer(c.eigen2.muts,my.color="orange") %>%
+    add.cumulative.mut.layer(c.eigen3.muts,my.color="yellow") %>%
+    add.cumulative.mut.layer(c.eigen4.muts,my.color="green") %>%
+    add.cumulative.mut.layer(c.eigen5.muts,my.color="cyan") %>%
+    add.cumulative.mut.layer(c.eigen6.muts,my.color="blue") %>%
+    add.cumulative.mut.layer(c.eigen7.muts,my.color="violet") %>%
+    add.cumulative.mut.layer(c.eigen8.muts,my.color="pink") %>%
+    add.cumulative.mut.layer(c.eigen9.muts,my.color="black")
 ggsave(eigen.plot,filename='../results/figures/eigen-plot.pdf')
 
 ## just plot sv, indels, and nonsense mutations.
@@ -1625,23 +1609,179 @@ eigengene6.mut.data %>% filter(Population=='Ara+3') %>%
 
 ## plot eigen sv, indels, nonsense.
 eigen.sv.indel.nonsen.plot <- sv.indel.nonsen.rando.plot %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen1.muts,my.color="red", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen2.muts,my.color="orange", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen3.muts,my.color="yellow", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen4.muts,my.color="green", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen5.muts,my.color="cyan", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen6.muts,my.color="blue", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen7.muts,my.color="violet", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen8.muts,my.color="pink", logscale=FALSE) %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen9.muts,my.color="black", logscale=FALSE)
+    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen1.muts,my.color="red") %>%
+    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen2.muts,my.color="orange") %>%
+    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen3.muts,my.color="yellow") %>%
+    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen4.muts,my.color="green") %>%
+    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen5.muts,my.color="cyan") %>%
+    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen6.muts,my.color="blue") %>%
+    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen7.muts,my.color="violet") %>%
+    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen8.muts,my.color="pink") %>%
+    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen9.muts,my.color="black")
 ggsave(eigen.sv.indel.nonsen.plot,filename='../results/figures/eigen-sv-indel-nonsen-plot.png')
 
 ##########################################################################
-## TODO:
-
 ## look at accumulation of stars over time for genes in different transcriptional
 ## modules inferred by Sastry et al. (2020) paper from Bernhard Palsson's group.
 
+## Questions:
+## Q1) are the regulators of the I-modulons under stronger selection than
+## the genes that they regulate?
+
+## Two ways of testing:
+## A) group all regulators together, against all regulated genes.
+## B) paired comparison. compare regulator against regulated genes for each I-modulon.
+
+## Q2) Do any I-modulons show evidence of positive or purifying selection?
+## I will have to do some kind of FDR correction for multiple hypothesis testing.
+
+## Q3) Are genes that are not regulated in stronger or weaker selection
+## (either purifying or positive) than those that are in an I-modulon?
+
+## I made this file by hand, by going through the I-modulons in imodulon_gene_names.txt,
+## and the regulator annotations in modulon.pdf, both in precise-db-repo.
+Imodulons.to.regulators <- read.csv("../data/rohans-I-modulons-to-regulators.csv")
+
+Imodulon.regulators <-Imodulons.to.regulators %>% filter(!(is.na(regulator)))
+    
+Imodulon.regulator.mut.data <- gene.mutation.data %>%
+    filter(Gene %in% Imodulon.regulators$regulator)
+
+sv.indel.nonsen.Imodulon.regulator.muts <- Imodulon.regulator.mut.data %>%
+    filter(Annotation %in% c("sv", "indel", "nonsense"))
+
+c.Imodulon.regulators <- calc.cumulative.muts(Imodulon.regulator.mut.data)
+
+## I-modulon regulators are under extremely strong positive selection!
+Imodulon.regulators.plot <- all.rando.plot %>%
+    add.cumulative.mut.layer(c.Imodulon.regulators,
+                             my.color="red")
+
+c.sv.indel.nonsen.Imodulon.regulators <- calc.cumulative.muts(
+    sv.indel.nonsen.Imodulon.regulator.muts)
+
+## calculate more rigorous statistics than the figures.
+Imodulon.regulator.sv.indel.nonsense.pvals <- calculate.trajectory.tail.probs(sv.indel.nonsense.gene.mutation.data, unique(Imodulons.to.regulators$regulator))
+
+Imodulon.regulators.sv.indel.nonsen.plot <- sv.indel.nonsen.rando.plot %>%
+    add.cumulative.mut.layer(c.sv.indel.nonsen.Imodulon.regulators,
+                             my.color="red")
+
+## Now look at genes that are regulated within Imodulons.
+## I expect relaxed or purifying selection overall.
+
+## this file was generated by reformat-I-modulons.py
+genes.to.Imodulons <- read.csv("../results/genes-to-I-modulons.csv")
+
+Imodulon.genes <- genes.to.Imodulons %>% filter(!(is.na(Gene))) %>%
+    ## remove any I-modulon regulators from the I-modulon genes to
+    ## make an orthogonal comparison.
+    filter(!(Gene %in% Imodulon.regulators$regulator))
+    
+Imodulon.gene.mut.data <- gene.mutation.data %>%
+filter(Gene %in% Imodulon.genes$Gene)
+
+sv.indel.nonsen.Imodulon.muts <- Imodulon.gene.mut.data %>%
+    filter(Annotation %in% c("sv", "indel", "nonsense"))
+
+c.Imodulon.genes <- calc.cumulative.muts(Imodulon.gene.mut.data)
+
+Imodulon.gene.plot <- all.rando.plot %>%
+    add.cumulative.mut.layer(c.Imodulon.genes,
+                             my.color="red")
+
+c.sv.indel.nonsen.Imodulon.genes <- calc.cumulative.muts(
+    sv.indel.nonsen.Imodulon.muts)
+
+## I-modulon genes appear to be being knocked out in many populations.
+## this contradicts my initial hypothesis that they would be under purifying selection,
+## overall.
+Imodulon.gene.sv.indel.nonsen.plot <- sv.indel.nonsen.rando.plot %>%
+    add.cumulative.mut.layer(c.sv.indel.nonsen.Imodulon.genes,
+                             my.color="red")
+
+## make plots comparing I-modulon regulators to the genes they regulate.
+Imodulon.plot <- all.rando.plot %>%
+    add.cumulative.mut.layer(c.Imodulon.regulators, my.color="black") %>%
+        add.cumulative.mut.layer(c.Imodulon.genes, my.color="red")
+
+Imodulon.sv.indel.nonsen.plot <- sv.indel.nonsen.rando.plot %>%
+    add.cumulative.mut.layer(c.sv.indel.nonsen.Imodulon.regulators,
+                             my.color="black") %>%
+    add.cumulative.mut.layer(c.sv.indel.nonsen.Imodulon.genes, my.color="red")
+
+## Answer Q3: compare genes in I-modulons
+## to genes outside of I-modulons (omitting I-modulon.regulators altogether).
+
+genes.in.Imodulons <- setdiff(unique(Imodulon.genes$Gene),unique(Imodulon.regulators$regulator))
+genes.outside.Imodulons <- setdiff(unique(gene.mutation.data$Gene),
+                                   union(Imodulon.genes$Gene,Imodulon.regulators$regulator))
+c.genes.in.Imodulons <- calc.cumulative.muts(filter(gene.mutation.data,
+                                                    Gene %in% genes.in.Imodulons))
+c.genes.outside.Imodulons <- calc.cumulative.muts(filter(gene.mutation.data, Gene %in% genes.outside.Imodulons))
+
+InNOut.Imodulon.plot <- all.rando.plot %>%
+    add.cumulative.mut.layer(c.genes.in.Imodulons, my.color="black") %>%
+        add.cumulative.mut.layer(c.genes.outside.Imodulons, my.color="red")
+
+## Make a multiple-page PDF for each I-modulon. 2 pages for each one:
+## all mutations, and sv.indel.nonsense mutations for each I-modulon, and its regulators.
+
+## This helper function refers to several global variables.
+## TODO: Best to wrap this into the context of a larger function later,
+## to maintain modularity.
+make.modulon.plots.helper <- function(my.I.modulon) {
+    my.modulon.genes <- Imodulon.genes %>%
+        filter(I.modulon == unique(my.I.modulon$I.modulon))
+    my.modulon.mut.data <- gene.mutation.data %>%
+        filter(Gene %in% my.modulon.genes$Gene)
+    c.my.modulon.muts <- calc.cumulative.muts(my.modulon.mut.data)
+
+    my.sv.indel.nonsen.modulon.muts <- my.modulon.mut.data %>%
+        filter(Annotation %in% c("sv", "indel", "nonsense"))
+    c.sv.indel.nonsen.my.modulon.muts <- calc.cumulative.muts(
+        my.sv.indel.nonsen.modulon.muts)
+
+    ## IMPORTANT TODO: will have to regenerate the base plots--
+    ## need to subsample the same size subset of genes
+    ## for each regulon for a proper comparison.
+    p1 <- all.rando.plot %>%
+        add.cumulative.mut.layer(c.my.modulon.muts,my.color="red")
+    p2 <- sv.indel.nonsen.rando.plot %>%
+        add.cumulative.mut.layer(c.sv.indel.nonsen.my.modulon.muts, my.color="red")
+
+    ## if any regulators exist, add layers for mutations in those genes.
+    my.regulators <- my.I.modulon %>% filter(!(is.na(regulator)))
+    if (nrow(my.regulators)) {
+        my.regulator.mut.data <- gene.mutation.data %>%
+            filter(Gene %in% my.regulators$regulator)
+        my.sv.indel.nonsen.regulator.muts <- my.regulator.mut.data %>%
+            filter(Annotation %in% c("sv", "indel", "nonsense"))
+        c.my.regulators <- calc.cumulative.muts(my.regulator.mut.data)
+        c.my.sv.indel.nonsen.regulators <- calc.cumulative.muts(
+            my.sv.indel.nonsen.regulator.muts)
+        p1 <- p1 %>% add.cumulative.mut.layer(c.my.regulators,my.color='black')
+        p2 <- p2 %>% add.cumulative.mut.layer(c.my.sv.indel.nonsen.regulators,
+                                              my.color='black')
+    }
+    ## add a title to the plots.
+    my.title <- paste(unique(my.I.modulon$I.modulon),"I-modulon")
+    p1 <- p1 + ggtitle(my.title)
+    p2 <- p2 + ggtitle(my.title)
+    print(p1)
+    ## For now, don't show sv/indel/nonsense plots. Already too many to go through!
+    ##print(p2)
+}
+
+## too big for PDF! plot to separate jpegs.
+jpeg("../results/figures/I-modulon-plots/plot-%d.jpeg")
+## split by I-modulon, and map-reduce a plotting function.
+Imodulons.to.regulators %>% split(.$I.modulon) %>%
+    map(.f=make.modulon.plots.helper)
+dev.off()
+
+## TODO: Will have to do some kind of False Discovery Rate (FDR) correction
+## when reporting results for individual modulons.
 
 ##########################################################################
 ## overall, no evidence of selection on dS.
@@ -1667,6 +1807,8 @@ buggy.ydfQ.mutations <- gene.dS.mutation.data %>% filter(Gene=='ydfQ')
 ##########################################################################
 ## NOTES:
 ##########################################################################
+## Is there any overlap in the modules defined in the three papers?
+
 ## can I "train" a model of relaxed selection on genes that we know are not under selection
 ## in the LTEE? That is, metabolic operons that are never used?
 
@@ -1674,14 +1816,15 @@ buggy.ydfQ.mutations <- gene.dS.mutation.data %>% filter(Gene=='ydfQ')
 ## relaxed selection (if I am lucky.)
 
 ## I think so! just bootstrap/resample trajectories from a training set of
-## metabolic operons whose function decay in the LTEE from previous work.
+## metabolic operons whose function decay in the LTEE from previous work,
+## such as Leiby and Marx.
 ## This could be a good baseline for comparing other sets of genes.
-## (of course, result depends on how well this set is chosen.
-## bootstrapping random sets from the whole genome may be a safer comparison).
+## (of course, result depends on how well this set is chosen).
 
-
-## I could use Brian Wade's genomes as a test set to validate
-## predictions of genes under purifying selection (as a paper 3).
+## TODO: make a gold standard set of genes under true relaxed selection
+## (from Leiby and Marx paper), and use this as a benchmark for relaxed selection.
+## This is to answer the following question:
+## Does the base rate reflect relaxed selection and quasi-neutrality?
 
 ## based on redoing the binomial test on genomes, it seems the difference in result
 ## is NOT driven by target size. rather, it is whether or not all kinds of mutations
