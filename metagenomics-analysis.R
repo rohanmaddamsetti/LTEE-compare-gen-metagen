@@ -2,23 +2,19 @@
 
 ## MAKE SURE THAT ZEROS IN MUTATION COUNTS ARE NOT THROWN OUT BY DPLYR!
 
-## TODO: measure the concentration/density of mutation as an empirical CDF.
-
-## TODO: MAKE SURE MASKED REGIONS ARE TREATED PROPERLY!
-
 ## IMPORTANT TODO: SOMETIMES FIGURES ARE MISLEADING W.R.T. ACTUAL STATISTICS!
 ## calculate the statistics, and fix figures so that they are more accurate
 ## (will probably have to generate individual base plots, when only one set of genes
 ## is of interest in the plot).
-
-## TODO: It could be quite interesting to examine genes in prophage that
-## Jeff Barrick has annotated as misc_regions.
 
 ## TODO: do hierarchical modeling of point mutations in genes based on:
 ## 1) gene length
 ## 2) distance from peak in Ara+3.
 ## Question is to quantify (or set an upper bound) on
 ## the contribution of mutation rate variation.
+
+## I need an independent dataset to set phase parameters-- use E. coli MA
+## experiment data to calibrate.
 
 library(tidyverse)
 
@@ -525,13 +521,6 @@ REL606.genes <- read.csv('../results/REL606_IDs.csv',as.is=TRUE) %>%
     ## join thetaS estimates.
     left_join(thetaS.estimates)
 
-## IMPORTANT BUG: SEEMS LIKE BEN MASKED SOME REGIONS--
-## including prophage starting at ECB_00814 --
-## THAT I MISS!!!
-## I can double-check my purifying selection results against the
-## LTEE genomics data at barricklab.org/shiny/LTEE-Ecoli
-## to verify that those genes indeed don't have any mutations.
-
 ## Order nonmutator pops, then hypermutator pops by converting Population to
 ## factor type and setting the levels.
 nonmutator.pops <- c("Ara-5", "Ara-6", "Ara+1", "Ara+2", "Ara+4", "Ara+5")
@@ -551,6 +540,8 @@ mutation.data <- read.csv(
     mutate(oriC.coordinate=rotate.REL606.chr(Position,"oriC")) %>%
     mutate(terB.coordinate=rotate.REL606.chr(Position,"terB"))
 
+## IMPORTANT: DEBUG THIS MERGE-- SHOULD MERGE ON LOCUS_TAG RATHER THAN GENE?
+##test <- inner_join(mutation.data,REL606.genes)
 gene.mutation.data <- inner_join(mutation.data,REL606.genes)
 
 #############!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -574,8 +565,19 @@ duplicate.genes <- gene.mutation.data %>%
 gene.mutation.data <- filter(gene.mutation.data,
                              !(Gene %in% duplicate.genes$Gene))
 
-## write out gene sets to examine using the STRING database.
-write.csv(gene.mutation.data, "../results/gene-LTEE-metagenomic-mutations.csv")
+##########################################################################
+## parallelism in dS at the same position in the same population
+## we get exactly one gene: ydfQ--
+## BUT THIS IS A BUG TO BE FIXED, CAUSED BY TWO LOCI WITH THE SAME BLATTNER NUMBER.
+bug.to.fix <- gene.dS.mutation.data %>% group_by(Population,Gene,Position) %>% summarize(count=n()) %>% arrange(desc(count)) %>% filter(count>1)
+buggy.ydfQ.mutations <- gene.dS.mutation.data %>% filter(Gene=='ydfQ')
+##########################################################################
+
+## quick random check: look for nucleotide-level parallelism in the Good dataset.
+nuc.parallel.data <- gene.mutation.data %>% group_by(Gene, Position, Annotation, gene_length, product, blattner, locus_tag) %>% summarize(count=n()) %>%
+    filter(count>=3) %>% arrange(desc(count))
+
+write.csv(nuc.parallel.data,'../results/parallel-nuc-summary.csv')
 
 
 ## let's combine IS (structural mutations), indels, and nonsense mutations,
@@ -640,6 +642,46 @@ sv.indel.nonsen.rando.plot <- plot.base.layer(sv.indel.nonsense.gene.mutation.da
 
 ## for indels and structural variation, we cannot distinguish between
 ## mutation hotspots vs. selection.
+
+## no evidence of a strand-specific mutation bias on genes
+## in the LTEE. Do genes on the lagging strand have a different number of
+## mutations compared to the lagging strand?
+## Will have to normalize by number of genes in each class.
+summed.strand.mut.plot <- ggplot(gene.mutation.data,aes(x=oriC.coordinate,fill=Annotation)) +
+    geom_histogram(bins=100) +
+    theme_classic() +
+    facet_grid(strand~.,scales="fixed") 
+ggsave("../results/figures/summed.strand-mutation-bias-histogram.pdf",strand.mut.plot,width=11,height=8)
+
+araplus3.gene.mutation.data <- gene.mutation.data %>% filter(Population=='Ara+3')
+araplus3.strand.mut.plot <- ggplot(araplus3.gene.mutation.data,aes(x=oriC.coordinate,fill=Annotation)) +
+    geom_histogram(bins=100) +
+    theme_classic() +
+    facet_grid(strand~.,scales="fixed") 
+ggsave("../results/figures/ara+3.strand-mutation-bias-histogram.pdf",strand.mut.plot,width=11,height=8)
+
+araplus3.leadingstrand.gene.mut.data <- araplus3.gene.mutation.data %>% filter(strand==1)
+araplus3.laggingstrand.gene.mut.data <- araplus3.gene.mutation.data %>% filter(strand==-1)
+
+## effect seems to be consistently explained by ratio of number of genes on each strand.
+## fits quite well! 1907 leading genes/2131 lagging genes.
+## in Ara+3, 794 leading strand dS, and 881 lagging strand genes. Both ratios are ~0.90!
+## is it consistent across populations?
+leading.gene.target <- sum(filter(REL606.genes,strand==1)$gene_length)
+lagging.gene.target <- sum(filter(REL606.genes,strand==-1)$gene_length)
+
+nrow(filter(REL606.genes,strand==1))
+nrow(filter(REL606.genes,strand==-1))
+nrow(filter(araplus3.leadingstrand.gene.mut.data,Annotation=='synonymous'))
+nrow(filter(araplus3.laggingstrand.gene.mut.data,Annotation=='synonymous'))
+leading.gene.mutation.data <- gene.mutation.data %>% filter(strand==1)
+lagging.gene.mutation.data <- gene.mutation.data %>% filter(strand==-1)
+leading.dS <- nrow(filter(leading.gene.mutation.data,Annotation=='synonymous'))
+lagging.dS <- nrow(filter(lagging.gene.mutation.data,Annotation=='synonymous'))
+## fit to null distribution over all populations is very strong:
+## leading.dS/lagging.dS = 0.8934, while expectation is 1907/2131 = 0.8949
+## expected ratio when accounting for gene length is 0.90.
+
 
 ## LOOKS LIKES GENOME-WIDE MUTATION BIAS IN ARA+3, but not others!
 ## look at mutation density over the chromosome.
@@ -712,7 +754,6 @@ summed.indel.mut.plot <- ggplot(indel.mut.data,aes(x=oriC.coordinate,fill=Annota
     geom_histogram(bins=100) + 
     theme_classic()
 ggsave("../results/figures/summed-indel-mut-bias-histogram.pdf",summed.indel.mut.plot,width=11,height=8)
-
 
 sv.mut.data <- mutation.data %>%
     filter(Annotation %in% c('sv'))
@@ -983,45 +1024,27 @@ make.KS.Figure(cumsum.largedeletions.genome.50K)
 ## PROPHAGE STARTING AT ECB_00814 is a good place to start debugging.
 ################################################################################
 
-## Let's look at mutation densities within populations (not summed over populations.)
+## when examining density of mutations over the genome, remove all genes that
+## have no mutations whatsoever in any population. These loci might have been
+## masked, or have been otherwise problematic in the mutation calling steps.
+## many of these loci are quite interesting, and some of these are probably
+## recent gene duplicates. Since I haven't analyzed the raw metagenomic data
+## though, it's best to play it safe.
+no.mutation.genes <- REL606.genes %>%
+    filter(!(Gene %in% mutation.data$Gene))
 
-## add an index column to the dataframe.
-add_index_helper <- function(df) {
-    df %>% mutate(index = seq_len(nrow(.)))
-}
+write.csv(no.mutation.genes,file="../results/no-mutation-genes.csv")
 
-pop.all.mutation.density <- gene.mutation.data %>%
-    pop.calc.gene.mutation.density(mut_type_vec=c("missense", "sv", "synonymous","noncoding", "indel", "nonsense")) %>% arrange(Population,desc(density)) %>%
-    split(.$Population) %>%
-    map_dfr(add_index_helper)
-
-pop.all.mutation.density.plot <- ggplot(pop.all.mutation.density,
-                                        aes(x=index,y=density)) +
-    geom_point(size=0.3) + theme_classic() + facet_wrap(.~Population,scale='fixed',nrow=4)
-
-pop.all.mutation.density.plot
-
-## look at dN now.
-pop.dN.mutation.density <- gene.mutation.data %>%
-    pop.calc.gene.mutation.density(mut_type_vec=c("missense")) %>% arrange(Population,desc(density)) %>%
-    split(.$Population) %>%
-    map_dfr(add_index_helper)
-
-pop.dN.mutation.density.plot <- ggplot(pop.dN.mutation.density,
-                                        aes(x=index,y=density)) +
-    geom_point(size=0.3) + theme_classic() + facet_wrap(.~Population,scale='fixed',nrow=4)
-
-pop.dN.mutation.density.plot
-
+## By hand, I cross-checked all of these genes against the LTEE-Ecoli
+## genome webserver on Jeff Barrick's website. All 'no-mutation-genes'
+## with mutations in the genomics data are marked in red.
+## 'no-mutation-genes' that have no mutations in the genomics data are marked in
+## green. This spreadsheet is saved as 'no-mutation-genes.xlsx'.
 ################################################################################
 ### DENSITIES SUMMED OVER ALL POPULATIONS.
 
 ## IMPORTANT: these densities are summed over ALL LTEE populations,
 ## so they don't correspond to single LTEE populations.
-
-## just rank gene.mutation.density to see what it looks like!
-## this is already a good indication of selection,
-## and this is pretty much what Ben Good does in his Table S3.
 
 ## IMPORTANT: these densities are summed over ALL LTEE populations,
 ## so they don't correspond to single LTEE populations.
@@ -1082,139 +1105,19 @@ gene.mutation.densities <- REL606.genes %>%
 #### We need to keep track of genes that haven't been hit by any mutations
 #### in a given mutation class (sv, indels, dN, etc.)
 gene.mutation.densities[is.na(gene.mutation.densities)] <- 0
-gene.mutation.densities <- tbl_df(gene.mutation.densities)
-
-##################################
-## break REL606 genes into deciles, based on mutation density.
-
-## decile = 1 means lowest density. decile = 10 means highest density.
-gene.deciles.by.density <- gene.mutation.densities %>%
-    mutate(all.mut.decile = ntile(all.mut.density, 10)) %>%
-    mutate(dN.decile = ntile(dN.mut.density, 10)) %>%
-    mutate(nonsense.indel.sv.decile = ntile(nonsense.indel.sv.mut.density, 10))
-
-## examine density tails by dN.
-median.by.dN.density.genes <- filter(gene.deciles.by.density,dN.decile %in% c(5,6))
-median.by.dN.mutation.data <- filter(gene.mutation.data,Gene %in% median.by.dN.density.genes$Gene)
-median.by.dN.gene.length <- sum(median.by.dN.mutation.data$gene_length)
-
-top.by.dN.density.genes <- filter(gene.deciles.by.density,dN.decile == 10)
-top.by.dN.mutation.data <- filter(gene.mutation.data,Gene %in% top.by.dN.density.genes$Gene)
-top.by.dN.gene.length <- sum(top.by.dN.mutation.data$gene_length)
-
-bottom.by.dN.density.genes <- filter(gene.deciles.by.density,dN.decile == 1)
-bottom.by.dN.mutation.data <- filter(gene.mutation.data,Gene %in% bottom.by.dN.density.genes$Gene)
-bottom.by.dN.gene.length <- sum(bottom.by.dN.mutation.data$gene_length)
-
-## examine density tails by nonsense, indels, and sv.
-median.by.nonindelsv.density.genes <- filter(gene.deciles.by.density,nonsense.indel.sv.decile %in% c(5,6))
-median.by.nonindelsv.mutation.data <- filter(gene.mutation.data,Gene %in% median.by.nonindelsv.density.genes$Gene)
-median.by.nonindelsv.gene.length <- sum(median.by.nonindelsv.mutation.data$gene_length)
-
-top.by.nonindelsv.density.genes <- filter(gene.deciles.by.density,nonsense.indel.sv.decile == 10)
-top.by.nonindelsv.mutation.data <- filter(gene.mutation.data,Gene %in% top.by.nonindelsv.density.genes$Gene)
-top.by.nonindelsv.gene.length <- sum(top.by.nonindelsv.mutation.data$gene_length)
-
-bottom.by.nonindelsv.density.genes <- filter(gene.deciles.by.density,nonsense.indel.sv.decile == 1)
-bottom.by.nonindelsv.mutation.data <- filter(gene.mutation.data,Gene %in% bottom.by.nonindelsv.density.genes$Gene)
-bottom.by.nonindelsv.gene.length <- sum(bottom.by.nonindelsv.mutation.data$gene_length)
-
-
-## seems like a lot of the all.density.data results are driven by repeated IS
-## insertions.
-
-## TODO: plot IS insertions over the genome, and indels over the genome, when
-## examining mutation bias.
-
-## let's look at nonsense, sv, and indels, and see what the distribution looks like.
-nonindelsv.density.data <- arrange(gene.mutation.densities,desc(nonsense.indel.sv.mut.density)) %>%     ## for plotting convenience, add an index to the data frame.
-    mutate(index = seq_len(nrow(.)))
-
-nonindelsv.density.plot <- ggplot(nonindelsv.density.data, aes(x=index,y=nonsense.indel.sv.mut.density)) +
-    geom_point() + theme_classic()
-
-nonindelsv.density.plot
-
-## 2,735 genes have no nonsense, indels, or structural variants throughout the LTEE.
-zero.nonindelsv.density.data <- nonindelsv.density.data %>%
-    filter(nonsense.indel.sv.mut.density==0)
-
-top.nonindelsv.density.data <- nonindelsv.density.data %>%
-    filter(nonsense.indel.sv.mut.density>0.01) %>%
-    dplyr::select(Gene,locus_tag,blattner,gene_length,product,nonsense.indel.sv.mut.density,nonsense.indel.sv.mut.count)
-
-
-## let's just look at dN and see what the distribution looks like.
-dN.density.data <- arrange(gene.mutation.densities,desc(dN.mut.density)) %>%
-    ## for plotting convenience, add an index to the data frame.
-    mutate(index = seq_len(nrow(.))) %>%
-    mutate(top=index<=420)
-
-dN.density.plot <- ggplot(dN.density.data, aes(x=index,y=dN.mut.density,color=top)) +
-    geom_point() + theme_classic()
-
-dN.density.plot
-
-## let's quickly plot cumulative numbers of mutations in the top genes
-## (damn the circularity, full speed ahead!)
-
-top.dN.gene.mutation.data <- filter(gene.dN.mutation.data,Gene %in% top.by.dN.density.genes$Gene)
-
-c.top.dN.gene.mutations <- calc.cumulative.muts(top.dN.gene.mutation.data)
-
-c.top.dN.gene.plot <- small.dN.rando.plot %>%
-    add.cumulative.mut.layer(c.top.dN.gene.mutations, my.color="black")
-
-## what are these top genes?
-top.by.dN.density.genes
-
-## let's filter further on dN.mut.density.
-top_dN_checkme <- top.by.dN.density.genes %>% dplyr::select(Gene,locus_tag,blattner, gene_length,
-                                                 product, dN.mut.count,dN.mut.density,
-                                                 dN.decile) %>%
-    filter(dN.mut.density>0.01) %>%
-    arrange(desc(dN.mut.density))
-## Curious list of genes... let's check STRING.
-write.csv(top_dN_checkme,file="../results/dN_checkme.csv")
-
-## Probably better to import gene lists from Tenaillon and Good papers to avoid the
-## obvious circularity. But EVEN better to compare these lists. When are they the same;
-## when are they different? Where do the genes from Tenaillon and Good papers
-## fall in the dN density distribution?
-
-## interesting: ribosomal genes are in both the top as well as the bottom
-## (purifying selection results).
-
-top.dN.ribosome.genes <- c('yceD', 'yeiP', 'rplL', 'rpsD', 'rpsE', 'infB', 'rplF', 'rplS',
-                           'rplP', 'rplY', 'ykgM')
-top.dN.ribosome.mutations <- filter(gene.dN.mutation.data,Gene %in% top.dN.ribosome.genes)
-c.top.dN.ribosome.mutations <- calc.cumulative.muts(top.dN.ribosome.mutations)
-
-
-c.top.dN.ribosome.plot <- small.dN.rando.plot %>%
-    add.cumulative.mut.layer(c.top.dN.ribosome.mutations, my.color="black")
-
-## quick random check: look for nucleotide-level parallelism in the Good dataset.
-nuc.parallel.data <- gene.mutation.data %>% group_by(Gene, Position, Annotation, gene_length, product, blattner, locus_tag) %>% summarize(count=n()) %>%
-    filter(count>=3) %>% arrange(desc(count))
-
-write.csv(nuc.parallel.data,'../results/parallel-nuc-summary.csv')
-
+gene.mutation.densities <- tbl_df(gene.mutation.densities) %>%
+    ## and IMPORTANT: remove genes with no mutations at all.
+    ## these may be artifactual due to library prep or variant calling.
+    ## by allowing dS, I might be able to filter out false positives caused by
+    ## a lack of reads mapping uniquely to that locus,
+    ## such as repeats or transposases or something.
+    filter(!(Gene %in% no.mutation.genes$Gene))
 
 #######################################################################################
-## INITIAL PURIFYING SELECTION RESULTS.
-## VERY PROMISING BUT WILL NEED TO RIGOROUSLY CHECK.
+## PURIFYING SELECTION RESULTS.
 
-## Let's look at distribution of SV and indels across genes in the
-## metagenomics data. Which genes are enriched? Which genes are depleted?
+
 ## Then, look at the annotation of these genes in STRING.
-
-## get genes with no sv.
-no.sv.genes <- filter(gene.mutation.densities, sv.mut.count == 0) %>%
-    arrange(desc(gene_length))
-## get genes with no indels.
-no.indel.genes <- filter(gene.mutation.densities, indel.mut.count == 0) %>%
-    arrange(desc(gene_length))
 
 ## IMPORTANT: EXAMINE GENES WITH ZERO INDEL, SV, NONSENSE MUTATIONS.
 ## THESE ARE THE MOST DEPLETED.
@@ -1230,7 +1133,6 @@ only.dS.allowed.genes <- filter(gene.mutation.densities,
     arrange(desc(gene_length))
 write.csv(only.dS.allowed.genes,file="../results/only-dS-allowed-genes.csv")
 
-
 ## As an added confirmation, let's compare essentiality from KEIO collection to these
 ## gene sets.
 KEIO.data <- read.csv("../data/KEIO_Essentiality.csv", header=TRUE,as.is=TRUE) %>%
@@ -1244,50 +1146,34 @@ purifying1 <- KEIO.gene.mutation.densities %>% mutate(maybe.purifying=ifelse(non
 purifying1.plot <- ggplot(purifying1,aes(x=maybe.purifying,y=Score)) + theme_classic() + geom_boxplot()
 purifying1.plot
 
-purifying2 <- purifying1 %>% filter(gene_length > 1000)
+purifying2 <- KEIO.gene.mutation.densities %>% mutate(maybe.purifying=ifelse(all.except.dS.mut.density==0,TRUE,FALSE))
 
 purifying2.plot <- ggplot(purifying2,aes(x=maybe.purifying,y=Score)) + theme_classic() + geom_boxplot()
 purifying2.plot
-
-purifying3 <- KEIO.gene.mutation.densities %>% mutate(maybe.purifying=ifelse(all.except.dS.mut.density==0,TRUE,FALSE))
-
-purifying3.plot <- ggplot(purifying3,aes(x=maybe.purifying,y=Score)) + theme_classic() + geom_boxplot()
-purifying3.plot
 
 ## potentially purifying genes have a higher KEIO essentially score, as we would hope.
 wilcox.test(x=filter(purifying1,maybe.purifying==TRUE)$Score,filter(purifying1,maybe.purifying==FALSE)$Score)
 
 wilcox.test(x=filter(purifying2,maybe.purifying==TRUE)$Score,filter(purifying2,maybe.purifying==FALSE)$Score)
 
-wilcox.test(x=filter(purifying3,maybe.purifying==TRUE)$Score,filter(purifying3,maybe.purifying==FALSE)$Score)
-
-
 pur1 <- filter(purifying1,maybe.purifying==TRUE) ## looks like a lot of false positives
-pur2 <- filter(purifying2,maybe.purifying==TRUE) ## looks like a lot of false positives
+pur2 <- filter(purifying2,maybe.purifying==TRUE) %>% arrange(desc(gene_length))
 
-## ribosomal genes... and lots of prophage? Are these addictive genes?
-
+## ribosomal genes... and hypothetical genes? Are these addictive genes?
 ## See "Pervasive domestication of defective prophages by bacteria"
 ## by Louis-Marie Bobay for insights, or potential analyses and checks, perhaps?
-
 ## Also see: Bacterial ‘Grounded’ Prophages: Hotspots for Genetic Renovation and Innovation
 ## by Ramisetty and Sudhakari.
 
-pur3 <- filter(purifying3,maybe.purifying==TRUE) %>% arrange(desc(gene_length))
+#######################################################################################
+######### Ribosome is under both positive and purifying selection.
+## TODO: make the presentation less circular and more logical.
 
-## by allowing dS, I might be able to filter out false positives caused by
-## a lack of reads mapping uniquely to that locus,
-## such as repeats or transposases or something.
-pur3.with.dS <- filter(pur3,dS.mut.count>0)
-
-## I'll need to dig deeper into these results.
-
-## IMPORTANT BUG: SEEMS LIKE BEN MASKED SOME REGIONS--
-## including prophage starting at ECB_00814 --
-## THAT I MISS!!!
-## I can double-check my purifying selection results against the
-## LTEE genomics data at barricklab.org/shiny/LTEE-Ecoli
-## to verify that those genes indeed don't have any mutations.
+## interesting: ribosomal genes are in both the top as well as the bottom
+## (purifying selection results).
+top.dN.ribosome.genes <- c('yceD', 'yeiP', 'rplL', 'rpsD', 'rpsE', 'infB', 'rplF', 'rplS',
+                           'rplP', 'rplY', 'ykgM')
+top.dN.ribosome.mutations <- filter(gene.dN.mutation.data,Gene %in% top.dN.ribosome.genes)
 #########################################################################
 #########################################################################
 ## look at the accumulation of stars over time for top genes in the
@@ -1784,27 +1670,6 @@ dev.off()
 ## when reporting results for individual modulons.
 
 ##########################################################################
-## overall, no evidence of selection on dS.
-## randomization tests show neutrality cannot be rejected when
-## looking at dS density per gene (p = 0.14).
-
-## to what extent is there evidence of intragenomic recombination between partially replicated chromosomes? intragenomic recombination/gene conversion?
-## candidates for gene conversion: multiple dS in the same Population, in the same gene,
-## and in the same cohort of mutations.
-dS.in.same.cohort <- gene.dS.mutation.data %>% group_by(Population,Gene,t0,tf) %>% summarize(cohort=n()) %>% arrange(desc(cohort)) %>% filter(cohort>1) %>%
-    filter(Gene!='ydfQ')
-
-## might these be larger recombination events? Examine all kinds of mutations, where
-## multiple mutations in the same gene in the same cohort.
-multiple.muts.in.same.cohort <- gene.mutation.data %>% group_by(Population,Gene,t0,tf) %>% summarize(cohort=n()) %>% filter(cohort>1) %>% arrange(Population,t0,tf) %>% arrange(Gene)
-
-## parallelism in dS at the same position in the same population
-## we get exactly one gene: ydfQ--
-## BUT THIS IS A BUG TO BE FIXED, CAUSED BY TWO LOCI WITH THE SAME BLATTNER NUMBER.
-bug.to.fix <- gene.dS.mutation.data %>% group_by(Population,Gene,Position) %>% summarize(count=n()) %>% arrange(desc(count)) %>% filter(count>1)
-buggy.ydfQ.mutations <- gene.dS.mutation.data %>% filter(Gene=='ydfQ')
-
-##########################################################################
 ## NOTES:
 ##########################################################################
 ## Is there any overlap in the modules defined in the three papers?
@@ -1835,9 +1700,3 @@ buggy.ydfQ.mutations <- gene.dS.mutation.data %>% filter(Gene=='ydfQ')
 ## Also see Ville Mustonen's paper on 'emergent neutrality'.
 ## so a better null hypothesis: dynamics of ALL mutations are driven by
 ## positive selection, either as hitchhikers or as drivers.
-
-## Does the Ornstein-Uhlenbeck process require that effects of each
-## mutation is uncorrelated? If mutations affecting anaerobic fitness
-## are uncorrelated with mutations affecting aerobic fitness,
-## then would this Genotype-Phenotype Map be inconsistent
-## with Nkrumah's results?

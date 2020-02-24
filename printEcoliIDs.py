@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 
 '''
-Usage: python printEcoliIDs.py -i ../data/CP001396.gbk > ../results/MC4100_IDs.csv
-
-python printEcoliIDs.py -i REL606.7.gbk --mask REL606.L20.G15.P0.M35.RM-edited.mask.gd > ../results/REL606_IDs.csv
+Usage: python printEcoliIDs.py -i ../data/REL606.7.gbk --mask ../data/REL606.L20.G15.P0.M35.RM-edited.mask.gd > ../results/REL606_IDs.csv
 
 This script skips over repetitive regions, per Section 4.3.1
 "Removing mutations in repetitive regions of the genome"
@@ -94,11 +92,12 @@ def main():
 
     ## now parse the genome for CDS.
     genome = next(SeqIO.parse(args.input, "genbank"))
-    print(','.join(['Gene','locus_tag','blattner','gene_length','product', 'start', 'end']))    
+    print(','.join(['Gene','locus_tag','blattner','gene_length','product', 'start', 'end', 'strand']))    
     for feat in genome.features:
         if feat.type != 'CDS': continue ## only consider protein-coding genes
         my_start = feat.location.start
         my_end = feat.location.end
+        my_strand = feat.location.strand
         if overlaps_any_region(my_start, my_end, annotated_repeats): continue
         if is_in_any_masked_region(my_start, my_end, masked_regions): continue
         length = my_end - my_start
@@ -123,7 +122,7 @@ def main():
         ## I should not have to do this next-- fix these corner cases later.
         blattner = re.sub('[,;()]', '', blattner)
         ## start+1 (but end+0) to be consistent with genbank format.
-        print(','.join([str(x) for x in (gene,locus_tag,blattner,length,product, my_start+1, my_end )]))
+        print(','.join([str(x) for x in (gene,locus_tag,blattner,length,product, my_start+1, my_end, my_strand)]))
 
 
 main()
