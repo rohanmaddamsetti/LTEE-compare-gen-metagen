@@ -1,4 +1,4 @@
-## metagenomics-analysis.R by Rohan Maddamsetti.
+## metagenomics-analysis.R by Rohan Maddamsetti and Nkrumah Grant 
 
 ## MAKE SURE THAT ZEROS IN MUTATION COUNTS ARE NOT THROWN OUT BY DPLYR!
 
