@@ -7,14 +7,27 @@
 ## (will probably have to generate individual base plots, when only one set of genes
 ## is of interest in the plot).
 
-## TODO: do hierarchical modeling of point mutations in genes based on:
-## 1) gene length
-## 2) distance from peak in Ara+3.
-## Question is to quantify (or set an upper bound) on
-## the contribution of mutation rate variation.
+## IMPORTANT TODO:
+## The problem with setting up a probabilistic model for mutation rate variation is
+## that causal factors evolve during the evolution experiment! Modeling these
+## changes adds a lot of complexity. For this reason, rather than directly
+## modeling mutation occurrence over the genome as a periodic function of
+## distance from the replication origin, as as a function of leading/lagging strand,
+## we used importance sampling to sample randomized modules of genes based on the empirical
+## density of mutations per gene. We could also use this technique to sample genes
+## using a sampling function that takes gene length, leading/lagging strand and a periodic
+## function of distance from the oriC replication origin.
 
-## I need an independent dataset to set phase parameters-- use E. coli MA
-## experiment data to calibrate.
+## If I need an independent dataset to set phase parameters-- then use E. coli MA
+## experiment data to calibrate. Use data in Foster et al. (2013) in G3,
+## or use any more recent datasets from that group or others.
+
+##to calculate an intensity value
+##over the genome (regression approach to disentangle, citing Bailey & Bataillon paper.
+
+## NOTE: Perhaps should cite my STLE paper-- recombination events tend to happen flanking
+## the replication origin. Is that result connected to the wave-like mutation bias
+## pattern seen here and in Patricia Foster's and Vaughn Cooper's evolution experiments?
 
 library(tidyverse)
 
@@ -643,15 +656,23 @@ sv.indel.nonsen.rando.plot <- plot.base.layer(sv.indel.nonsense.gene.mutation.da
 ## for indels and structural variation, we cannot distinguish between
 ## mutation hotspots vs. selection.
 
-## no evidence of a strand-specific mutation bias on genes
+## EVIDENCE OF STRAND-SPECIFIC BIAS.
+
+## There is evidence of a strand-specific mutation bias on genes
 ## in the LTEE. Do genes on the lagging strand have a different number of
 ## mutations compared to the lagging strand?
 ## Will have to normalize by number of genes in each class.
+
+## The key is that lagging/leading strands flip at the replication origin.
+## so the asymmetry on each strand over the origin SHOWS the strand-specfic bias.
+## the ratio of total mutations per strand on each side of the origin should give
+## an estimate of the strength of this bias.
+
 summed.strand.mut.plot <- ggplot(gene.mutation.data,aes(x=oriC.coordinate,fill=Annotation)) +
     geom_histogram(bins=100) +
     theme_classic() +
     facet_grid(strand~.,scales="fixed") 
-ggsave("../results/figures/summed.strand-mutation-bias-histogram.pdf",strand.mut.plot,width=11,height=8)
+ggsave("../results/figures/summed.strand-mutation-bias-histogram.pdf",summed.strand.mut.plot,width=11,height=8)
 
 araplus3.gene.mutation.data <- gene.mutation.data %>% filter(Population=='Ara+3')
 araplus3.strand.mut.plot <- ggplot(araplus3.gene.mutation.data,aes(x=oriC.coordinate,fill=Annotation)) +
@@ -660,28 +681,72 @@ araplus3.strand.mut.plot <- ggplot(araplus3.gene.mutation.data,aes(x=oriC.coordi
     facet_grid(strand~.,scales="fixed") 
 ggsave("../results/figures/ara+3.strand-mutation-bias-histogram.pdf",strand.mut.plot,width=11,height=8)
 
-araplus3.leadingstrand.gene.mut.data <- araplus3.gene.mutation.data %>% filter(strand==1)
-araplus3.laggingstrand.gene.mut.data <- araplus3.gene.mutation.data %>% filter(strand==-1)
+## Variable names assume that the lagging strand has more mutations--
+## I can't tell based on arbitrary orientation labeling conventions for
+## oriC.coordinate and strand!
 
-## effect seems to be consistently explained by ratio of number of genes on each strand.
-## fits quite well! 1907 leading genes/2131 lagging genes.
-## in Ara+3, 794 leading strand dS, and 881 lagging strand genes. Both ratios are ~0.90!
-## is it consistent across populations?
-leading.gene.target <- sum(filter(REL606.genes,strand==1)$gene_length)
-lagging.gene.target <- sum(filter(REL606.genes,strand==-1)$gene_length)
+leadingstrand.gene.mut.data <- gene.mutation.data %>%
+    filter(
+    ((oriC.coordinate > 0) & (strand == 1)) | ((oriC.coordinate < 0) & (strand == -1))
+    )
+laggingstrand.gene.mut.data <- gene.mutation.data %>%
+    filter(
+    ((oriC.coordinate > 0) & (strand == -1)) | ((oriC.coordinate < 0) & (strand == 1))
+    )
 
-nrow(filter(REL606.genes,strand==1))
-nrow(filter(REL606.genes,strand==-1))
-nrow(filter(araplus3.leadingstrand.gene.mut.data,Annotation=='synonymous'))
-nrow(filter(araplus3.laggingstrand.gene.mut.data,Annotation=='synonymous'))
-leading.gene.mutation.data <- gene.mutation.data %>% filter(strand==1)
-lagging.gene.mutation.data <- gene.mutation.data %>% filter(strand==-1)
-leading.dS <- nrow(filter(leading.gene.mutation.data,Annotation=='synonymous'))
-lagging.dS <- nrow(filter(lagging.gene.mutation.data,Annotation=='synonymous'))
-## fit to null distribution over all populations is very strong:
-## leading.dS/lagging.dS = 0.8934, while expectation is 1907/2131 = 0.8949
-## expected ratio when accounting for gene length is 0.90.
+nrow(leadingstrand.gene.mut.data)
+nrow(laggingstrand.gene.mut.data)
 
+dS.leadingstrand.gene.mut.data <- leadingstrand.gene.mut.data %>%
+                                         filter(Annotation=='synonymous')
+dS.laggingstrand.gene.mut.data <- laggingstrand.gene.mut.data %>%
+                                         filter(Annotation=='synonymous')
+
+
+araplus3.leadingstrand.gene.mut.data <- leadingstrand.gene.mut.data %>%
+    filter(Population=="Ara+3")
+araplus3.laggingstrand.gene.mut.data <- laggingstrand.gene.mut.data %>%
+    filter(Population=="Ara+3")
+
+dS.araplus3.leadingstrand.gene.mut.data <- araplus3.leadingstrand.gene.mut.data %>%
+                                         filter(Annotation=='synonymous')
+dS.araplus3.laggingstrand.gene.mut.data <- araplus3.laggingstrand.gene.mut.data %>%
+                                         filter(Annotation=='synonymous')
+
+nrow(dS.araplus3.leadingstrand.gene.mut.data)
+nrow(dS.araplus3.laggingstrand.gene.mut.data)
+
+leadingstrand.REL606.genes <- REL606.genes %>%
+    filter(
+    ((oriC_start > 0) & (strand == 1)) | ((oriC_start < 0) & (strand == -1))
+    )
+laggingstrand.REL606.genes <- REL606.genes %>%
+    filter(
+    ((oriC_start > 0) & (strand == -1)) | ((oriC_start < 0) & (strand == 1))
+    )
+
+
+leading.gene.target <- sum(leadingstrand.REL606.genes$gene_length)
+lagging.gene.target <- sum(laggingstrand.REL606.genes$gene_length)
+
+
+nrow(leadingstrand.gene.mut.data)/nrow(laggingstrand.gene.mut.data)
+
+nrow(dS.araplus3.leadingstrand.gene.mut.data)/nrow(dS.araplus3.laggingstrand.gene.mut.data)
+leading.gene.target/lagging.gene.target
+
+dS.strand.mut.vec <- c(nrow(dS.laggingstrand.gene.mut.data),
+                            nrow(dS.leadingstrand.gene.mut.data))
+
+binom.test(x=dS.strand.mut.vec,p=(lagging.gene.target/leading.gene.target))
+
+strand.mut.vec <- c(nrow(laggingstrand.gene.mut.data),
+                            nrow(leadingstrand.gene.mut.data))
+
+binom.test(x=strand.mut.vec,p=(lagging.gene.target/leading.gene.target))
+
+
+## EVIDENCE OF WAVE-PATTERN MUTATION BIAS.
 
 ## LOOKS LIKES GENOME-WIDE MUTATION BIAS IN ARA+3, but not others!
 ## look at mutation density over the chromosome.
@@ -1019,27 +1084,36 @@ cumsum.largedeletions.genome.50K <- ks.analysis(largedeletions.50K,REL606.genes)
 make.KS.Figure(cumsum.largedeletions.genome.50K)
 
 #################################################################################
-### IMPORTANT BUG! GENES THAT SHOULD HAVE BEEN MASKED, WITH NO
-### MUTATION CALLS IN THE GOOD ET AL. DATA, REAPPEAR IN REL606 GENES!!!
-## PROPHAGE STARTING AT ECB_00814 is a good place to start debugging.
-################################################################################
+## Find all genes that have no mutations whatsoever in any population.
+## Cross-check with the LTEE Genomics data-- synonymous, intergenic (not in coding region)
+## and amplifications are allowed, but no other kinds of mutations.
 
-## when examining density of mutations over the genome, remove all genes that
-## have no mutations whatsoever in any population. These loci might have been
-## masked, or have been otherwise problematic in the mutation calling steps.
-## many of these loci are quite interesting, and some of these are probably
-## recent gene duplicates. Since I haven't analyzed the raw metagenomic data
-## though, it's best to play it safe.
+## I downloaded mutations from https://barricklab.org/shiny/LTEE-Ecoli/,
+## skipping SNP synonymous, SNP intergenic, and large amplication mutations.
+LTEE.genomics.muts <- read.csv("../data/LTEE-Ecoli-data 2020-02-24 14_35_41.csv") %>%
+    ## ignore MOB, DEL, etc. that are annotated as intergenic.
+    ## this is to prevent false negatives, i.e. removing genes in the gene_list
+    ## that weren't directly affected by the intergenic mutation.
+    filter(!(str_detect(html_mutation_annotation,"intergenic")))
+    
+## remove genes from 'no.mutation.genes' that have mutations in LTEE.genomics.muts.
+## make a big string of all mutated genes in the LTEE-genomics data, and search this for
+## matches.
+LTEE.genomics.mutated.genestr <- str_c(unique(LTEE.genomics.muts$gene_list),collapse = ",")
+
 no.mutation.genes <- REL606.genes %>%
-    filter(!(Gene %in% mutation.data$Gene))
+    ## no hits allowed in the metagenomics.
+    filter(!(Gene %in% mutation.data$Gene)) %>%
+    ## and no hits (other than dS, amps, and intergenic) allowed in the genomics.
+    filter(!(str_detect(LTEE.genomics.mutated.genestr,Gene)))
+
+## Let's look at the strand and location of these genes.
+no.mut.gene.loc.plot <- ggplot(no.mutation.genes,aes(x=oriC_start,fill=strand)) +
+    geom_bar() + theme_classic()
+no.mut.gene.loc.plot
 
 write.csv(no.mutation.genes,file="../results/no-mutation-genes.csv")
 
-## By hand, I cross-checked all of these genes against the LTEE-Ecoli
-## genome webserver on Jeff Barrick's website. All 'no-mutation-genes'
-## with mutations in the genomics data are marked in red.
-## 'no-mutation-genes' that have no mutations in the genomics data are marked in
-## green. This spreadsheet is saved as 'no-mutation-genes.xlsx'.
 ################################################################################
 ### DENSITIES SUMMED OVER ALL POPULATIONS.
 
@@ -1105,19 +1179,10 @@ gene.mutation.densities <- REL606.genes %>%
 #### We need to keep track of genes that haven't been hit by any mutations
 #### in a given mutation class (sv, indels, dN, etc.)
 gene.mutation.densities[is.na(gene.mutation.densities)] <- 0
-gene.mutation.densities <- tbl_df(gene.mutation.densities) %>%
-    ## and IMPORTANT: remove genes with no mutations at all.
-    ## these may be artifactual due to library prep or variant calling.
-    ## by allowing dS, I might be able to filter out false positives caused by
-    ## a lack of reads mapping uniquely to that locus,
-    ## such as repeats or transposases or something.
-    filter(!(Gene %in% no.mutation.genes$Gene))
+gene.mutation.densities <- tbl_df(gene.mutation.densities)
 
 #######################################################################################
 ## PURIFYING SELECTION RESULTS.
-
-
-## Then, look at the annotation of these genes in STRING.
 
 ## IMPORTANT: EXAMINE GENES WITH ZERO INDEL, SV, NONSENSE MUTATIONS.
 ## THESE ARE THE MOST DEPLETED.
@@ -1130,8 +1195,19 @@ write.csv(no.nonsense.indel.sv.genes,file="../results/no-nonsense-indel-sv-genes
 ## Try again, now disallowing missense mutations.
 only.dS.allowed.genes <- filter(gene.mutation.densities,
                                 all.except.dS.mut.count == 0) %>%
+    ## no hits (other than dS, amps, and intergenic) allowed in the LTEE genomics
+    ## to remove false positives.
+    filter(!(str_detect(LTEE.genomics.mutated.genestr,Gene))) %>%
     arrange(desc(gene_length))
 write.csv(only.dS.allowed.genes,file="../results/only-dS-allowed-genes.csv")
+
+
+## Let's look at the strand and location of these genes.
+no.mut.gene.loc.plot <- ggplot(no.mutation.genes,aes(x=oriC_start,fill=strand)) +
+    geom_bar() + theme_classic()
+no.mut.gene.loc.plot
+
+
 
 ## As an added confirmation, let's compare essentiality from KEIO collection to these
 ## gene sets.
@@ -1162,7 +1238,8 @@ pur2 <- filter(purifying2,maybe.purifying==TRUE) %>% arrange(desc(gene_length))
 ## ribosomal genes... and hypothetical genes? Are these addictive genes?
 ## See "Pervasive domestication of defective prophages by bacteria"
 ## by Louis-Marie Bobay for insights, or potential analyses and checks, perhaps?
-## Also see: Bacterial ‘Grounded’ Prophages: Hotspots for Genetic Renovation and Innovation
+## Also see: Bacterial ‘Grounded’ Prophages:
+## Hotspots for Genetic Renovation and Innovation
 ## by Ramisetty and Sudhakari.
 
 #######################################################################################
@@ -1542,6 +1619,7 @@ c.Imodulon.regulators <- calc.cumulative.muts(Imodulon.regulator.mut.data)
 Imodulon.regulators.plot <- all.rando.plot %>%
     add.cumulative.mut.layer(c.Imodulon.regulators,
                              my.color="red")
+ggsave("../results/figures/I-modulon-regulators.pdf",Imodulon.regulators.plot)
 
 c.sv.indel.nonsen.Imodulon.regulators <- calc.cumulative.muts(
     sv.indel.nonsen.Imodulon.regulator.muts)
@@ -1552,6 +1630,7 @@ Imodulon.regulator.sv.indel.nonsense.pvals <- calculate.trajectory.tail.probs(sv
 Imodulon.regulators.sv.indel.nonsen.plot <- sv.indel.nonsen.rando.plot %>%
     add.cumulative.mut.layer(c.sv.indel.nonsen.Imodulon.regulators,
                              my.color="red")
+ggsave("../results/figures/sv-indel-nonsense_I-modulon-regulators.pdf",Imodulon.regulators.sv.indel.nonsen.plot)
 
 ## Now look at genes that are regulated within Imodulons.
 ## I expect relaxed or purifying selection overall.

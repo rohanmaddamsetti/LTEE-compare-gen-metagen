@@ -3,6 +3,8 @@
 '''
 Usage: python printEcoliIDs.py -i ../data/REL606.7.gbk --mask ../data/REL606.L20.G15.P0.M35.RM-edited.mask.gd > ../results/REL606_IDs.csv
 
+This script skips over all pseudogenes that have been annotated with the /pseudo tag.
+
 This script skips over repetitive regions, per Section 4.3.1
 "Removing mutations in repetitive regions of the genome"
 in the Supplemental Information of Ben Good's LTEE metagenomics paper.
@@ -95,6 +97,7 @@ def main():
     print(','.join(['Gene','locus_tag','blattner','gene_length','product', 'start', 'end', 'strand']))    
     for feat in genome.features:
         if feat.type != 'CDS': continue ## only consider protein-coding genes
+        if 'pseudo' in feat.qualifiers: continue ## skip loci annotated as pseudogenes
         my_start = feat.location.start
         my_end = feat.location.end
         my_strand = feat.location.strand
@@ -102,6 +105,7 @@ def main():
         if is_in_any_masked_region(my_start, my_end, masked_regions): continue
         length = my_end - my_start
         locus_tag = feat.qualifiers['locus_tag'].pop()
+            
         try:
             gene = feat.qualifiers['gene'].pop()
         except KeyError:
