@@ -204,7 +204,7 @@ calc.slope.of.cumulative.muts <- function(c.muts) {
 ## This plot visualizes a two-tailed test (alpha = 0.05)
 ## against a bootstrapped null distribution.
 ## This is what we want to use for publication.
-plot.base.layer <- function(data, subset.size=300, N=1000, alpha = 0.05, normalization.constant=NA) {
+plot.base.layer <- function(data, subset.size=50, N=1000, alpha = 0.05, normalization.constant=NA) {
 
     ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations.
@@ -683,7 +683,6 @@ gene.nodNdS.mutation.data <- gene.mutation.data %>%
 all.rando.plot <- plot.base.layer(gene.mutation.data)
 nodNdS.rando.plot <- plot.base.layer(gene.nodNdS.mutation.data)
 sv.indel.nonsen.rando.plot <- plot.base.layer(sv.indel.nonsense.gene.mutation.data)
-
 ##########################################################################################
 ## MUTATION BIAS ANALYSIS.
 
@@ -1799,29 +1798,6 @@ dev.off()
 ##########################################################################
 ## Is there any overlap in the modules defined in the three papers?
 
-## can I "train" a model of relaxed selection on genes that we know are not under selection
-## in the LTEE? That is, metabolic operons that are never used?
-
-## Then perhaps I can use this model to disentangle positive selection from
-## relaxed selection (if I am lucky.)
-
-## I think so! just bootstrap/resample trajectories from a training set of
-## metabolic operons whose function decay in the LTEE from previous work,
-## such as Leiby and Marx.
-## This could be a good baseline for comparing other sets of genes.
-## (of course, result depends on how well this set is chosen).
-
-## TODO: make a gold standard set of genes under true relaxed selection
-## (from Leiby and Marx paper), and use this as a benchmark for relaxed selection.
-## This is to answer the following question:
-## Does the base rate reflect relaxed selection and quasi-neutrality?
-
 ## based on redoing the binomial test on genomes, it seems the difference in result
 ## is NOT driven by target size. rather, it is whether or not all kinds of mutations
 ## are included, and not just restricting to point mutations.
-
-## The dynamics of mutations under relaxed selection should be
-## dragged by mutations under positive selection.
-## Also see Ville Mustonen's paper on 'emergent neutrality'.
-## so a better null hypothesis: dynamics of ALL mutations are driven by
-## positive selection, either as hitchhikers or as drivers.
