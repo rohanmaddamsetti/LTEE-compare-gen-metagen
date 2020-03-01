@@ -64,30 +64,64 @@ rotate.REL606.chr <- function(my.position, c) {
 ## in other words, look at the rates at which the mutations occur over time.
 ## To normalize, we need to supply the number of sites at risk
 ## (such as sum of gene length).
-calc.cumulative.muts <- function(data, normalization.constant=NA) {
+calc.cumulative.muts <- function(d, normalization.constant=NA) {
 
-    cumsum.per.pop.helper.func <- function(df) {
-        df %>%
-            arrange(t0) %>%
-            group_by(Population,Generation) %>%
-            summarize(count=n()) %>%
-            mutate(cs=cumsum(count)) %>%
-            ungroup() 
+    cumsum.per.pop.helper.func <- function(pop) {
+        finalgen <- 6.3 ## this is outside of the data collection
+        ## for nice plotting (final generation in mutation.data is 6.275).
+
+        ## This constant is to make sure that all pops are in the levels
+        ## of the Population factor after mergers, etc.
+        pop.levels <- c("Ara-5","Ara-6", "Ara+1", "Ara+2",
+                        "Ara+4", "Ara+5", "Ara-1", "Ara-2",
+                        "Ara-3", "Ara-4", "Ara+3", "Ara+6")
+        
+        df <- d %>% filter(Population==pop)
+        if (nrow(df) == 0) { ## if no mutations in this pop.
+            almost.done.df <- tibble(Population = factor(pop, levels = pop.levels),
+                                     Generation=finalgen,
+                                     count=0,
+                                     cs=0)
+        } else {
+            summary.df <- df %>%
+                arrange(t0) %>%
+                group_by(Population,Generation) %>%
+                summarize(count=n()) %>%
+                mutate(cs=cumsum(count)) %>%
+                ungroup()
+            ## if the final generation is not in ret.df,
+            ## then add one final row (for nicer plots).
+            final.row.df <- tibble(Population=factor(pop, levels = pop.levels),
+                                   Generation=finalgen,
+                                   count=max(summary.df$count),
+                                   cs=max(summary.df$cs))
+            
+            almost.done.df <- bind_rows(summary.df, final.row.df)
+        }
+        ## add an row for Generation == 0 (for nicer plots).
+        init.row.df <- tibble(
+            Population = factor(pop, levels = pop.levels),
+            Generation = 0,
+            count = 0,
+            cs = 0)
+        
+        ret.df <- bind_rows(init.row.df,almost.done.df)
+        return(ret.df)
     }
     
     ## if normalization.constant is not provided, then
     ## calculate based on gene length by default.
     if (is.na(normalization.constant)) {
-        my.genes <- data %>% dplyr::select(Gene,gene_length) %>% distinct()
+        my.genes <- d %>% dplyr::select(Gene,gene_length) %>% distinct()
         normalization.constant <- sum(my.genes$gene_length)
     }
     
-    c.dat <- data %>%
-        split(.$Population) %>%
-        map_dfr(.f=cumsum.per.pop.helper.func) %>%
+    c.dat <- map_dfr(.x=levels(d$Population),
+                     .f=cumsum.per.pop.helper.func) %>%
         mutate(normalized.cs=cs/normalization.constant) %>%
         ## remove any NA values.
         na.omit()
+    
     return(c.dat)
 }
 
@@ -802,7 +836,6 @@ summed.nonpoint.mut.plot <- ggplot(nonpoint.mut.data,aes(x=oriC.coordinate,fill=
     theme_classic()
 ggsave("../results/figures/summed-nonpoint-mut-bias-histogram.pdf",summed.nonpoint.mut.plot,width=11,height=8)
 
-
 ## plot the distribution of indels and SV over the genome, separately for the
 ## different LTEE populations, and altogether.
 
@@ -1430,7 +1463,6 @@ D.of.tenaillon.plot4b <- D.of.nodNdS.rando.plot %>%
     add.slope.of.cumulative.mut.layer(D.of.c.top.mut.nodNdS.muts,my.color="red")
 
 
-
 ##########################################################################
 ## look at accumulation of stars over time for genes in the different proteome
 ## sectors.
@@ -1616,7 +1648,8 @@ sv.indel.nonsen.Imodulon.regulator.muts <- Imodulon.regulator.mut.data %>%
 c.Imodulon.regulators <- calc.cumulative.muts(Imodulon.regulator.mut.data)
 
 ## I-modulon regulators are under extremely strong positive selection!
-Imodulon.regulators.plot <- all.rando.plot %>%
+Imodulon.regulators.base.layer <- plot.base.layer(gene.mutation.data,subset.size=length(unique(Imodulon.regulators$regulator)))
+Imodulon.regulators.plot <- Imodulon.regulators.base.layer %>%
     add.cumulative.mut.layer(c.Imodulon.regulators,
                              my.color="red")
 ggsave("../results/figures/I-modulon-regulators.pdf",Imodulon.regulators.plot)
@@ -1625,9 +1658,10 @@ c.sv.indel.nonsen.Imodulon.regulators <- calc.cumulative.muts(
     sv.indel.nonsen.Imodulon.regulator.muts)
 
 ## calculate more rigorous statistics than the figures.
-Imodulon.regulator.sv.indel.nonsense.pvals <- calculate.trajectory.tail.probs(sv.indel.nonsense.gene.mutation.data, unique(Imodulons.to.regulators$regulator))
+Imodulon.regulator.sv.indel.nonsense.pvals <- calculate.trajectory.tail.probs(sv.indel.nonsense.gene.mutation.data, unique(Imodulon.regulators$regulator))
 
-Imodulon.regulators.sv.indel.nonsen.plot <- sv.indel.nonsen.rando.plot %>%
+Imodulon.regulators.sv.indel.nonsen.base.layer <- plot.base.layer(sv.indel.nonsense.gene.mutation.data,subset.size=length(unique(Imodulon.regulators$regulator)))
+Imodulon.regulators.sv.indel.nonsen.plot <- Imodulon.regulators.sv.indel.nonsen.base.layer %>%
     add.cumulative.mut.layer(c.sv.indel.nonsen.Imodulon.regulators,
                              my.color="red")
 ggsave("../results/figures/sv-indel-nonsense_I-modulon-regulators.pdf",Imodulon.regulators.sv.indel.nonsen.plot)
@@ -1651,29 +1685,41 @@ sv.indel.nonsen.Imodulon.muts <- Imodulon.gene.mut.data %>%
 
 c.Imodulon.genes <- calc.cumulative.muts(Imodulon.gene.mut.data)
 
-Imodulon.gene.plot <- all.rando.plot %>%
+Imodulon.gene.base.layer <- plot.base.layer(
+    gene.mutation.data,
+    subset.size=length(unique(Imodulon.genes$Gene)))
+
+Imodulon.gene.plot <- Imodulon.gene.base.layer %>%
     add.cumulative.mut.layer(c.Imodulon.genes,
                              my.color="red")
+
+## I-modulon genes appear to be being knocked out in many populations.
+## this contradicts my initial hypothesis that they would be under
+## purifying selection, overall.
 
 c.sv.indel.nonsen.Imodulon.genes <- calc.cumulative.muts(
     sv.indel.nonsen.Imodulon.muts)
 
-## I-modulon genes appear to be being knocked out in many populations.
-## this contradicts my initial hypothesis that they would be under purifying selection,
-## overall.
-Imodulon.gene.sv.indel.nonsen.plot <- sv.indel.nonsen.rando.plot %>%
+Imodulon.gene.sv.indel.nonsen.base.layer <- plot.base.layer(
+    sv.indel.nonsense.gene.mutation.data,
+    subset.size=length(unique(Imodulon.genes$Gene)))
+
+Imodulon.gene.sv.indel.nonsen.plot <- Imodulon.gene.sv.indel.nonsen.base.layer %>%
     add.cumulative.mut.layer(c.sv.indel.nonsen.Imodulon.genes,
                              my.color="red")
 
 ## make plots comparing I-modulon regulators to the genes they regulate.
 Imodulon.plot <- all.rando.plot %>%
     add.cumulative.mut.layer(c.Imodulon.regulators, my.color="black") %>%
-        add.cumulative.mut.layer(c.Imodulon.genes, my.color="red")
+    add.cumulative.mut.layer(c.Imodulon.genes, my.color="red")
+ggsave("../results/figures/Imodulon-plot.pdf",Imodulon.plot)
+
 
 Imodulon.sv.indel.nonsen.plot <- sv.indel.nonsen.rando.plot %>%
     add.cumulative.mut.layer(c.sv.indel.nonsen.Imodulon.regulators,
                              my.color="black") %>%
     add.cumulative.mut.layer(c.sv.indel.nonsen.Imodulon.genes, my.color="red")
+ggsave("../results/figures/Imodulon-sv-indel-nonsen-plot.pdf",Imodulon.sv.indel.nonsen.plot)
 
 ## Answer Q3: compare genes in I-modulons
 ## to genes outside of I-modulons (omitting I-modulon.regulators altogether).
