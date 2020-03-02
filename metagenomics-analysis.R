@@ -491,13 +491,6 @@ gene.mutation.data <- filter(gene.mutation.data,
                              !(Gene %in% duplicate.genes$Gene))
 
 ##########################################################################
-## parallelism in dS at the same position in the same population
-## we get exactly one gene: ydfQ--
-## BUT THIS IS A BUG TO BE FIXED, CAUSED BY TWO LOCI WITH THE SAME BLATTNER NUMBER.
-bug.to.fix <- gene.dS.mutation.data %>% group_by(Population,Gene,Position) %>% summarize(count=n()) %>% arrange(desc(count)) %>% filter(count>1)
-buggy.ydfQ.mutations <- gene.dS.mutation.data %>% filter(Gene=='ydfQ')
-##########################################################################
-
 ## quick random check: look for nucleotide-level parallelism in the Good dataset.
 nuc.parallel.data <- gene.mutation.data %>% group_by(Gene, Position, Annotation, gene_length, product, blattner, locus_tag) %>% summarize(count=n()) %>%
     filter(count>=3) %>% arrange(desc(count))
@@ -553,6 +546,14 @@ gene.indel.mutation.data <- gene.mutation.data %>%
 gene.nodNdS.mutation.data <- gene.mutation.data %>%
     filter(Gene!='intergenic') %>%
     filter(Annotation %in% c("sv", "indel", "noncoding"))
+
+##########################################################################
+## parallelism in dS at the same position in the same population
+## we get exactly one gene: ydfQ--
+## BUT THIS IS A BUG TO BE FIXED, CAUSED BY TWO LOCI WITH THE SAME BLATTNER NUMBER.
+bug.to.fix <- gene.dS.mutation.data %>% group_by(Population,Gene,Position) %>% summarize(count=n()) %>% arrange(desc(count)) %>% filter(count>1)
+buggy.ydfQ.mutations <- gene.dS.mutation.data %>% filter(Gene=='ydfQ')
+
 ##########################################################################################
 ## make base plot of null distributions by subsampling/bootstrapping.
 ## I will overlay data on top of these plots.
@@ -590,7 +591,7 @@ araplus3.strand.mut.plot <- ggplot(araplus3.gene.mutation.data,aes(x=oriC.coordi
     geom_histogram(bins=100) +
     theme_classic() +
     facet_grid(strand~.,scales="fixed") 
-ggsave("../results/figures/ara+3.strand-mutation-bias-histogram.pdf",strand.mut.plot,width=11,height=8)
+ggsave("../results/figures/ara+3.strand-mutation-bias-histogram.pdf",araplus3.strand.mut.plot,width=11,height=8)
 
 ## Variable names assume that the lagging strand has more mutations--
 ## I can't tell based on arbitrary orientation labeling conventions for
