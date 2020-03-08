@@ -30,6 +30,7 @@
 ## pattern seen here and in Patricia Foster's and Vaughn Cooper's evolution experiments?
 
 library(tidyverse)
+library(cowplot)
 
 ##########################################################################
 ## FUNCTIONS FOR DATA ANALYSIS REPORTED IN MAIN TEXT
@@ -754,34 +755,12 @@ gene.length.location.plot
 ## Control analysis 1:
 ## look at the accumulation of stars over time for top genes in the
 ## Tenaillon et al. (2016) genomics data.
-
-## split data into before 50K and after 50K.
-
-## These curves are so far above the average, that comparing slopes is
-## challenging. To solve this issue let's compare rates of mutation
-## by looking at derivative itself.
-
-## Look at these pictures carefully. Some indicate positive selection,
-## while others indicate mutation accumulation.
-
-## look at the derivative of the accumulation of stars over time,
-## because the cumulative distribution is too high for a good comparison.
+## split data into before 50K and after 50K,
+## to ask whether we see continued fine-tuning in these genes, overall.
 
 ## base plots of null distribution for comparison.
-
 pre50K.rando.plot <- plot.base.layer(filter(gene.mutation.data,Generation <= 5))
 post50K.rando.plot <- plot.base.layer(filter(gene.mutation.data,Generation > 5))
-
-D.of.pre50K.rando.plot <- plot.slope.of.base.layer(filter(gene.mutation.data,Generation<=5))
-D.of.post50K.rando.plot <- plot.slope.of.base.layer(filter(gene.mutation.data,Generation>5))
-
-pre50K.nodNdS.rando.plot <- plot.base.layer(filter(gene.nodNdS.mutation.data,Generation <= 5))
-post50K.nodNdS.rando.plot <- plot.base.layer(filter(gene.nodNdS.mutation.data,Generation > 5))
-
-D.of.pre50K.nodNdS.rando.plot <- plot.slope.of.base.layer(filter(gene.nodNdS.mutation.data,
-                                                          Generation <= 5))
-D.of.post50K.nodNdS.rando.plot <- plot.slope.of.base.layer(filter(gene.nodNdS.mutation.data,
-                                                          Generation > 5))
 
 ## 1) plot top genes in non-mutators.
 nonmut.genomics <- read.csv('../data/tenaillon2016-nonmutator-parallelism.csv')
@@ -801,61 +780,15 @@ c.pre50K.top.nonmuts <- calc.cumulative.muts(pre50K.top.nonmut.data) %>%
 c.post50K.top.nonmuts <- calc.cumulative.muts(post50K.top.nonmut.data) %>%
     filter(Generation > 5)
 
-D.of.c.pre50K.top.nonmuts <- calc.slope.of.cumulative.muts(c.pre50K.top.nonmuts) %>%
-    filter(Generation<=5)
-D.of.c.post50K.top.nonmuts <- calc.slope.of.cumulative.muts(c.post50K.top.nonmuts) %>%
-    filter(Generation>5)
-
-tenaillon.plot1A <- pre50K.rando.plot %>%
+S1Fig <- pre50K.rando.plot %>%
     add.cumulative.mut.layer(c.pre50K.top.nonmuts,my.color="black")
-tenaillon.plot1B <- post50K.rando.plot %>%
+ggsave("../results/figures/S1Figure.pdf",S1Fig)
+S2Fig <- post50K.rando.plot %>%
     add.cumulative.mut.layer(c.post50K.top.nonmuts,my.color="black")
+ggsave("../results/figures/S2Figure.pdf",S2Fig)
 
 ## data favors coupon-collecting/mutation accumulation:
 ## genes under selection before 50K don't look so special after 50K.
-D.of.tenaillon.plot1A <- D.of.pre50K.rando.plot %>%
-    add.slope.of.cumulative.mut.layer(D.of.c.pre50K.top.nonmuts,
-                                      my.color='red')
-
-D.of.tenaillon.plot1B <- D.of.post50K.rando.plot %>%
-    add.slope.of.cumulative.mut.layer(D.of.c.post50K.top.nonmuts,
-                                      my.color='red')
-
-## 2a) plot top genes in non-mutators, after excluding dN and dS mutations.
-## exclude dN and dS in random comparison.
-nonmut.nodNdS <- read.csv('../data/tenaillon2016-nonmutator-parallelism-nodSdN.csv')
-top.nonmut.nodNdS <- top_n(nonmut.nodNdS, 50) ## using excluding dN dS column by default.
-top.nonmut.nodNdS.data <- gene.nodNdS.mutation.data %>%
-    filter(Gene %in% top.nonmut.nodNdS$Gene.name)
-
-pre50K.top.nonmut.nodNdS.data <- filter(top.nonmut.nodNdS.data) %>%
-    filter(Generation <= 5)
-
-post50K.top.nonmut.nodNdS.data <- filter(top.nonmut.nodNdS.data) %>%
-    filter(Generation > 5)
-
-c.pre50K.top.nonmut.nodNdS <- calc.cumulative.muts(pre50K.top.nonmut.nodNdS.data)
-c.post50K.top.nonmut.nodNdS <- calc.cumulative.muts(post50K.top.nonmut.nodNdS.data)
-
-D.of.c.pre50K.top.nonmut.nodNdS <- calc.slope.of.cumulative.muts(c.pre50K.top.nonmut.nodNdS) %>%
-    filter(Generation<=5)
-
-D.of.c.post50K.top.nonmut.nodNdS <- calc.slope.of.cumulative.muts(c.post50K.top.nonmut.nodNdS) %>%
-    filter(Generation>5)
-
-tenaillon.plot2A <- pre50K.nodNdS.rando.plot %>%
-    add.cumulative.mut.layer(c.pre50K.top.nonmut.nodNdS,my.color="black")
-
-tenaillon.plot2B <- post50K.nodNdS.rando.plot %>%
-    add.cumulative.mut.layer(c.post50K.top.nonmut.nodNdS,my.color="black")
-
-D.of.tenaillon.plot2A <- D.of.pre50K.rando.plot %>%
-    add.slope.of.cumulative.mut.layer(D.of.c.pre50K.top.nonmut.nodNdS,
-                                      my.color='red')
-
-D.of.tenaillon.plot2B <- D.of.post50K.rando.plot %>%
-    add.slope.of.cumulative.mut.layer(D.of.c.post50K.top.nonmut.nodNdS,
-                                      my.color='red')
 
 ## 3) plot top genes in hypermutators.
 hypermut.genomics <- read.csv('../data/tenaillon2016-mutator-parallelism.csv')
@@ -873,39 +806,13 @@ post50K.top.hypermut <- top.hypermut.data %>%
 c.pre50K.top.hypermut <- calc.cumulative.muts(pre50K.top.hypermut)
 c.post50K.top.hypermut <- calc.cumulative.muts(post50K.top.hypermut)
 
-D.of.c.top.mut.muts <- calc.slope.of.cumulative.muts(c.top.mut.muts)
-
-tenaillon.plot3A <- pre50K.rando.plot %>%
+S3Fig <- pre50K.rando.plot %>%
     add.cumulative.mut.layer(c.pre50K.top.hypermut,my.color="black")
+ggsave("../results/figures/S3Figure.pdf",S3Fig)
 
-tenaillon.plot3B <- post50K.rando.plot %>%
+S4Fig <- post50K.rando.plot %>%
     add.cumulative.mut.layer(c.post50K.top.hypermut,my.color="black")
-
-## 4) plot top genes in hypermutators, after excluding dN and dS mutations.
-## exclude dN and dS in random comparison.
-
-hypermut.nodNdS <- read.csv('../data/tenaillon2016-mutator-parallelism-nodSdN.csv')
-top.hypermut.nodNdS <- top_n(mut.nodNdS, 50) ## using excluding dN dS column by default.
-
-## exclude dN and dS mutations for this comparison.
-top.hypermut.nodNdS <- gene.nodNdS.mutation.data %>%
-    filter(Gene %in% top.mut.nodNdS$Gene.name)
-
-pre50K.top.hypermut.nodNdS <- filter(top.hypermut.nodNdS,Generation<=5)
-post50K.top.hypermut.nodNdS <- filter(top.hypermut.nodNdS,Generation>5)
-
-c.pre50K.top.hypermut.nodNdS <- calc.cumulative.muts(pre50K.top.hypermut.nodNdS)
-
-c.post50K.top.hypermut.nodNdS <- calc.cumulative.muts(post50K.top.hypermut.nodNdS)
-
-tenaillon.plot4A <- pre50K.nodNdS.rando.plot %>%
-    add.cumulative.mut.layer(c.pre50K.top.hypermut.nodNdS,my.color="black")
-
-tenaillon.plot4B <- post50K.nodNdS.rando.plot %>%
-    add.cumulative.mut.layer(c.post50K.top.hypermut.nodNdS,my.color="black")
-
-D.of.tenaillon.plot4 <- D.of.nodNdS.rando.plot %>%
-    add.slope.of.cumulative.mut.layer(D.of.c.top.mut.nodNdS.muts,my.color="red")
+ggsave("../results/figures/S4Figure.pdf",S4Fig)
 
 #########################################################################
 ## PURIFYING SELECTION ANALYSIS.
@@ -1034,7 +941,6 @@ no.mut.gene.loc.plot <- ggplot(no.mutation.genes,aes(x=oriC_start,fill=strand)) 
 no.mut.gene.loc.plot
 
 
-
 ## As an added confirmation, let's compare essentiality from KEIO collection to these
 ## gene sets.
 KEIO.data <- read.csv("../data/KEIO_Essentiality.csv", header=TRUE,as.is=TRUE) %>%
@@ -1068,6 +974,7 @@ pur2 <- filter(purifying2,maybe.purifying==TRUE) %>% arrange(desc(gene_length))
 ## Hotspots for Genetic Renovation and Innovation
 ## by Ramisetty and Sudhakari.
 
+##########################################################################
 ##########################################################################
 ## look at accumulation of stars over time for genes in different transcriptional
 ## modules inferred by Sastry et al. (2020) paper from Bernhard Palsson's group.
@@ -1106,6 +1013,7 @@ ggsave("../results/figures/I-modulon-regulators.pdf",Imodulon.regulators.plot)
 
 
 ## calculate more rigorous statistics than the figures.
+## IMPORTANT BUG: WHY ARE ONLY 7 OF 12 POPS IN the PVAL DATAFRAME ???
 Imodulon.regulator.pvals <- calculate.trajectory.tail.probs(gene.mutation.data, unique(Imodulon.regulators$regulator))
 
 ## Now look at genes that are regulated within Imodulons.
