@@ -561,7 +561,6 @@ buggy.ydfQ.mutations <- gene.dS.mutation.data %>% filter(Gene=='ydfQ')
 ## Base plots here of null distributions: add the data lines on top to compare.
 all.rando.plot <- plot.base.layer(gene.mutation.data)
 nodNdS.rando.plot <- plot.base.layer(gene.nodNdS.mutation.data)
-sv.indel.nonsen.rando.plot <- plot.base.layer(sv.indel.nonsense.gene.mutation.data)
 ##########################################################################################
 ## MUTATION BIAS ANALYSIS.
 
@@ -681,13 +680,6 @@ summed.mut.plot <- ggplot(mutation.data,aes(x=oriC.coordinate,fill=Annotation)) 
     theme_classic()
 ggsave("../results/figures/summed-mutation-bias-histogram.pdf",mut.plot,width=11,height=8)
 
-## For supplement, also plot with terminus as the origin in genome coordinates.
-terB.mut.plot <- ggplot(mutation.data,aes(x=terB.coordinate,fill=Annotation)) +
-    geom_histogram(bins=100) + 
-    theme_classic() +
-    facet_wrap(.~Population,scales="free") 
-ggsave("../results/figures/terB-mutation-bias-histogram.pdf",terB.mut.plot,width=11,height=8)
-
 ## plot point mutations over the genome: dN, dS, nonsense, noncoding
 point.mut.data <- mutation.data %>%
      filter(Annotation %in% c('missense', 'synonymous', 'nonsense', 'noncoding'))
@@ -763,6 +755,8 @@ gene.length.location.plot
 ## look at the accumulation of stars over time for top genes in the
 ## Tenaillon et al. (2016) genomics data.
 
+## split data into before 50K and after 50K.
+
 ## These curves are so far above the average, that comparing slopes is
 ## challenging. To solve this issue let's compare rates of mutation
 ## by looking at derivative itself.
@@ -773,100 +767,144 @@ gene.length.location.plot
 ## look at the derivative of the accumulation of stars over time,
 ## because the cumulative distribution is too high for a good comparison.
 
-## base plot of null distribution for comparison.
-D.of.all.rando.plot <- plot.slope.of.base.layer(gene.mutation.data)
-D.of.nodNdS.rando.plot <- plot.slope.of.base.layer(gene.nodNdS.mutation.data)
+## base plots of null distribution for comparison.
 
+pre50K.rando.plot <- plot.base.layer(filter(gene.mutation.data,Generation <= 5))
+post50K.rando.plot <- plot.base.layer(filter(gene.mutation.data,Generation > 5))
+
+D.of.pre50K.rando.plot <- plot.slope.of.base.layer(filter(gene.mutation.data,Generation<=5))
+D.of.post50K.rando.plot <- plot.slope.of.base.layer(filter(gene.mutation.data,Generation>5))
+
+pre50K.nodNdS.rando.plot <- plot.base.layer(filter(gene.nodNdS.mutation.data,Generation <= 5))
+post50K.nodNdS.rando.plot <- plot.base.layer(filter(gene.nodNdS.mutation.data,Generation > 5))
+
+D.of.pre50K.nodNdS.rando.plot <- plot.slope.of.base.layer(filter(gene.nodNdS.mutation.data,
+                                                          Generation <= 5))
+D.of.post50K.nodNdS.rando.plot <- plot.slope.of.base.layer(filter(gene.nodNdS.mutation.data,
+                                                          Generation > 5))
 
 ## 1) plot top genes in non-mutators.
 nonmut.genomics <- read.csv('../data/tenaillon2016-nonmutator-parallelism.csv')
 top.nonmut.genomics <- top_n(nonmut.genomics, 50, wt=G.score)
 
 top.nonmut.mutation.data <- gene.mutation.data %>%
-                                   filter(Gene %in% top.nonmut.genomics$Gene.name)
-c.top.nonmut.muts <- calc.cumulative.muts(top.nonmut.mutation.data)
-D.of.c.top.nonmut.muts <- calc.slope.of.cumulative.muts(c.top.nonmut.muts)
+    filter(Gene %in% top.nonmut.genomics$Gene.name)
 
-tenaillon.plot1 <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.top.nonmut.muts,my.color="black")
+pre50K.top.nonmut.data <- top.nonmut.mutation.data %>%
+    filter(Generation <= 5)
 
-## evidence of continual fine tuning!
-D.of.tenaillon.plot1 <- D.of.all.rando.plot %>%
-    add.slope.of.cumulative.mut.layer(D.of.c.top.nonmut.muts,
+post50K.top.nonmut.data <- top.nonmut.mutation.data %>%
+    filter(Generation > 5)
+
+c.pre50K.top.nonmuts <- calc.cumulative.muts(pre50K.top.nonmut.data) %>%
+    filter(Generation<=5)
+c.post50K.top.nonmuts <- calc.cumulative.muts(post50K.top.nonmut.data) %>%
+    filter(Generation > 5)
+
+D.of.c.pre50K.top.nonmuts <- calc.slope.of.cumulative.muts(c.pre50K.top.nonmuts) %>%
+    filter(Generation<=5)
+D.of.c.post50K.top.nonmuts <- calc.slope.of.cumulative.muts(c.post50K.top.nonmuts) %>%
+    filter(Generation>5)
+
+tenaillon.plot1A <- pre50K.rando.plot %>%
+    add.cumulative.mut.layer(c.pre50K.top.nonmuts,my.color="black")
+tenaillon.plot1B <- post50K.rando.plot %>%
+    add.cumulative.mut.layer(c.post50K.top.nonmuts,my.color="black")
+
+## data favors coupon-collecting/mutation accumulation:
+## genes under selection before 50K don't look so special after 50K.
+D.of.tenaillon.plot1A <- D.of.pre50K.rando.plot %>%
+    add.slope.of.cumulative.mut.layer(D.of.c.pre50K.top.nonmuts,
+                                      my.color='red')
+
+D.of.tenaillon.plot1B <- D.of.post50K.rando.plot %>%
+    add.slope.of.cumulative.mut.layer(D.of.c.post50K.top.nonmuts,
                                       my.color='red')
 
 ## 2a) plot top genes in non-mutators, after excluding dN and dS mutations.
+## exclude dN and dS in random comparison.
 nonmut.nodNdS <- read.csv('../data/tenaillon2016-nonmutator-parallelism-nodSdN.csv')
 top.nonmut.nodNdS <- top_n(nonmut.nodNdS, 50) ## using excluding dN dS column by default.
+top.nonmut.nodNdS.data <- gene.nodNdS.mutation.data %>%
+    filter(Gene %in% top.nonmut.nodNdS$Gene.name)
 
-top.nonmut.nodNdS.mutation.data <- gene.mutation.data %>%
-                                   filter(Gene %in% top.nonmut.nodNdS$Gene.name)
-c.top.nonmut.nodNdS.muts <- calc.cumulative.muts(top.nonmut.nodNdS.mutation.data)
-D.of.c.top.nonmut.nodNdS.muts <- calc.slope.of.cumulative.muts(c.top.nonmut.nodNdS.muts)
+pre50K.top.nonmut.nodNdS.data <- filter(top.nonmut.nodNdS.data) %>%
+    filter(Generation <= 5)
 
-tenaillon.plot2a <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.top.nonmut.nodNdS.muts,my.color="black")
+post50K.top.nonmut.nodNdS.data <- filter(top.nonmut.nodNdS.data) %>%
+    filter(Generation > 5)
 
-D.of.tenaillon.plot2a <- D.of.all.rando.plot %>%
-    add.slope.of.cumulative.mut.layer(D.of.c.top.nonmut.nodNdS.muts,
+c.pre50K.top.nonmut.nodNdS <- calc.cumulative.muts(pre50K.top.nonmut.nodNdS.data)
+c.post50K.top.nonmut.nodNdS <- calc.cumulative.muts(post50K.top.nonmut.nodNdS.data)
+
+D.of.c.pre50K.top.nonmut.nodNdS <- calc.slope.of.cumulative.muts(c.pre50K.top.nonmut.nodNdS) %>%
+    filter(Generation<=5)
+
+D.of.c.post50K.top.nonmut.nodNdS <- calc.slope.of.cumulative.muts(c.post50K.top.nonmut.nodNdS) %>%
+    filter(Generation>5)
+
+tenaillon.plot2A <- pre50K.nodNdS.rando.plot %>%
+    add.cumulative.mut.layer(c.pre50K.top.nonmut.nodNdS,my.color="black")
+
+tenaillon.plot2B <- post50K.nodNdS.rando.plot %>%
+    add.cumulative.mut.layer(c.post50K.top.nonmut.nodNdS,my.color="black")
+
+D.of.tenaillon.plot2A <- D.of.pre50K.rando.plot %>%
+    add.slope.of.cumulative.mut.layer(D.of.c.pre50K.top.nonmut.nodNdS,
                                       my.color='red')
 
-
-## 2b) exclude dN and dS in random comparison.
-top.nonmut.nodNdS.mutation.data.2b <- gene.nodNdS.mutation.data %>%
-                                   filter(Gene %in% top.nonmut.nodNdS$Gene.name)
-c.top.nonmut.nodNdS.muts.2b <- calc.cumulative.muts(top.nonmut.nodNdS.mutation.data.2b)
-
-tenaillon.plot2b <- nodNdS.rando.plot %>%
-    add.cumulative.mut.layer(c.top.nonmut.nodNdS.muts.2b,my.color="black")
-
-D.of.tenaillon.plot2b <- D.of.nodNdS.rando.plot %>%
-    add.slope.of.cumulative.mut.layer(D.of.c.top.nonmut.nodNdS.muts,
+D.of.tenaillon.plot2B <- D.of.post50K.rando.plot %>%
+    add.slope.of.cumulative.mut.layer(D.of.c.post50K.top.nonmut.nodNdS,
                                       my.color='red')
 
 ## 3) plot top genes in hypermutators.
-mut.genomics <- read.csv('../data/tenaillon2016-mutator-parallelism.csv')
-top.mut.genomics <- top_n(mut.genomics, 50, wt=G.score)
+hypermut.genomics <- read.csv('../data/tenaillon2016-mutator-parallelism.csv')
+top.hypermut.genomics <- top_n(hypermut.genomics, 50, wt=G.score)
 
-top.mut.mutation.data <- gene.mutation.data %>%
-    filter(Gene %in% top.mut.genomics$Gene.name)
+top.hypermut.data <- gene.mutation.data %>%
+    filter(Gene %in% top.hypermut.genomics$Gene.name)
 
-c.top.mut.muts <- calc.cumulative.muts(top.mut.mutation.data)
+pre50K.top.hypermut <- top.hypermut.data %>%
+    filter(Generation <= 5)
+
+post50K.top.hypermut <- top.hypermut.data %>%
+    filter(Generation > 5)
+
+c.pre50K.top.hypermut <- calc.cumulative.muts(pre50K.top.hypermut)
+c.post50K.top.hypermut <- calc.cumulative.muts(post50K.top.hypermut)
+
 D.of.c.top.mut.muts <- calc.slope.of.cumulative.muts(c.top.mut.muts)
 
-tenaillon.plot3 <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.top.mut.muts,my.color="black")
+tenaillon.plot3A <- pre50K.rando.plot %>%
+    add.cumulative.mut.layer(c.pre50K.top.hypermut,my.color="black")
 
-D.of.tenaillon.plot3 <- D.of.all.rando.plot %>%
-    add.slope.of.cumulative.mut.layer(D.of.c.top.mut.muts,
-                                      my.color='red')
+tenaillon.plot3B <- post50K.rando.plot %>%
+    add.cumulative.mut.layer(c.post50K.top.hypermut,my.color="black")
 
-## 4a) plot top genes in hypermutators, after excluding dN and dS mutations.
+## 4) plot top genes in hypermutators, after excluding dN and dS mutations.
+## exclude dN and dS in random comparison.
 
-mut.nodNdS <- read.csv('../data/tenaillon2016-mutator-parallelism-nodSdN.csv')
-top.mut.nodNdS <- top_n(mut.nodNdS, 50) ## using excluding dN dS column by default.
+hypermut.nodNdS <- read.csv('../data/tenaillon2016-mutator-parallelism-nodSdN.csv')
+top.hypermut.nodNdS <- top_n(mut.nodNdS, 50) ## using excluding dN dS column by default.
 
-top.mut.nodNdS.mutation.data <- gene.mutation.data %>%
-                                   filter(Gene %in% top.mut.nodNdS$Gene.name)
-c.top.mut.nodNdS.muts <- calc.cumulative.muts(top.mut.nodNdS.mutation.data)
-D.of.c.top.mut.nodNdS.muts <- calc.slope.of.cumulative.muts(c.top.mut.nodNdS.muts)
+## exclude dN and dS mutations for this comparison.
+top.hypermut.nodNdS <- gene.nodNdS.mutation.data %>%
+    filter(Gene %in% top.mut.nodNdS$Gene.name)
 
-tenaillon.plot4a <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.top.mut.nodNdS.muts,my.color="black")
+pre50K.top.hypermut.nodNdS <- filter(top.hypermut.nodNdS,Generation<=5)
+post50K.top.hypermut.nodNdS <- filter(top.hypermut.nodNdS,Generation>5)
 
-D.of.tenaillon.plot4a <- D.of.all.rando.plot %>%
-    add.slope.of.cumulative.mut.layer(D.of.c.top.mut.nodNdS.muts,my.color="red")
+c.pre50K.top.hypermut.nodNdS <- calc.cumulative.muts(pre50K.top.hypermut.nodNdS)
 
+c.post50K.top.hypermut.nodNdS <- calc.cumulative.muts(post50K.top.hypermut.nodNdS)
 
-## 4b) exclude dN and dS in random comparison.
-top.mut.nodNdS.mutation.data.4b <- gene.nodNdS.mutation.data %>%
-                                   filter(Gene %in% top.mut.nodNdS$Gene.name)
-c.top.mut.nodNdS.muts.4b <- calc.cumulative.muts(top.mut.nodNdS.mutation.data.4b)
+tenaillon.plot4A <- pre50K.nodNdS.rando.plot %>%
+    add.cumulative.mut.layer(c.pre50K.top.hypermut.nodNdS,my.color="black")
 
-tenaillon.plot4b <- nodNdS.rando.plot %>%
-    add.cumulative.mut.layer(c.top.mut.nodNdS.muts.4b,my.color="black")
+tenaillon.plot4B <- post50K.nodNdS.rando.plot %>%
+    add.cumulative.mut.layer(c.post50K.top.hypermut.nodNdS,my.color="black")
 
-D.of.tenaillon.plot4b <- D.of.nodNdS.rando.plot %>%
+D.of.tenaillon.plot4 <- D.of.nodNdS.rando.plot %>%
     add.slope.of.cumulative.mut.layer(D.of.c.top.mut.nodNdS.muts,my.color="red")
 
 #########################################################################
@@ -1057,9 +1095,6 @@ Imodulon.regulators <-Imodulons.to.regulators %>% filter(!(is.na(regulator)))
 Imodulon.regulator.mut.data <- gene.mutation.data %>%
     filter(Gene %in% Imodulon.regulators$regulator)
 
-sv.indel.nonsen.Imodulon.regulator.muts <- Imodulon.regulator.mut.data %>%
-    filter(Annotation %in% c("sv", "indel", "nonsense"))
-
 c.Imodulon.regulators <- calc.cumulative.muts(Imodulon.regulator.mut.data)
 
 ## I-modulon regulators are under extremely strong positive selection!
@@ -1069,17 +1104,9 @@ Imodulon.regulators.plot <- Imodulon.regulators.base.layer %>%
                              my.color="red")
 ggsave("../results/figures/I-modulon-regulators.pdf",Imodulon.regulators.plot)
 
-c.sv.indel.nonsen.Imodulon.regulators <- calc.cumulative.muts(
-    sv.indel.nonsen.Imodulon.regulator.muts)
 
 ## calculate more rigorous statistics than the figures.
-Imodulon.regulator.sv.indel.nonsense.pvals <- calculate.trajectory.tail.probs(sv.indel.nonsense.gene.mutation.data, unique(Imodulon.regulators$regulator))
-
-Imodulon.regulators.sv.indel.nonsen.base.layer <- plot.base.layer(sv.indel.nonsense.gene.mutation.data,subset.size=length(unique(Imodulon.regulators$regulator)))
-Imodulon.regulators.sv.indel.nonsen.plot <- Imodulon.regulators.sv.indel.nonsen.base.layer %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.Imodulon.regulators,
-                             my.color="red")
-ggsave("../results/figures/sv-indel-nonsense_I-modulon-regulators.pdf",Imodulon.regulators.sv.indel.nonsen.plot)
+Imodulon.regulator.pvals <- calculate.trajectory.tail.probs(gene.mutation.data, unique(Imodulon.regulators$regulator))
 
 ## Now look at genes that are regulated within Imodulons.
 ## I expect relaxed or purifying selection overall.
@@ -1095,9 +1122,6 @@ Imodulon.genes <- genes.to.Imodulons %>% filter(!(is.na(Gene))) %>%
 Imodulon.gene.mut.data <- gene.mutation.data %>%
 filter(Gene %in% Imodulon.genes$Gene)
 
-sv.indel.nonsen.Imodulon.muts <- Imodulon.gene.mut.data %>%
-    filter(Annotation %in% c("sv", "indel", "nonsense"))
-
 c.Imodulon.genes <- calc.cumulative.muts(Imodulon.gene.mut.data)
 
 Imodulon.gene.base.layer <- plot.base.layer(
@@ -1108,33 +1132,12 @@ Imodulon.gene.plot <- Imodulon.gene.base.layer %>%
     add.cumulative.mut.layer(c.Imodulon.genes,
                              my.color="red")
 
-## I-modulon genes appear to be being knocked out in many populations.
-## this contradicts my initial hypothesis that they would be under
-## purifying selection, overall.
-
-c.sv.indel.nonsen.Imodulon.genes <- calc.cumulative.muts(
-    sv.indel.nonsen.Imodulon.muts)
-
-Imodulon.gene.sv.indel.nonsen.base.layer <- plot.base.layer(
-    sv.indel.nonsense.gene.mutation.data,
-    subset.size=length(unique(Imodulon.genes$Gene)))
-
-Imodulon.gene.sv.indel.nonsen.plot <- Imodulon.gene.sv.indel.nonsen.base.layer %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.Imodulon.genes,
-                             my.color="red")
-
 ## make plots comparing I-modulon regulators to the genes they regulate.
 Imodulon.plot <- all.rando.plot %>%
     add.cumulative.mut.layer(c.Imodulon.regulators, my.color="black") %>%
     add.cumulative.mut.layer(c.Imodulon.genes, my.color="red")
 ggsave("../results/figures/Imodulon-plot.pdf",Imodulon.plot)
 
-
-Imodulon.sv.indel.nonsen.plot <- sv.indel.nonsen.rando.plot %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.Imodulon.regulators,
-                             my.color="black") %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.Imodulon.genes, my.color="red")
-ggsave("../results/figures/Imodulon-sv-indel-nonsen-plot.pdf",Imodulon.sv.indel.nonsen.plot)
 
 ## Answer Q3: compare genes in I-modulons
 ## to genes outside of I-modulons (omitting I-modulon.regulators altogether).
@@ -1171,32 +1174,21 @@ make.modulon.plots.helper <- function(my.I.modulon) {
     ## IMPORTANT TODO: will have to regenerate the base plots--
     ## need to subsample the same size subset of genes
     ## for each regulon for a proper comparison.
-    p1 <- all.rando.plot %>%
+    p <- all.rando.plot %>%
         add.cumulative.mut.layer(c.my.modulon.muts,my.color="red")
-    p2 <- sv.indel.nonsen.rando.plot %>%
-        add.cumulative.mut.layer(c.sv.indel.nonsen.my.modulon.muts, my.color="red")
 
     ## if any regulators exist, add layers for mutations in those genes.
     my.regulators <- my.I.modulon %>% filter(!(is.na(regulator)))
     if (nrow(my.regulators)) {
         my.regulator.mut.data <- gene.mutation.data %>%
             filter(Gene %in% my.regulators$regulator)
-        my.sv.indel.nonsen.regulator.muts <- my.regulator.mut.data %>%
-            filter(Annotation %in% c("sv", "indel", "nonsense"))
         c.my.regulators <- calc.cumulative.muts(my.regulator.mut.data)
-        c.my.sv.indel.nonsen.regulators <- calc.cumulative.muts(
-            my.sv.indel.nonsen.regulator.muts)
-        p1 <- p1 %>% add.cumulative.mut.layer(c.my.regulators,my.color='black')
-        p2 <- p2 %>% add.cumulative.mut.layer(c.my.sv.indel.nonsen.regulators,
-                                              my.color='black')
+        p <- p %>% add.cumulative.mut.layer(c.my.regulators,my.color='black')
     }
     ## add a title to the plots.
     my.title <- paste(unique(my.I.modulon$I.modulon),"I-modulon")
-    p1 <- p1 + ggtitle(my.title)
-    p2 <- p2 + ggtitle(my.title)
-    print(p1)
-    ## For now, don't show sv/indel/nonsense plots. Already too many to go through!
-    ##print(p2)
+    p <- p + ggtitle(my.title)
+    print(p)
 }
 
 ## too big for PDF! plot to separate jpegs.
@@ -1249,31 +1241,6 @@ sector.plot <- all.rando.plot %>%
     add.cumulative.mut.layer(c.C.muts,my.color="orange")
 ggsave(sector.plot,filename='../results/figures/sector-plot.pdf')
 
-## just plot sv, indels, and nonsense mutations.
-A.sv.indel.nonsen.muts <- filter(A.sector.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
-S.sv.indel.nonsen.muts <- filter(S.sector.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
-O.sv.indel.nonsen.muts <- filter(O.sector.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
-U.sv.indel.nonsen.muts <- filter(U.sector.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
-R.sv.indel.nonsen.muts <- filter(R.sector.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
-C.sv.indel.nonsen.muts <- filter(C.sector.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
-    
-c.A.sv.indel.nonsen.muts <- calc.cumulative.muts(A.sv.indel.nonsen.muts)
-c.S.sv.indel.nonsen.muts <- calc.cumulative.muts(S.sv.indel.nonsen.muts)
-c.O.sv.indel.nonsen.muts <- calc.cumulative.muts(O.sv.indel.nonsen.muts)
-c.U.sv.indel.nonsen.muts <- calc.cumulative.muts(U.sv.indel.nonsen.muts)
-c.R.sv.indel.nonsen.muts <- calc.cumulative.muts(R.sv.indel.nonsen.muts)
-c.C.sv.indel.nonsen.muts <- calc.cumulative.muts(C.sv.indel.nonsen.muts)
-
-## now plot sv, indel, nonsense mutations on top.
-sector.sv.indel.nonsen.testplot <- sv.indel.nonsen.rando.plot %>%
-    add.cumulative.mut.layer(c.A.sv.indel.nonsen.muts, my.color="black") %>%
-    add.cumulative.mut.layer(c.S.sv.indel.nonsen.muts,my.color="red") %>%
-    add.cumulative.mut.layer(c.O.sv.indel.nonsen.muts,my.color="blue") %>%
-    add.cumulative.mut.layer(c.U.sv.indel.nonsen.muts,my.color="green") %>%
-    add.cumulative.mut.layer(c.R.sv.indel.nonsen.muts,my.color="yellow") %>%
-    add.cumulative.mut.layer(c.C.sv.indel.nonsen.muts,my.color="orange")
-ggsave(sector.sv.indel.nonsen.testplot,filename='../results/figures/sector-sv-indel-nonsen-testplot.png')
-
 ##########################################################################
 ## look at accumulation of stars over time for genes in different eigengenes
 ## inferred by Wytock and Motter (2018).
@@ -1319,27 +1286,6 @@ eigen.plot <- all.rando.plot %>%
     add.cumulative.mut.layer(c.eigen9.muts,my.color="black")
 ggsave(eigen.plot,filename='../results/figures/eigen-plot.pdf')
 
-## just plot sv, indels, and nonsense mutations.
-sv.indel.nonsen.eigengene1.muts <- filter(eigengene1.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
-sv.indel.nonsen.eigengene2.muts <- filter(eigengene2.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
-sv.indel.nonsen.eigengene3.muts <- filter(eigengene3.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
-sv.indel.nonsen.eigengene4.muts <- filter(eigengene4.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
-sv.indel.nonsen.eigengene5.muts <- filter(eigengene5.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
-sv.indel.nonsen.eigengene6.muts <- filter(eigengene6.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
-sv.indel.nonsen.eigengene7.muts <- filter(eigengene7.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
-sv.indel.nonsen.eigengene8.muts <- filter(eigengene8.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
-sv.indel.nonsen.eigengene9.muts <- filter(eigengene9.mut.data,Annotation %in% c("sv", "indel", "nonsense"))
-
-c.sv.indel.nonsen.eigen1.muts <- calc.cumulative.muts(sv.indel.nonsen.eigengene1.muts)
-c.sv.indel.nonsen.eigen2.muts <- calc.cumulative.muts(sv.indel.nonsen.eigengene2.muts)
-c.sv.indel.nonsen.eigen3.muts <- calc.cumulative.muts(sv.indel.nonsen.eigengene3.muts)
-c.sv.indel.nonsen.eigen4.muts <- calc.cumulative.muts(sv.indel.nonsen.eigengene4.muts)
-c.sv.indel.nonsen.eigen5.muts <- calc.cumulative.muts(sv.indel.nonsen.eigengene5.muts)
-c.sv.indel.nonsen.eigen6.muts <- calc.cumulative.muts(sv.indel.nonsen.eigengene6.muts)
-c.sv.indel.nonsen.eigen7.muts <- calc.cumulative.muts(sv.indel.nonsen.eigengene7.muts)
-c.sv.indel.nonsen.eigen8.muts <- calc.cumulative.muts(sv.indel.nonsen.eigengene8.muts)
-c.sv.indel.nonsen.eigen9.muts <- calc.cumulative.muts(sv.indel.nonsen.eigengene9.muts)
-
 ## why does Ara+3 show apparent selection in eigengene 6?
 ## Seems to be entirely driven by an excess of mutations in entF.
 ## at a first glance, maybe caused by gene conversion or homologous recombination
@@ -1348,19 +1294,6 @@ c.sv.indel.nonsen.eigen9.muts <- calc.cumulative.muts(sv.indel.nonsen.eigengene9
 ## This is not the case! Looks like a bona fide example of historical contingency!
 eigengene6.mut.data %>% filter(Population=='Ara+3') %>%
     group_by(Gene) %>% summarize(count=n())
-
-## plot eigen sv, indels, nonsense.
-eigen.sv.indel.nonsen.plot <- sv.indel.nonsen.rando.plot %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen1.muts,my.color="red") %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen2.muts,my.color="orange") %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen3.muts,my.color="yellow") %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen4.muts,my.color="green") %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen5.muts,my.color="cyan") %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen6.muts,my.color="blue") %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen7.muts,my.color="violet") %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen8.muts,my.color="pink") %>%
-    add.cumulative.mut.layer(c.sv.indel.nonsen.eigen9.muts,my.color="black")
-ggsave(eigen.sv.indel.nonsen.plot,filename='../results/figures/eigen-sv-indel-nonsen-plot.png')
 
 ##########################################################################
 ## NOTES:
