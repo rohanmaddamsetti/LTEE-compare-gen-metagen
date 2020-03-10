@@ -2,12 +2,6 @@
 
 ## MAKE SURE THAT ZEROS IN MUTATION COUNTS ARE NOT THROWN OUT BY DPLYR!
 
-## IMPORTANT TODO: SOMETIMES FIGURES ARE MISLEADING W.R.T. ACTUAL STATISTICS!
-## calculate the statistics, and fix figures so that they are more accurate
-## (will probably have to generate individual base plots, when only one set of genes
-## is of interest in the plot). OR, use the minimum subsample size to make the rando plot,
-## to increase the variance in the null distribution in the comparison.
-
 ## IMPORTANT TODO:
 ## The problem with setting up a probabilistic model for mutation rate variation is
 ## that causal factors evolve during the evolution experiment! Modeling these
@@ -29,8 +23,7 @@
 ## NOTE: Perhaps should cite my STLE paper-- recombination events tend to happen flanking
 ## the replication origin. Is that result connected to the wave-like mutation bias
 ## pattern seen here and in Patricia Foster's and Vaughn Cooper's evolution experiments?
-## Also check out 
-
+## Also check out Hi-C papers and others reporting 3D chromosome in E. coli.
 
 library(tidyverse)
 library(cowplot)
@@ -216,7 +209,8 @@ calc.slope.of.cumulative.muts <- function(c.muts) {
 
 ## This plot visualizes a two-tailed test (alpha = 0.05)
 ## against a bootstrapped null distribution.
-## This is what we want to use for publication.
+## Throughout, plots use the minimum subsample size to subsample the null distribution,
+## to increase the variance in order to make a conservative comparison.
 plot.base.layer <- function(data, subset.size=50, N=1000, alpha = 0.05, normalization.constant=NA, my.color="gray") {
 
     ## This function takes the index for the current draw, and samples the data,
@@ -553,65 +547,8 @@ duplicate.genes <- gene.mutation.data %>%
     filter(checkme>1)
 
 ## filter those duplicates.
-gene.mutation.data <- filter(gene.mutation.data,
-                             !(Gene %in% duplicate.genes$Gene))
-
-##########################################################################
-## quick random check: look for nucleotide-level parallelism in the Good dataset.
-nuc.parallel.data <- gene.mutation.data %>% group_by(Gene, Position, Annotation, gene_length, product, blattner, locus_tag) %>% summarize(count=n()) %>%
-    filter(count>=3) %>% arrange(desc(count))
-
-write.csv(nuc.parallel.data,'../results/parallel-nuc-summary.csv')
-
-
-## let's combine IS (structural mutations), indels, and nonsense mutations,
-## as a proxy for purifying selection.
-gene.nonsense.sv.indels.mutation.data <- gene.mutation.data %>%
-    filter(Gene!='intergenic') %>%
-    filter(Annotation %in% c('indel', 'sv', 'nonsense'))
-
-## Now filter for nonsense, sv, and indels in genes (of course nonsense are always in genes)
-sv.indel.nonsense.gene.mutation.data <- gene.mutation.data %>%
-    filter(Annotation %in% c("sv", "indel", "nonsense"))
-
-## filter for point mutations (missense, synonymous, nonsense).
-gene.point.mutation.data <- gene.mutation.data %>%
-    filter(Gene!='intergenic') %>%
-    filter(Annotation %in% c('missense', 'synonymous', 'nonsense'))
-
-## look at distribution over the genome for different classes of mutations.
-
-gene.only.mutation.data <- gene.mutation.data %>%
-    filter(Annotation !='noncoding')
-
-gene.dS.mutation.data <- gene.mutation.data %>%
-    filter(Annotation=='synonymous')
-
-gene.dN.mutation.data <- gene.mutation.data %>%
-    filter(Annotation=='missense')
-
-gene.nonsense.mutation.data <- gene.mutation.data %>%
-    filter(Annotation=='nonsense')
-
-gene.noncoding.mutation.data <- gene.mutation.data %>%
-    filter(Annotation=='noncoding')
-
-gene.except.dS.mutation.data <- gene.mutation.data %>%
-    filter(Gene!='intergenic') %>%
-    filter(Annotation!='synonymous')
-
-gene.sv.mutation.data <- gene.mutation.data %>%
-    filter(Gene!='intergenic') %>%
-    filter(Annotation=='sv')
-
-gene.indel.mutation.data <- gene.mutation.data %>%
-    filter(Gene!='intergenic') %>%
-    filter(Annotation=='indel')
-
-## we treat nonsense as a nonsynonymous mutation-- for comparison to Tenaillon 2016 data.
-gene.nodNdS.mutation.data <- gene.mutation.data %>%
-    filter(Gene!='intergenic') %>%
-    filter(Annotation %in% c("sv", "indel", "noncoding"))
+gene.mutation.data <- gene.mutation.data %>%
+    filter(!(Gene %in% duplicate.genes$Gene))
 
 ##########################################################################
 ## parallelism in dS at the same position in the same population
@@ -621,14 +558,7 @@ bug.to.fix <- gene.dS.mutation.data %>% group_by(Population,Gene,Position) %>% s
 buggy.ydfQ.mutations <- gene.dS.mutation.data %>% filter(Gene=='ydfQ')
 
 ##########################################################################################
-## make base plot of null distributions by subsampling/bootstrapping.
-## I will overlay data on top of these plots.
-
-## Base plot here of null distributions: add the data lines on top to compare.
-all.rando.plot <- plot.base.layer(gene.mutation.data)
-##########################################################################################
 ## MUTATION BIAS ANALYSIS.
-
 ## for indels and structural variation, we cannot distinguish between
 ## mutation hotspots vs. selection.
 
@@ -1049,7 +979,6 @@ putative.phage.purifying.selection <- phage.genes %>%
 no.dS.phage.genes <- phage.genes %>% filter(locus_tag %in% no.dS.genes$locus_tag)
 only.dS.allowed.phage.genes <- phage.genes %>% filter(locus_tag %in% only.dS.allowed.genes$locus_tag)
 
-
 c.phage1 <- calc.cumulative.muts(phage1)
 c.phage2 <- calc.cumulative.muts(phage2)
 c.phage4 <- calc.cumulative.muts(phage4)
@@ -1085,9 +1014,6 @@ ggsave(phage.plot,filename='../results/figures/phage-plot.pdf')
 ## Q2) Do any I-modulons show evidence of positive or purifying selection?
 ## I will have to do some kind of FDR correction for multiple hypothesis testing.
 
-## Q3) Are genes that are not regulated in stronger or weaker selection
-## (either purifying or positive) than those that are in an I-modulon?
-
 ## I made this file by hand, by going through the I-modulons in imodulon_gene_names.txt,
 ## and the regulator annotations in modulon.pdf, both in precise-db-repo.
 Imodulons.to.regulators <- read.csv("../data/rohans-I-modulons-to-regulators.csv")
@@ -1110,97 +1036,85 @@ Imodulon.regulator.pvals <- calculate.trajectory.tail.probs(gene.mutation.data, 
 ## this file was generated by reformat-I-modulons.py
 genes.to.Imodulons <- read.csv("../results/genes-to-I-modulons.csv")
 
-Imodulon.genes <- genes.to.Imodulons %>% filter(!(is.na(Gene))) %>%
+Imodulon.regulated <- genes.to.Imodulons %>% filter(!(is.na(Gene))) %>%
     ## remove any I-modulon regulators from the I-modulon genes to
     ## make an orthogonal comparison.
     filter(!(Gene %in% Imodulon.regulators$regulator))
     
-Imodulon.gene.mut.data <- gene.mutation.data %>%
-filter(Gene %in% Imodulon.genes$Gene)
+Imodulon.regulated.mut.data <- gene.mutation.data %>%
+    filter(Gene %in% Imodulon.regulated$Gene)
 
-c.Imodulon.genes <- calc.cumulative.muts(Imodulon.gene.mut.data)
+c.Imodulon.regulated <- calc.cumulative.muts(Imodulon.regulated.mut.data)
 
 Imodulon.regulators.base.layer <- plot.base.layer(
     gene.mutation.data,
     subset.size=length(unique(Imodulon.regulators$regulator)))
 
-Imodulon.gene.base.layer <- plot.base.layer(
-    gene.mutation.data,
-    subset.size=length(unique(Imodulon.genes$Gene)),
-    my.color="pink")
-
-## make plots comparing I-modulon regulators to the genes they regulate.
+## Figure for paper:  compare I-modulon regulators to the genes they regulate.
 Imodulon.plot <- Imodulon.regulators.base.layer %>% ## null for regulators
     add.base.layer(gene.mutation.data, ## add null for regulated genes
-                   subset.size=length(unique(Imodulon.genes$Gene)),
+                   subset.size=length(unique(Imodulon.regulated$Gene)),
                    my.color="pink") %>%
     add.cumulative.mut.layer(c.Imodulon.regulators, my.color="black") %>%
-    add.cumulative.mut.layer(c.Imodulon.genes, my.color="red")
+    add.cumulative.mut.layer(c.Imodulon.regulated, my.color="red")
 ggsave("../results/figures/Imodulon-plot.pdf",Imodulon.plot)
 
-## Answer Q3: compare genes in I-modulons
-## to genes outside of I-modulons (omitting I-modulon.regulators altogether).
 
-genes.in.Imodulons <- setdiff(unique(Imodulon.genes$Gene),unique(Imodulon.regulators$regulator))
-genes.outside.Imodulons <- setdiff(unique(gene.mutation.data$Gene),
-                                   union(Imodulon.genes$Gene,Imodulon.regulators$regulator))
-c.genes.in.Imodulons <- calc.cumulative.muts(filter(gene.mutation.data,
-                                                    Gene %in% genes.in.Imodulons))
-c.genes.outside.Imodulons <- calc.cumulative.muts(filter(gene.mutation.data, Gene %in% genes.outside.Imodulons))
-
-InNOut.Imodulon.plot <- all.rando.plot %>%
-    add.cumulative.mut.layer(c.genes.in.Imodulons, my.color="black") %>%
-        add.cumulative.mut.layer(c.genes.outside.Imodulons, my.color="red")
-
-## Make a multiple-page PDF for each I-modulon. 2 pages for each one:
-## all mutations, and sv.indel.nonsense mutations for each I-modulon, and its regulators.
+## Make plots for each I-modulon.
 
 ## This helper function refers to several global variables.
 ## TODO: Best to wrap this into the context of a larger function later,
 ## to maintain modularity.
 make.modulon.plots.helper <- function(my.I.modulon) {
-    my.modulon.genes <- Imodulon.genes %>%
-        filter(I.modulon == unique(my.I.modulon$I.modulon))
+    
+    my.modulon.name <- unique(my.I.modulon$I.modulon)
+    modulon.text <- paste(my.modulon.name,"I-modulon")
+    print(modulon.text) ## to help with debugging.
+
+    my.regulators <- my.I.modulon %>% filter(!(is.na(regulator)))
+    regulator.size <- length(unique(my.regulators$regulator))
+    
+    my.modulon.genes <- genes.to.Imodulons %>%
+        filter(I.modulon == my.modulon.name) %>%
+        filter(!(is.na(Gene))) %>%
+        ## remove any regulators of this I-modulon (if they exist)
+        ## to make an orthogonal comparison.
+        filter(!(Gene %in% my.regulators$regulator))
+    
     my.modulon.mut.data <- gene.mutation.data %>%
         filter(Gene %in% my.modulon.genes$Gene)
+
     c.my.modulon.muts <- calc.cumulative.muts(my.modulon.mut.data)
-
-    my.sv.indel.nonsen.modulon.muts <- my.modulon.mut.data %>%
-        filter(Annotation %in% c("sv", "indel", "nonsense"))
-    c.sv.indel.nonsen.my.modulon.muts <- calc.cumulative.muts(
-        my.sv.indel.nonsen.modulon.muts)
-
-    ## IMPORTANT TODO: will have to regenerate the base plots--
-    ## need to subsample the same size subset of genes
-    ## for each regulon for a proper comparison.
-    
-    p <- all.rando.plot %>%
+    ## for the plots, subsample based on the cardinality of the I-modulon.
+    modulon.size <- length(unique(my.modulon.genes$Gene))
+    modulon.base.layer <- plot.base.layer(gene.mutation.data,
+                                          subset.size=modulon.size,
+                                          my.color="pink")
+    p <- modulon.base.layer %>%
         add.cumulative.mut.layer(c.my.modulon.muts,my.color="red")
 
     ## if any regulators exist, add layers for mutations in those genes.
-    my.regulators <- my.I.modulon %>% filter(!(is.na(regulator)))
-    if (nrow(my.regulators)) {
+    if (regulator.size > 0) {
         my.regulator.mut.data <- gene.mutation.data %>%
             filter(Gene %in% my.regulators$regulator)
         c.my.regulators <- calc.cumulative.muts(my.regulator.mut.data)
-        p <- p %>% add.cumulative.mut.layer(c.my.regulators,my.color='black')
+
+        p <- p %>% 
+            add.base.layer(gene.mutation.data,my.color="grey",
+                           subset.size=regulator.size) %>%
+            add.cumulative.mut.layer(c.my.regulators,my.color='black')
     }
     ## add a title to the plots.
-    my.title <- paste(unique(my.I.modulon$I.modulon),"I-modulon")
-    p <- p + ggtitle(my.title)
+    p <- p + ggtitle(modulon.text)
     print(p)
 }
 
 ## too big for PDF! plot to separate jpegs.
 jpeg("../results/figures/I-modulon-plots/plot-%d.jpeg")
-## split by I-modulon, and map-reduce a plotting function.
-Imodulons.to.regulators %>% split(.$I.modulon) %>%
+## split into groups by I-modulon, and map them to the plotting helper.
+Imodulons.to.regulators %>% group_split(I.modulon) %>%
     map(.f=make.modulon.plots.helper)
 dev.off()
-
-## TODO: Will have to do some kind of False Discovery Rate (FDR) correction
-## when reporting results for individual modulons.
-
 
 ##########################################################################
 ## look at accumulation of stars over time for genes in the different proteome
@@ -1308,24 +1222,11 @@ eigen.plot <- eigen.rando.layer %>%
     add.cumulative.mut.layer(c.eigen9.muts,my.color="black")
 ggsave(eigen.plot,filename='../results/figures/eigen-plot.pdf')
 
-## why does Ara+3 show apparent selection in eigengene 6?
+## why does Ara+3 an upswing of mutations in eigengene 6?
 ## Seems to be entirely driven by an excess of mutations in entF.
-## at a first glance, maybe caused by gene conversion or homologous recombination
-## with some other locus in the genome?
-## If so, all these mutations should be linked in a cohort in the metagenomics data.
-## This is not the case! Looks like a bona fide example of historical contingency!
+## Looks like a bona fide example of historical contingency!
 eigengene6.mut.data %>% filter(Population=='Ara+3') %>%
     group_by(Gene) %>% summarize(count=n())
-
-##########################################################################
-## NOTES:
-##########################################################################
-## Is there any overlap in the modules defined in the three papers?
-
-## based on redoing the binomial test on genomes, it seems the difference in result
-## is NOT driven by target size. rather, it is whether or not all kinds of mutations
-## are included, and not just restricting to point mutations.
-
 
 ##########################################################################################
 ## SUPPLEMENTARY INFORMATION
@@ -1534,6 +1435,52 @@ make.thetaS.KS.Figure <- function(the.results.to.plot, rank_by="length") {
     
     return(plot)
 }
+
+
+
+
+## filter for point mutations (missense, synonymous, nonsense).
+gene.point.mutation.data <- gene.mutation.data %>%
+    filter(Gene!='intergenic') %>%
+    filter(Annotation %in% c('missense', 'synonymous', 'nonsense'))
+
+## look at distribution over the genome for different classes of mutations.
+
+gene.only.mutation.data <- gene.mutation.data %>%
+    filter(Annotation !='noncoding')
+
+gene.dS.mutation.data <- gene.mutation.data %>%
+    filter(Annotation=='synonymous')
+
+gene.dN.mutation.data <- gene.mutation.data %>%
+    filter(Annotation=='missense')
+
+gene.nonsense.mutation.data <- gene.mutation.data %>%
+    filter(Annotation=='nonsense')
+
+gene.noncoding.mutation.data <- gene.mutation.data %>%
+    filter(Annotation=='noncoding')
+
+gene.except.dS.mutation.data <- gene.mutation.data %>%
+    filter(Gene!='intergenic') %>%
+    filter(Annotation!='synonymous')
+
+gene.sv.mutation.data <- gene.mutation.data %>%
+    filter(Gene!='intergenic') %>%
+    filter(Annotation=='sv')
+
+gene.indel.mutation.data <- gene.mutation.data %>%
+    filter(Gene!='intergenic') %>%
+    filter(Annotation=='indel')
+
+## we treat nonsense as a nonsynonymous mutation-- for comparison to Tenaillon 2016 data.
+gene.nodNdS.mutation.data <- gene.mutation.data %>%
+    filter(Gene!='intergenic') %>%
+    filter(Annotation %in% c("sv", "indel", "noncoding"))
+
+
+
+
 
 ## examine all mutations over genes in the genome.
 cumsum.all.over.metagenome <- ks.analysis(gene.only.mutation.data,REL606.genes)
