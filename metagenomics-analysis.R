@@ -5,7 +5,8 @@
 ## IMPORTANT TODO: SOMETIMES FIGURES ARE MISLEADING W.R.T. ACTUAL STATISTICS!
 ## calculate the statistics, and fix figures so that they are more accurate
 ## (will probably have to generate individual base plots, when only one set of genes
-## is of interest in the plot).
+## is of interest in the plot). OR, use the minimum subsample size to make the rando plot,
+## to increase the variance in the null distribution in the comparison.
 
 ## IMPORTANT TODO:
 ## The problem with setting up a probabilistic model for mutation rate variation is
@@ -28,6 +29,8 @@
 ## NOTE: Perhaps should cite my STLE paper-- recombination events tend to happen flanking
 ## the replication origin. Is that result connected to the wave-like mutation bias
 ## pattern seen here and in Patricia Foster's and Vaughn Cooper's evolution experiments?
+## Also check out 
+
 
 library(tidyverse)
 library(cowplot)
@@ -35,6 +38,15 @@ library(cowplot)
 ##########################################################################
 ## FUNCTIONS FOR DATA ANALYSIS REPORTED IN MAIN TEXT
 ##########################################################################
+## calculate the probability that a locus (or set of loci) is not hit by mutations,
+## assuming uniform mutation rate.
+## l is locus length, and n is the number of mutations in the dataset.
+probability.that.not.hit <- function(l,n) {
+    GENOME.LENGTH <- 4629812
+    p <- (1 - (l/GENOME.LENGTH))^n
+    return(p)
+}
+
 #' function to rotate REL606 genome coordinates, setting oriC/terB at the center of plots
 #' that examine mutation bias over the chromosome.
 rotate.REL606.chr <- function(my.position, c) {
@@ -205,7 +217,7 @@ calc.slope.of.cumulative.muts <- function(c.muts) {
 ## This plot visualizes a two-tailed test (alpha = 0.05)
 ## against a bootstrapped null distribution.
 ## This is what we want to use for publication.
-plot.base.layer <- function(data, subset.size=50, N=1000, alpha = 0.05, normalization.constant=NA) {
+plot.base.layer <- function(data, subset.size=50, N=1000, alpha = 0.05, normalization.constant=NA, my.color="gray") {
 
     ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations.
@@ -255,7 +267,7 @@ plot.base.layer <- function(data, subset.size=50, N=1000, alpha = 0.05, normaliz
     p <- ggplot(filtered.trajectories,aes(x=Generation,y=normalized.cs)) +
         ylab('Cumulative number of mutations (normalized)') +
         theme_classic() +
-        geom_point(size=0.2, color='gray') +
+        geom_point(size=0.2, color=my.color) +
         facet_wrap(.~Population,scales='free',nrow=4) +
         xlab('Generations (x 10,000)') +
         xlim(0,6.3) +
@@ -263,6 +275,59 @@ plot.base.layer <- function(data, subset.size=50, N=1000, alpha = 0.05, normaliz
               axis.title.y = element_text(size=14),
               axis.text.x  = element_text(size=14),
               axis.text.y  = element_text(size=14))
+    return(p)                
+}
+
+## add a base layer to a plot. used in Imodulon code.
+add.base.layer <- function(p, data, my.color, subset.size=50, N=1000, alpha = 0.05, normalization.constant=NA) {
+    
+        ## This function takes the index for the current draw, and samples the data,
+    ## generating a random gene set for which to calculate cumulative mutations.
+    generate.cumulative.mut.subset <- function(idx) {
+        rando.genes <- sample(unique(data$Gene),subset.size)
+        mut.subset <- filter(data,Gene %in% rando.genes)
+        c.mut.subset <- calc.cumulative.muts(mut.subset, normalization.constant) %>%
+            mutate(bootstrap_replicate=idx)
+        return(c.mut.subset)
+    }
+
+    ## make a dataframe of bootstrapped trajectories.
+    ## look at accumulation of stars over time for random subsets of genes.
+    ## I want to plot the distribution of cumulative mutations over time for
+    ## say, 1000 or 10000 random subsets of genes.
+    bootstrapped.trajectories <- map_dfr(.x=seq_len(N),.f=generate.cumulative.mut.subset)
+
+    ## filter out the top alpha/2 and bottom alpha/2 trajectories from each population,
+    ## for a two-sided test. default is alpha == 0.05.
+    
+    trajectory.summary <- bootstrapped.trajectories %>%
+        ## important: don't drop empty groups.
+        group_by(bootstrap_replicate, Population,.drop=FALSE) %>%
+        summarize(final.norm.cs=max(normalized.cs)) %>%
+        ungroup() 
+    
+    top.trajectories <- trajectory.summary %>%
+        group_by(Population) %>%
+        top_frac(alpha/2) %>%
+        dplyr::select(-final.norm.cs) %>%
+        mutate(in.top=TRUE)
+    
+    bottom.trajectories <- trajectory.summary %>%
+        group_by(Population) %>%
+        top_frac(-alpha/2) %>%
+        dplyr::select(-final.norm.cs) %>%
+        mutate(in.bottom=TRUE)
+    
+    filtered.trajectories <- bootstrapped.trajectories %>%
+        left_join(top.trajectories) %>%
+        left_join(bottom.trajectories) %>%
+        filter(is.na(in.top)) %>%
+        filter(is.na(in.bottom)) %>%
+        dplyr::select(-in.top,-in.bottom)
+
+    p <- p + geom_point(data=filtered.trajectories,
+                        aes(x=Generation, y=normalized.cs),
+                        size=0.2, color=my.color)
     return(p)                
 }
 
@@ -559,9 +624,8 @@ buggy.ydfQ.mutations <- gene.dS.mutation.data %>% filter(Gene=='ydfQ')
 ## make base plot of null distributions by subsampling/bootstrapping.
 ## I will overlay data on top of these plots.
 
-## Base plots here of null distributions: add the data lines on top to compare.
+## Base plot here of null distributions: add the data lines on top to compare.
 all.rando.plot <- plot.base.layer(gene.mutation.data)
-nodNdS.rando.plot <- plot.base.layer(gene.nodNdS.mutation.data)
 ##########################################################################################
 ## MUTATION BIAS ANALYSIS.
 
@@ -818,6 +882,11 @@ ggsave("../results/figures/S4Figure.pdf",S4Fig)
 ## PURIFYING SELECTION ANALYSIS.
 
 ## Find all genes that have no mutations whatsoever in any population.
+
+## IMPORTANT: most of these genes are very short. Many of them are probably
+## depleted by chance, and not are significant after FDR-correction.
+## nonetheless, some of them are probably under purifying selection.
+
 ## Cross-check with the LTEE Genomics data-- synonymous, intergenic (not in coding region)
 ## and amplifications are allowed, but no other kinds of mutations.
 
@@ -834,25 +903,22 @@ LTEE.genomics.muts <- read.csv("../data/LTEE-Ecoli-data 2020-02-24 14_35_41.csv"
 ## matches.
 LTEE.genomics.mutated.genestr <- str_c(unique(LTEE.genomics.muts$gene_list),collapse = ",")
 
+total.gene.mut.count <- nrow(gene.mutation.data)
+
 no.mutation.genes <- REL606.genes %>%
     ## no hits allowed in the metagenomics.
     filter(!(Gene %in% mutation.data$Gene)) %>%
     ## and no hits (other than dS, amps, and intergenic) allowed in the genomics.
-    filter(!(str_detect(LTEE.genomics.mutated.genestr,Gene)))
-
-## Let's look at the strand and location of these genes.
-no.mut.gene.loc.plot <- ggplot(no.mutation.genes,aes(x=oriC_start,fill=strand)) +
-    geom_bar() + theme_classic()
-no.mut.gene.loc.plot
+    filter(!(str_detect(LTEE.genomics.mutated.genestr,Gene))) %>%
+    arrange(desc(gene_length)) %>%
+    ## estimate the probability that these genes were not hit by chance.
+    mutate(pval = probability.that.not.hit(gene_length,total.gene.mut.count)) %>%
+    mutate(fdr.qval = p.adjust(pval,"fdr"))
 
 write.csv(no.mutation.genes,file="../results/no-mutation-genes.csv")
 
-################################################################################
-### DENSITIES SUMMED OVER ALL POPULATIONS.
-
-## IMPORTANT: these densities are summed over ALL LTEE populations,
-## so they don't correspond to single LTEE populations.
-
+## Look at genes that only have dS.
+### MUTATION DENSITIES SUMMED OVER ALL POPULATIONS.
 ## IMPORTANT: these densities are summed over ALL LTEE populations,
 ## so they don't correspond to single LTEE populations.
 
@@ -862,50 +928,16 @@ all.mutation.density <- calc.gene.mutation.density(
     rename(all.mut.count = mut.count) %>%
     rename(all.mut.density = density)
 
-dN.mutation.density <- calc.gene.mutation.density(
-    gene.mutation.data, c("missense")) %>%
-    rename(dN.mut.count = mut.count) %>%
-    rename(dN.mut.density = density)
-
-dS.mutation.density <- calc.gene.mutation.density(
-    gene.mutation.data, c("synonymous")) %>%
-    rename(dS.mut.count = mut.count) %>%
-    rename(dS.mut.density = density)
-
-nonsense.mutation.density <- calc.gene.mutation.density(
-    gene.mutation.data, c("nonsense")) %>%
-    rename(nonsense.mut.count = mut.count) %>%
-    rename(nonsense.mut.density = density)
-
-sv.mutation.density <- calc.gene.mutation.density(
-    gene.mutation.data,c("sv")) %>%
-    rename(sv.mut.count = mut.count) %>%
-    rename(sv.mut.density = density)
-
-indel.mutation.density <- calc.gene.mutation.density(
-    gene.mutation.data,c("indel")) %>%
-    rename(indel.mut.count = mut.count) %>%
-    rename(indel.mut.density = density)
-
-nonsense.indel.sv.density <- calc.gene.mutation.density(
-    gene.mutation.data,c("sv", "indel", "nonsense")) %>%
-    rename(nonsense.indel.sv.mut.count = mut.count) %>%
-    rename(nonsense.indel.sv.mut.density = density)
-
 all.except.dS.density <- calc.gene.mutation.density(
     gene.mutation.data,c("sv", "indel", "nonsense", "missense")) %>%
     rename(all.except.dS.mut.count = mut.count) %>%
     rename(all.except.dS.mut.density = density)
 
+no.dS.count <- sum(all.except.dS.density$all.except.dS.mut.count)
+
 ## combine these into one dataframe.
 gene.mutation.densities <- REL606.genes %>%
     full_join(all.mutation.density) %>%
-    full_join(dN.mutation.density) %>%
-    full_join(dS.mutation.density) %>%
-    full_join(nonsense.mutation.density) %>%
-    full_join(sv.mutation.density) %>%
-    full_join(indel.mutation.density) %>%
-    full_join(nonsense.indel.sv.density) %>%
     full_join(all.except.dS.density)
 
 #### CRITICAL STEP: replace NAs with zeros.
@@ -914,67 +946,130 @@ gene.mutation.densities <- REL606.genes %>%
 gene.mutation.densities[is.na(gene.mutation.densities)] <- 0
 gene.mutation.densities <- tbl_df(gene.mutation.densities)
 
-#######################################################################################
-## PURIFYING SELECTION RESULTS.
-
-## IMPORTANT: EXAMINE GENES WITH ZERO INDEL, SV, NONSENSE MUTATIONS.
-## THESE ARE THE MOST DEPLETED.
-## THIS LOOKS REAL!!!
-no.nonsense.indel.sv.genes <- filter(gene.mutation.densities,
-                                     nonsense.indel.sv.mut.count == 0) %>%
-    arrange(desc(gene_length))
-write.csv(no.nonsense.indel.sv.genes,file="../results/no-nonsense-indel-sv-genes.csv")
-
-## Try again, now disallowing missense mutations.
-only.dS.allowed.genes <- filter(gene.mutation.densities,
-                                all.except.dS.mut.count == 0) %>%
+## genes that are only affected by synonymous mutations.
+only.dS.allowed.genes <- gene.mutation.densities %>%
+    filter(all.except.dS.mut.count == 0) %>%
     ## no hits (other than dS, amps, and intergenic) allowed in the LTEE genomics
     ## to remove false positives.
     filter(!(str_detect(LTEE.genomics.mutated.genestr,Gene))) %>%
-    arrange(desc(gene_length))
+    arrange(desc(gene_length)) %>%
+    ## estimate the probability that these genes were only hit by dS by chance.
+    mutate(pval = probability.that.not.hit(gene_length,no.dS.count)) %>%
+    mutate(fdr.qval = p.adjust(pval,"fdr"))
+
 write.csv(only.dS.allowed.genes,file="../results/only-dS-allowed-genes.csv")
 
+## 105 genes just have dS.
+just.dS.genes <- only.dS.allowed.genes %>% filter(!(Gene %in% no.mutation.genes$Gene))
 
-## Let's look at the strand and location of these genes.
-no.mut.gene.loc.plot <- ggplot(no.mutation.genes,aes(x=oriC_start,fill=strand)) +
-    geom_bar() + theme_classic()
-no.mut.gene.loc.plot
+## 65 genes don't have even dS in the metagenomic data.
+no.dS.genes <- only.dS.allowed.genes %>% filter(Gene %in% no.mutation.genes$Gene)
 
-
-## As an added confirmation, let's compare essentiality from KEIO collection to these
-## gene sets.
+## If these sets are under purifying selection, then they should be more essential.
+## let's examine essentiality from the KEIO collection.
 KEIO.data <- read.csv("../data/KEIO_Essentiality.csv", header=TRUE,as.is=TRUE) %>%
     dplyr::select(-JW_id)
 
 KEIO.gene.mutation.densities <- left_join(gene.mutation.densities,KEIO.data)
 
+purifying1 <- KEIO.gene.mutation.densities %>%
+    mutate(maybe.purifying = (Gene %in% only.dS.allowed.genes$Gene))
 
-purifying1 <- KEIO.gene.mutation.densities %>% mutate(maybe.purifying=ifelse(nonsense.indel.sv.mut.density==0,TRUE,FALSE))
-
-purifying1.plot <- ggplot(purifying1,aes(x=maybe.purifying,y=Score)) + theme_classic() + geom_boxplot()
+purifying1.plot <- ggplot(purifying1,aes(x=maybe.purifying,y=Score)) +
+    theme_classic() + geom_boxplot()
 purifying1.plot
 
-purifying2 <- KEIO.gene.mutation.densities %>% mutate(maybe.purifying=ifelse(all.except.dS.mut.density==0,TRUE,FALSE))
-
-purifying2.plot <- ggplot(purifying2,aes(x=maybe.purifying,y=Score)) + theme_classic() + geom_boxplot()
+purifying2.plot <- ggplot(purifying1,aes(x=Score,fill=maybe.purifying)) + theme_classic() +
+    facet_wrap(.~maybe.purifying) + geom_histogram(bins=10) + guides(fill=FALSE)
 purifying2.plot
 
+Fig5 <- plot_grid(purifying1.plot,purifying2.plot,nrow=2)
+ggsave("../results/figures/Figure5.pdf",Fig5)
+
 ## potentially purifying genes have a higher KEIO essentially score, as we would hope.
-wilcox.test(x=filter(purifying1,maybe.purifying==TRUE)$Score,filter(purifying1,maybe.purifying==FALSE)$Score)
+pur1 <- filter(purifying1,maybe.purifying==TRUE)
+notpur1 <- filter(purifying1,maybe.purifying==FALSE)
 
-wilcox.test(x=filter(purifying2,maybe.purifying==TRUE)$Score,filter(purifying2,maybe.purifying==FALSE)$Score)
+wilcox.test(x=pur1$Score,notpur1$Score)
 
-pur1 <- filter(purifying1,maybe.purifying==TRUE) ## looks like a lot of false positives
-pur2 <- filter(purifying2,maybe.purifying==TRUE) %>% arrange(desc(gene_length))
-
-## ribosomal genes... and hypothetical genes? Are these addictive genes?
-## See "Pervasive domestication of defective prophages by bacteria"
-## by Louis-Marie Bobay for insights, or potential analyses and checks, perhaps?
-## Also see: Bacterial ‘Grounded’ Prophages:
-## Hotspots for Genetic Renovation and Innovation
-## by Ramisetty and Sudhakari.
+## TODO: group together genes-- are they significant when considered as one
+## big mutational target? Look at cliques in figure 5, and the proteins
+## annotated as hypothetical proteins/toxin-antitoxins as well.
 
 ##########################################################################
+
+## quickly look at mutations in phage in REL606 with orthologs
+## reported in Louis-Marie Bobay paper,
+##Pervasive domestication of defective prophages by bacteria.
+## These positions come from S1 Dataset from that paper, for phage
+## that are annotated as coming from REL606.
+
+## label genes and mutations by the phage.
+
+phage1 <- gene.mutation.data %>% filter(start>=536929) %>% filter(end<=559782) %>%
+    mutate(phage='phage1')
+phage2 <- gene.mutation.data %>% filter(start>=787952) %>% filter(end<=799275) %>%
+    mutate(phage='phage2')
+## no mutations in phage 3: probably masked.
+phage3 <- gene.mutation.data %>% filter(start>=880691) %>% filter(end<=904605)
+phage4 <- gene.mutation.data %>% filter(start>=1409170) %>% filter(end<=1425863) %>%
+    mutate(phage='phage4')
+phage5 <- gene.mutation.data %>% filter(start>=1600805) %>% filter(end<=1628589) %>%
+    mutate(phage='phage5')
+phage6 <- gene.mutation.data %>% filter(start>=2100409) %>% filter(end<=2122347) %>%
+    mutate(phage='phage6')
+
+## look at the genes in REL606. do any look like under purifying selection?
+phage1.genes <- REL606.genes %>% filter(start>=536929) %>% filter(end<=559782) %>%
+    mutate(phage='phage1')
+phage2.genes <- REL606.genes %>% filter(start>=787952) %>% filter(end<=799275) %>%
+    mutate(phage='phage2')
+phage4.genes <- REL606.genes %>% filter(start>=1409170) %>% filter(end<=1425863) %>%
+    mutate(phage='phage4')
+phage5.genes <- REL606.genes %>% filter(start>=1600805) %>% filter(end<=1628589) %>%
+    mutate(phage='phage5')
+phage6.genes <- REL606.genes %>% filter(start>=2100409) %>% filter(end<=2122347) %>%
+    mutate(phage='phage6')
+
+phage.subset.size <- min(nrow(phage1.genes),
+                    nrow(phage2.genes),
+                    nrow(phage4.genes),
+                    nrow(phage5.genes),
+                    nrow(phage6.genes))
+
+phage.rando.layer <- plot.base.layer(gene.mutation.data,subset.size=phage.subset.size)
+
+phage.genes <- rbind(phage1.genes,phage2.genes,phage4.genes,phage5.genes,phage6.genes)
+phage.gene.mut.data <- rbind(phage1,phage2,phage4,phage5,phage6)
+
+putative.phage.purifying.selection <- phage.genes %>%
+    filter(!(locus_tag %in% phage.gene.mut.data$locus_tag)) %>%
+    mutate(in.no.mut.list=(locus_tag %in% no.dS.genes$locus_tag))
+
+no.dS.phage.genes <- phage.genes %>% filter(locus_tag %in% no.dS.genes$locus_tag)
+only.dS.allowed.phage.genes <- phage.genes %>% filter(locus_tag %in% only.dS.allowed.genes$locus_tag)
+
+
+c.phage1 <- calc.cumulative.muts(phage1)
+c.phage2 <- calc.cumulative.muts(phage2)
+c.phage4 <- calc.cumulative.muts(phage4)
+c.phage5 <- calc.cumulative.muts(phage5)
+c.phage6 <- calc.cumulative.muts(phage6)
+
+c.all.phage <- calc.cumulative.muts(phage.gene.mut.data)
+
+## plot for phage.
+## interesting, but will have to do stats more carefully.
+phage.plot <- phage.rando.layer %>%
+    ## the black layer is all the other ones together.
+    add.cumulative.mut.layer(c.all.phage,my.color="black") %>%
+    add.cumulative.mut.layer(c.phage1,my.color="red") %>%
+    add.cumulative.mut.layer(c.phage2,my.color="blue") %>%
+    add.cumulative.mut.layer(c.phage4,my.color="green") %>%
+    add.cumulative.mut.layer(c.phage5,my.color="yellow") %>%
+    add.cumulative.mut.layer(c.phage6,my.color="orange")
+ggsave(phage.plot,filename='../results/figures/phage-plot.pdf')
+
 ##########################################################################
 ## look at accumulation of stars over time for genes in different transcriptional
 ## modules inferred by Sastry et al. (2020) paper from Bernhard Palsson's group.
@@ -997,20 +1092,13 @@ pur2 <- filter(purifying2,maybe.purifying==TRUE) %>% arrange(desc(gene_length))
 ## and the regulator annotations in modulon.pdf, both in precise-db-repo.
 Imodulons.to.regulators <- read.csv("../data/rohans-I-modulons-to-regulators.csv")
 
-Imodulon.regulators <-Imodulons.to.regulators %>% filter(!(is.na(regulator)))
+Imodulon.regulators <-Imodulons.to.regulators %>%
+    filter(!(is.na(regulator)))
     
 Imodulon.regulator.mut.data <- gene.mutation.data %>%
     filter(Gene %in% Imodulon.regulators$regulator)
 
 c.Imodulon.regulators <- calc.cumulative.muts(Imodulon.regulator.mut.data)
-
-## I-modulon regulators are under extremely strong positive selection!
-Imodulon.regulators.base.layer <- plot.base.layer(gene.mutation.data,subset.size=length(unique(Imodulon.regulators$regulator)))
-Imodulon.regulators.plot <- Imodulon.regulators.base.layer %>%
-    add.cumulative.mut.layer(c.Imodulon.regulators,
-                             my.color="red")
-ggsave("../results/figures/I-modulon-regulators.pdf",Imodulon.regulators.plot)
-
 
 ## calculate more rigorous statistics than the figures.
 ## IMPORTANT BUG: WHY ARE ONLY 7 OF 12 POPS IN the PVAL DATAFRAME ???
@@ -1032,20 +1120,23 @@ filter(Gene %in% Imodulon.genes$Gene)
 
 c.Imodulon.genes <- calc.cumulative.muts(Imodulon.gene.mut.data)
 
+Imodulon.regulators.base.layer <- plot.base.layer(
+    gene.mutation.data,
+    subset.size=length(unique(Imodulon.regulators$regulator)))
+
 Imodulon.gene.base.layer <- plot.base.layer(
     gene.mutation.data,
-    subset.size=length(unique(Imodulon.genes$Gene)))
-
-Imodulon.gene.plot <- Imodulon.gene.base.layer %>%
-    add.cumulative.mut.layer(c.Imodulon.genes,
-                             my.color="red")
+    subset.size=length(unique(Imodulon.genes$Gene)),
+    my.color="pink")
 
 ## make plots comparing I-modulon regulators to the genes they regulate.
-Imodulon.plot <- all.rando.plot %>%
+Imodulon.plot <- Imodulon.regulators.base.layer %>% ## null for regulators
+    add.base.layer(gene.mutation.data, ## add null for regulated genes
+                   subset.size=length(unique(Imodulon.genes$Gene)),
+                   my.color="pink") %>%
     add.cumulative.mut.layer(c.Imodulon.regulators, my.color="black") %>%
     add.cumulative.mut.layer(c.Imodulon.genes, my.color="red")
 ggsave("../results/figures/Imodulon-plot.pdf",Imodulon.plot)
-
 
 ## Answer Q3: compare genes in I-modulons
 ## to genes outside of I-modulons (omitting I-modulon.regulators altogether).
@@ -1082,6 +1173,7 @@ make.modulon.plots.helper <- function(my.I.modulon) {
     ## IMPORTANT TODO: will have to regenerate the base plots--
     ## need to subsample the same size subset of genes
     ## for each regulon for a proper comparison.
+    
     p <- all.rando.plot %>%
         add.cumulative.mut.layer(c.my.modulon.muts,my.color="red")
 
@@ -1132,6 +1224,16 @@ U.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='U')
 R.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='R')
 C.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='C')
 
+proteome.subset.size <- min(length(unique(A.sector.mut.data$Gene)),
+                            length(unique(S.sector.mut.data$Gene)),
+                            length(unique(O.sector.mut.data$Gene)),
+                            length(unique(U.sector.mut.data$Gene)),
+                            length(unique(R.sector.mut.data$Gene)),
+                            length(unique(C.sector.mut.data$Gene)))
+
+proteome.rando.layer <- plot.base.layer(gene.mutation.data,subset.size=proteome.subset.size)
+
+
 c.A.muts <- calc.cumulative.muts(A.sector.mut.data)
 c.S.muts <- calc.cumulative.muts(S.sector.mut.data)
 c.O.muts <- calc.cumulative.muts(O.sector.mut.data)
@@ -1140,7 +1242,7 @@ c.R.muts <- calc.cumulative.muts(R.sector.mut.data)
 c.C.muts <- calc.cumulative.muts(C.sector.mut.data)
 
 ## plot for proteome sectors.
-sector.plot <- all.rando.plot %>%
+sector.plot <- proteome.rando.layer %>%
     add.cumulative.mut.layer(c.A.muts, my.color="black") %>%
     add.cumulative.mut.layer(c.S.muts,my.color="red") %>%
     add.cumulative.mut.layer(c.O.muts,my.color="blue") %>%
@@ -1172,6 +1274,18 @@ eigengene7.mut.data <- filter(eigengene.mut.data,Eigengene==7)
 eigengene8.mut.data <- filter(eigengene.mut.data,Eigengene==8)
 eigengene9.mut.data <- filter(eigengene.mut.data,Eigengene==9)
 
+eigen.subset.size <- min(length(unique(eigengene1.mut.data$Gene)),
+                         length(unique(eigengene2.mut.data$Gene)),
+                         length(unique(eigengene3.mut.data$Gene)),
+                         length(unique(eigengene4.mut.data$Gene)),
+                         length(unique(eigengene5.mut.data$Gene)),
+                         length(unique(eigengene6.mut.data$Gene)),
+                         length(unique(eigengene7.mut.data$Gene)),
+                         length(unique(eigengene8.mut.data$Gene)),
+                         length(unique(eigengene9.mut.data$Gene)))
+
+eigen.rando.layer <- plot.base.layer(gene.mutation.data,subset.size=eigen.subset.size)
+
 c.eigen1.muts <- calc.cumulative.muts(eigengene1.mut.data)
 c.eigen2.muts <- calc.cumulative.muts(eigengene2.mut.data)
 c.eigen3.muts <- calc.cumulative.muts(eigengene3.mut.data)
@@ -1182,7 +1296,7 @@ c.eigen7.muts <- calc.cumulative.muts(eigengene7.mut.data)
 c.eigen8.muts <- calc.cumulative.muts(eigengene8.mut.data)
 c.eigen9.muts <- calc.cumulative.muts(eigengene9.mut.data)
 
-eigen.plot <- all.rando.plot %>%
+eigen.plot <- eigen.rando.layer %>%
     add.cumulative.mut.layer(c.eigen1.muts, my.color="red") %>%
     add.cumulative.mut.layer(c.eigen2.muts,my.color="orange") %>%
     add.cumulative.mut.layer(c.eigen3.muts,my.color="yellow") %>%
