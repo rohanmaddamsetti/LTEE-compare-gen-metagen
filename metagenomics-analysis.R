@@ -925,80 +925,6 @@ wilcox.test(x=pur1$Score,notpur1$Score)
 ## TODO: group together genes-- are they significant when considered as one
 ## big mutational target? Look at cliques in figure 5, and the proteins
 ## annotated as hypothetical proteins/toxin-antitoxins as well.
-
-##########################################################################
-
-## quickly look at mutations in phage in REL606 with orthologs
-## reported in Louis-Marie Bobay paper,
-##Pervasive domestication of defective prophages by bacteria.
-## These positions come from S1 Dataset from that paper, for phage
-## that are annotated as coming from REL606.
-
-## label genes and mutations by the phage.
-
-phage1 <- gene.mutation.data %>% filter(start>=536929) %>% filter(end<=559782) %>%
-    mutate(phage='phage1')
-phage2 <- gene.mutation.data %>% filter(start>=787952) %>% filter(end<=799275) %>%
-    mutate(phage='phage2')
-## no mutations in phage 3: probably masked.
-phage3 <- gene.mutation.data %>% filter(start>=880691) %>% filter(end<=904605)
-phage4 <- gene.mutation.data %>% filter(start>=1409170) %>% filter(end<=1425863) %>%
-    mutate(phage='phage4')
-phage5 <- gene.mutation.data %>% filter(start>=1600805) %>% filter(end<=1628589) %>%
-    mutate(phage='phage5')
-phage6 <- gene.mutation.data %>% filter(start>=2100409) %>% filter(end<=2122347) %>%
-    mutate(phage='phage6')
-
-## look at the genes in REL606. do any look like under purifying selection?
-phage1.genes <- REL606.genes %>% filter(start>=536929) %>% filter(end<=559782) %>%
-    mutate(phage='phage1')
-phage2.genes <- REL606.genes %>% filter(start>=787952) %>% filter(end<=799275) %>%
-    mutate(phage='phage2')
-phage4.genes <- REL606.genes %>% filter(start>=1409170) %>% filter(end<=1425863) %>%
-    mutate(phage='phage4')
-phage5.genes <- REL606.genes %>% filter(start>=1600805) %>% filter(end<=1628589) %>%
-    mutate(phage='phage5')
-phage6.genes <- REL606.genes %>% filter(start>=2100409) %>% filter(end<=2122347) %>%
-    mutate(phage='phage6')
-
-phage.subset.size <- min(nrow(phage1.genes),
-                    nrow(phage2.genes),
-                    nrow(phage4.genes),
-                    nrow(phage5.genes),
-                    nrow(phage6.genes))
-
-phage.rando.layer <- plot.base.layer(gene.mutation.data,subset.size=phage.subset.size)
-
-phage.genes <- rbind(phage1.genes,phage2.genes,phage4.genes,phage5.genes,phage6.genes)
-phage.gene.mut.data <- rbind(phage1,phage2,phage4,phage5,phage6)
-
-putative.phage.purifying.selection <- phage.genes %>%
-    filter(!(locus_tag %in% phage.gene.mut.data$locus_tag)) %>%
-    mutate(in.no.mut.list=(locus_tag %in% no.dS.genes$locus_tag))
-
-no.dS.phage.genes <- phage.genes %>% filter(locus_tag %in% no.dS.genes$locus_tag)
-only.dS.allowed.phage.genes <- phage.genes %>% filter(locus_tag %in% only.dS.allowed.genes$locus_tag)
-
-c.phage1 <- calc.cumulative.muts(phage1)
-c.phage2 <- calc.cumulative.muts(phage2)
-c.phage4 <- calc.cumulative.muts(phage4)
-c.phage5 <- calc.cumulative.muts(phage5)
-c.phage6 <- calc.cumulative.muts(phage6)
-
-c.all.phage <- calc.cumulative.muts(phage.gene.mut.data)
-
-## plot for phage.
-## interesting, but will have to do stats more carefully.
-phage.plot <- phage.rando.layer %>%
-    ## the black layer is all the other ones together.
-    add.cumulative.mut.layer(c.all.phage,my.color="black") %>%
-    add.cumulative.mut.layer(c.phage1,my.color="red") %>%
-    add.cumulative.mut.layer(c.phage2,my.color="blue") %>%
-    add.cumulative.mut.layer(c.phage4,my.color="green") %>%
-    add.cumulative.mut.layer(c.phage5,my.color="yellow") %>%
-    add.cumulative.mut.layer(c.phage6,my.color="orange")
-ggsave(phage.plot,filename='../results/figures/phage-plot.pdf')
-
 ##########################################################################
 ## look at accumulation of stars over time for genes in different transcriptional
 ## modules inferred by Sastry et al. (2020) paper from Bernhard Palsson's group.
@@ -1012,7 +938,7 @@ ggsave(phage.plot,filename='../results/figures/phage-plot.pdf')
 ## B) paired comparison. compare regulator against regulated genes for each I-modulon.
 
 ## Q2) Do any I-modulons show evidence of positive or purifying selection?
-## I will have to do some kind of FDR correction for multiple hypothesis testing.
+## I may have to do some kind of FDR correction for multiple hypothesis testing.
 
 ## I made this file by hand, by going through the I-modulons in imodulon_gene_names.txt,
 ## and the regulator annotations in modulon.pdf, both in precise-db-repo.
