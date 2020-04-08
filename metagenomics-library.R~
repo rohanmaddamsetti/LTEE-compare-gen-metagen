@@ -1,12 +1,5 @@
 ## metagenomics-analysis.R by Rohan Maddamsetti and Nkrumah Grant 
 
-## IMPORTANT: THIS FILE IS DEPRECATED-- HAS BEEN REFACTORED INTO THREE SEPARATE FILES:
-## -- metagenomics-library.R
-## -- mutation-rate-analysis.R
-## -- gene-module-analysis.R
-## THIS CODE WILL REMAIN FOR ARCHIVAL PURPOSES UNTIL THOSE FILES HAVE BEEN
-## POLISHED AND THROUGHLY DEBUGGED.
-
 ## MAKE SURE THAT ZEROS IN MUTATION COUNTS ARE NOT THROWN OUT BY DPLYR!
 
 ## IMPORTANT TODO:
