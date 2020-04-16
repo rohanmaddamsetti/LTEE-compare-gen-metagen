@@ -1,13 +1,5 @@
 ## mutation-rate-analysis.R by Rohan Maddamsetti
 
-## MAKE SURE THAT ZEROS IN MUTATION COUNTS ARE NOT THROWN OUT BY DPLYR!
-
-## NOTE: Perhaps should cite my STLE paper-- recombination events tend to happen flanking
-## the replication origin. Is that result connected to the wave-like mutation bias
-## pattern seen here and in Patricia Foster's and Vaughn Cooper's evolution experiments?
-
-## Also check out Hi-C papers and others reporting 3D chromosome in E. coli.
-
 ## load library functions.
 source("metagenomics-library.R")
 library(RColorBrewer)
@@ -110,7 +102,6 @@ sv.mut.data <- mutation.data %>% filter(Annotation %in% c('sv'))
 point.mut.plot <- make.facet.mut.plot(point.mut.data)
 ggsave("../results/mutation-bias/figures/Fig1.pdf",point.mut.plot,width=7,height=7)
 
-
 ## S1 Figure: indels over the genome.
 indel.mut.plot <- make.facet.mut.plot(indel.mut.data) +
     scale_fill_manual(values="purple") + guides(fill=FALSE)
@@ -137,7 +128,6 @@ summed.plot <- plot_grid(summed.point.mut.plot,
                          labels=c('A','B','C'),
                          ncol=1)
 ggsave("../results/mutation-bias/figures/S3Fig.pdf",summed.plot,width=6,height=8)
-
 
 ## plot gene length against location in oriC coordinates.
 gene.length.location.plot <- ggplot(REL606.genes, aes(x=oriC_start,y=gene_length)) +
@@ -384,7 +374,7 @@ ggsave(filename="../results/mutation-bias/figures/Fig3.pdf",Fig3,width=7)
 
 ##########################################################################################
 ## reanalysis of synonymous variation in natural populations.
-## looks like problems with the K-S test set up?
+## looks like problems with the K-S test... 
 
 ## goal was to investigate dS (and other classes of mutations) across the genome
 ## in the metagenomics data, revamping code from my 2015 Mol. Biol. Evol. paper.
@@ -395,7 +385,8 @@ ggsave(filename="../results/mutation-bias/figures/Fig3.pdf",Fig3,width=7)
 ## Perhaps because K-S is for continuous and not discrete distributions?
 
 ## Right now I don't know the answer to this question. Report this as
-## a Technical Comment to my 2015 MBE paper in Supplementary Figure S5.
+## a Technical Comment to my 2015 MBE paper,
+## in the Supplementary Text and in Supplementary Figure S5.
 
 ########################################################################
 ## DO NOT replace this with thetaS analysis-- that will only work for core genes!
