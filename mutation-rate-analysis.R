@@ -565,9 +565,8 @@ make.thetaS.KS.Figure <- function(the.results.to.plot, rank_by="length") {
         geom_line(aes(y=null), linetype=2) +
         geom_line(aes(y=alt1), linetype='dotted') +
         scale_y_continuous('Cumulative proportion of mutations',limits=c(0,1)) +
-        theme_classic() #+
-        #theme(axis.title=element_text(size=18),axis.text=element_text(size=12))
-
+        theme_classic()
+    
     if (rank_by == "oriC") {
         ## find the index for gidA and mioC, which sandwich oriC.
         ## use these to plot the location of oriC.
@@ -577,7 +576,8 @@ make.thetaS.KS.Figure <- function(the.results.to.plot, rank_by="length") {
     } else if (rank_by == "length") {
         plot <- plot + scale_x_continuous('Genes ranked by length')
     } else if (rank_by == "thetaS") {
-        plot <- plot + scale_x_continuous('Genes ranked by thetaS')
+        plot <- plot + scale_x_continuous(expression(Genes~ranked~by~italic(theta[s])))
+        
     } else {
         stop("error 2 in make.KS.Figure.")
     }
