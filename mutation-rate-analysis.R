@@ -383,24 +383,19 @@ Fig3 <- plot_grid(point.mut.plot,indel.plot, sv.plot,labels=c('A','B','C'),nrow=
 ggsave(filename="../results/mutation-bias/figures/Fig3.pdf",Fig3,width=7)
 
 ##########################################################################################
-## SUPPLEMENTARY INFORMATION
-##########################################################################################
-
 ## reanalysis of synonymous variation in natural populations.
 ## looks like problems with the K-S test set up?
 
-## investigate dS (and other classes of mutations) across the genome
-## in the metagenomics data.
-## revamp code from my 2015 Mol. Biol. Evol. paper.
-## in short, cannot reject null model that dS is uniform over the genome.
-## and dN fits the null extremely well-- even better than dS!
-## Probably because there are 3 times as many dN as dS throughout the
-## experiment... but could the mutation bias seen in Ara+3 be a factor?
+## goal was to investigate dS (and other classes of mutations) across the genome
+## in the metagenomics data, revamping code from my 2015 Mol. Biol. Evol. paper.
 
 ## IMPORTANT ISSUE: changing the CDF (by changing rank on x-axis),
 ## while keeping the same set of probability masses for each gene
 ## changes K-S test statistics! How do I interpret this?
 ## Perhaps because K-S is for continuous and not discrete distributions?
+
+## Right now I don't know the answer to this question. Report this as
+## a Technical Comment to my 2015 MBE paper in Supplementary Figure S5.
 
 ########################################################################
 ## DO NOT replace this with thetaS analysis-- that will only work for core genes!
@@ -590,48 +585,12 @@ make.thetaS.KS.Figure <- function(the.results.to.plot, rank_by="length") {
     return(plot)
 }
 
-
-## filter for point mutations (missense, synonymous, nonsense).
-gene.point.mutation.data <- gene.mutation.data %>%
-    filter(Gene!='intergenic') %>%
-    filter(Annotation %in% c('missense', 'synonymous', 'nonsense'))
-
-## look at distribution over the genome for different classes of mutations.
-
-gene.only.mutation.data <- gene.mutation.data %>%
-    filter(Annotation !='noncoding')
-
+####################################################
 gene.dS.mutation.data <- gene.mutation.data %>%
     filter(Annotation=='synonymous')
 
 gene.dN.mutation.data <- gene.mutation.data %>%
     filter(Annotation=='missense')
-
-gene.nonsense.mutation.data <- gene.mutation.data %>%
-    filter(Annotation=='nonsense')
-
-gene.noncoding.mutation.data <- gene.mutation.data %>%
-    filter(Annotation=='noncoding')
-
-gene.except.dS.mutation.data <- gene.mutation.data %>%
-    filter(Gene!='intergenic') %>%
-    filter(Annotation!='synonymous')
-
-gene.sv.mutation.data <- gene.mutation.data %>%
-    filter(Gene!='intergenic') %>%
-    filter(Annotation=='sv')
-
-gene.indel.mutation.data <- gene.mutation.data %>%
-    filter(Gene!='intergenic') %>%
-    filter(Annotation=='indel')
-
-## we treat nonsense as a nonsynonymous mutation-- for comparison to Tenaillon 2016 data.
-gene.nodNdS.mutation.data <- gene.mutation.data %>%
-    filter(Gene!='intergenic') %>%
-    filter(Annotation %in% c("sv", "indel", "noncoding"))
-
-## examine all mutations over genes in the genome.
-cumsum.all.over.metagenome <- ks.analysis(gene.only.mutation.data,REL606.genes)
 
 ## NOTE: thetaS KS analysis will only work for core genes!
 ## IMPORTANT!! RESULTS DEPEND ON X-AXIS ORDERING!
@@ -657,151 +616,3 @@ FigS5 <- plot_grid(dS.thetaS.plot1, dS.thetaS.plot2, dS.thetaS.plot3,
                    dN.thetaS.plot1, dN.thetaS.plot2, dN.thetaS.plot3,
                    labels=c('A','B','C','D','E','F'), nrow=2)
 ggsave("../results/mutation-bias/figures/FigS5.pdf", height=7, width=10)
-
-
-##########################
-
-
-
-## not significant: but marginal result: p-value = 0.095.
-cumsum.all.over.metagenome.by.oriC <- ks.analysis(gene.only.mutation.data,REL606.genes,TRUE)
-all.KS.plot.by.oriC <- make.KS.Figure(cumsum.all.over.metagenome.by.oriC, TRUE)
-ggsave("../results/figures/all_KS.plot_by_oriC.pdf",all.KS.plot.by.oriC)
-
-## plot all mutations for Ara+3.
-ara.plus3.all.muts <- filter(gene.only.mutation.data,Population=='Ara+3')
-cumsum.ara.plus3.core.metagenome <- thetaS.KS.analysis(ara.plus3.all.muts,REL606.genes)
-ara.plus3.all.thetaS.KS.plot <- make.thetaS.KS.Figure(cumsum.ara.plus3.core.metagenome)
-
-cumsum.all.over.ara.plus3 <- ks.analysis(ara.plus3.all.muts,REL606.genes)
-ara.plus3.all.KS.plot <- make.KS.Figure(cumsum.all.over.ara.plus3)
-##ggsave("../results/figures/Ara+3_KS.plot.pdf",ara.plus3.all.KS.plot)
-
-cumsum.all.over.ara.plus3.by.oriC <- ks.analysis(ara.plus3.all.muts,REL606.genes,TRUE)
-ara.plus3.all.KS.plot.by.oriC <- make.KS.Figure(cumsum.all.over.ara.plus3.by.oriC, TRUE)
-##ggsave("../results/figures/Ara+3_KS.plot.pdf",ara.plus3.all.KS.plot)
-
-## plot all mutations for Ara+6.
-ara.plus6.all.muts <- filter(gene.only.mutation.data,Population=='Ara+6')
-
-cumsum.all.over.ara.plus6 <- ks.analysis(ara.plus6.all.muts,REL606.genes)
-ara.plus6.all.KS.plot <- make.KS.Figure(cumsum.all.over.ara.plus6)
-##ggsave("../results/figures/Ara+3_KS.plot.pdf",ara.plus3.all.KS.plot)
-
-cumsum.all.over.ara.plus6.by.oriC <- ks.analysis(ara.plus6.all.muts,REL606.genes,TRUE)
-ara.plus6.all.KS.plot.by.oriC <- make.KS.Figure(cumsum.all.over.ara.plus6.by.oriC, TRUE)
-##ggsave("../results/figures/Ara+3_KS.plot.pdf",ara.plus3.all.KS.plot)
-
-
-## examine dS over the genome.
-cumsum.dS.over.metagenome <- ks.analysis(gene.dS.mutation.data,REL606.genes)
-dS.KS.plot <- make.KS.Figure(cumsum.dS.over.metagenome)
-ggsave("../results/figures/dS_KS.plot.pdf",dS.KS.plot)
-
-## dS is significantly different from null, when ordered by chromosomal location!
-## p = 0.002231.
-cumsum.dS.over.metagenome.by.oriC <- ks.analysis(gene.dS.mutation.data,REL606.genes,TRUE)
-dS.KS.plot.by.oriC <- make.KS.Figure(cumsum.dS.over.metagenome.by.oriC,TRUE)
-ggsave("../results/figures/dS_KS.plot_by_oriC.pdf",dS.KS.plot.by.oriC)
-
-## plot dS for Ara+3.
-ara.plus3.dS.muts <- filter(gene.dS.mutation.data,Population=='Ara+3')
-
-cumsum.dS.over.ara.plus3 <- ks.analysis(ara.plus3.dS.muts,REL606.genes)
-ara.plus3.dS.KS.plot <- make.KS.Figure(cumsum.dS.over.ara.plus3)
-ggsave("../results/figures/Ara+3_dS_KS.plot.pdf",ara.plus3.dS.KS.plot)
-
-cumsum.dS.over.ara.plus3.by.oriC <- ks.analysis(ara.plus3.dS.muts,REL606.genes,TRUE)
-ara.plus3.dS.KS.plot.by.oriC <- make.KS.Figure(cumsum.dS.over.ara.plus3.by.oriC,TRUE)
-ggsave("../results/figures/Ara+3_dS_KS_by_oriC.plot.pdf",ara.plus3.dS.KS.plot.by.oriC)
-
-
-cumsum.ara.plus3.dS.metagenome <- thetaS.KS.analysis(ara.plus3.dS.muts,REL606.genes)
-ara.plus3.dS.thetaS.KS.plot <- make.thetaS.KS.Figure(cumsum.ara.plus3.dS.metagenome)
-
-
-## examine dN over the genome.
-## dN fits the null even better than dS! But note that
-## there are 18493 dN in the data, and 6792 dS in the data.
-## so the better fit is probably best explained by the larger sample size.
-cumsum.dN.over.metagenome <- ks.analysis(gene.dN.mutation.data,REL606.genes)
-dN.KS.plot <- make.KS.Figure(cumsum.dN.over.metagenome)
-cumsum.dN.over.metagenome.by.oriC <- ks.analysis(gene.dN.mutation.data,REL606.genes,TRUE)
-dN.KS.plot.by.oriC <- make.KS.Figure(cumsum.dN.over.metagenome.by.oriC,TRUE)
-ggsave("../results/figures/dN_KS_plot.pdf",dN.KS.plot)
-ggsave("../results/figures/dN_KS_plot_by_oriC.pdf",dN.KS.plot.by.oriC)
-
-## dN is not different from null, when ordered by chromosomal location.
-## p = 0.3705.
-cumsum.dN.over.metagenome.by.oriC <- ks.analysis(gene.dN.mutation.data,REL606.genes,TRUE)
-dN.KS.plot.by.oriC <- make.KS.Figure(cumsum.dN.over.metagenome.by.oriC, TRUE)
-
-## plots for Ara+3.
-ara.plus3.dN.muts <- filter(gene.dN.mutation.data,Population=='Ara+3')
-cumsum.dN.over.ara.plus3 <- ks.analysis(ara.plus3.dN.muts,REL606.genes)
-ara.plus3.dN.KS.plot <- make.KS.Figure(cumsum.dN.over.ara.plus3)
-
-## let's look at nonsense mutations.
-## nonsense mutations don't fit the null expectation.
-## opposite trend of indels or IS elements, though!
-## not sure why.
-cumsum.nonsense.over.metagenome <- ks.analysis(gene.nonsense.mutation.data,REL606.genes)
-make.KS.Figure(cumsum.nonsense.over.metagenome)
-
-## examine non-coding mutations.
-## very clear that the normalization by gene_length is not appropriate.
-cumsum.noncoding.over.metagenome <- ks.analysis(gene.noncoding.mutation.data,REL606.genes)
-make.KS.Figure(cumsum.noncoding.over.metagenome)
-
-## now let's look at all mutations except for dS.
-cumsum.no.dS.over.metagenome <- ks.analysis(gene.except.dS.mutation.data,REL606.genes)
-make.KS.Figure(cumsum.no.dS.over.metagenome)
-
-## There's a significant difference between dS and non-dS
-## distribution over the genome:
-## p = 0.001. I feel I found this by fishing... but still
-## significant by Bonferroni correcting by the different graphs I made
-## in this section (9 tests)
-ks.test(cumsum.dS.over.metagenome$empirical,
-        cumsum.no.dS.over.metagenome$empirical,
-        simulate.p.value=TRUE)
-## Two hypotheses for these results:
-## H1: mutation hotspots for indels and IS elements.
-## H2: purifying selection against indels and IS elements.
-
-## but this test is not significant in comparing dS to dN.
-## so driven by distribution of non-point mutations over the genome,
-## since I excluded intergenic mutations.
-ks.test(cumsum.dS.over.metagenome$empirical,
-        cumsum.dN.over.metagenome$empirical,
-        simulate.p.value=TRUE)
-
-## Nonsense mutation distribution is predicted by neither the distribution
-## of synonymous nor missense mutations! Nice result.
-ks.test(cumsum.dS.over.metagenome$empirical,
-        cumsum.nonsense.over.metagenome$empirical,
-        simulate.p.value=TRUE)
-
-ks.test(cumsum.dN.over.metagenome$empirical,
-        cumsum.nonsense.over.metagenome$empirical,
-        simulate.p.value=TRUE)
-
-## VERY IMPORTANT TODO: EXCLUDE SV AND INDELS THAT ARE ANNOTATED BY A GENE,
-## BUT ACTUALLY OCCUR IN PROMOTER REGIONS! I can do this using the gene_start and
-## gene_end information.
-
-## examine structural mutations (IS elements) affecting genes.
-## RESULT: longer genes are depleted in IS insertions!! (double check if true.)
-cumsum.sv.over.metagenome <- ks.analysis(gene.sv.mutation.data,REL606.genes)
-make.KS.Figure(cumsum.sv.over.metagenome)
-
-## examine indels.
-## RESULT: longer genes are depleted in indels! (double check if true.)
-cumsum.indel.over.metagenome <- ks.analysis(gene.indel.mutation.data,REL606.genes)
-make.KS.Figure(cumsum.indel.over.metagenome)
-
-## Therefore, structural mutations and indels are probably what are driving the
-## differences that I saw in aerobic and anerobic mutations before.
-
-cumsum.nonsense.sv.indels.over.metagenome <- ks.analysis(gene.nonsense.sv.indels.mutation.data, REL606.genes)
-make.KS.Figure(cumsum.nonsense.sv.indels.over.metagenome)
