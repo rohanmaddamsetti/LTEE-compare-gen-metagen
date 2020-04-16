@@ -563,15 +563,15 @@ make.thetaS.KS.Figure <- function(the.results.to.plot, rank_by="length") {
 
     ## for plotting convenience, add an index to the data frame.
     the.results.to.plot$index <- seq_len(nrow(the.results.to.plot))
-    
+
+    ## we don't plot alt2 for clarity (it doesn't change the message).
     plot <- ggplot(the.results.to.plot, aes(x=index)) +
         geom_line(aes(y=empirical), colour="red") + 
         geom_line(aes(y=null), linetype=2) +
         geom_line(aes(y=alt1), linetype='dotted') +
-        geom_line(aes(y=alt2), linetype='dotted') + 
         scale_y_continuous('Cumulative proportion of mutations',limits=c(0,1)) +
-        theme_classic() +
-        theme(axis.title=element_text(size=18),axis.text=element_text(size=12))
+        theme_classic() #+
+        #theme(axis.title=element_text(size=18),axis.text=element_text(size=12))
 
     if (rank_by == "oriC") {
         ## find the index for gidA and mioC, which sandwich oriC.
@@ -630,35 +630,38 @@ gene.nodNdS.mutation.data <- gene.mutation.data %>%
     filter(Gene!='intergenic') %>%
     filter(Annotation %in% c("sv", "indel", "noncoding"))
 
-
 ## examine all mutations over genes in the genome.
 cumsum.all.over.metagenome <- ks.analysis(gene.only.mutation.data,REL606.genes)
 
 ## NOTE: thetaS KS analysis will only work for core genes!
 ## IMPORTANT!! RESULTS DEPEND ON X-AXIS ORDERING!
-cumsum.dS.core1 <- thetaS.KS.analysis(gene.dS.mutation.data,REL606.genes,"length")
-cumsum.dS.core2 <- thetaS.KS.analysis(gene.dS.mutation.data,REL606.genes,"oriC")
-cumsum.dS.core3 <- thetaS.KS.analysis(gene.dS.mutation.data,REL606.genes,"thetaS")
+## This will be reported as a technical comment on my 2015 MBE paper.
 
-cumsum.dN.core1 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"length")
-cumsum.dN.core2 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"oriC")
-cumsum.dN.core3 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"thetaS")
+cumsum.dS.core1 <- thetaS.KS.analysis(gene.dS.mutation.data,REL606.genes,"thetaS")
+cumsum.dS.core2 <- thetaS.KS.analysis(gene.dS.mutation.data,REL606.genes,"length")
+cumsum.dS.core3 <- thetaS.KS.analysis(gene.dS.mutation.data,REL606.genes,"oriC")
 
-dS.thetaS.plot1 <- make.thetaS.KS.Figure(cumsum.dS.core1,"length")
-ggsave("../results/figures/dS_thetaS_plot1.pdf",dS.thetaS.plot1)
-dS.thetaS.plot2 <- make.thetaS.KS.Figure(cumsum.dS.core2,"oriC")
-ggsave("../results/figures/dS_thetaS_plot2.pdf",dS.thetaS.plot2)
-dS.thetaS.plot3 <- make.thetaS.KS.Figure(cumsum.dS.core3,"thetaS")
-ggsave("../results/figures/dS_thetaS_plot3.pdf",dS.thetaS.plot3)
+cumsum.dN.core1 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"thetaS")
+cumsum.dN.core2 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"length")
+cumsum.dN.core3 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"oriC")
 
-dN.thetaS.plot1 <- make.thetaS.KS.Figure(cumsum.dN.core1,"length")
-ggsave("../results/figures/dN_thetaS_plot1.pdf",dN.thetaS.plot1)
-dN.thetaS.plot2 <- make.thetaS.KS.Figure(cumsum.dN.core2,"oriC")
-ggsave("../results/figures/dN_thetaS_plot2.pdf",dN.thetaS.plot2)
-dN.thetaS.plot3 <- make.thetaS.KS.Figure(cumsum.dN.core3,"thetaS")
-ggsave("../results/figures/dN_thetaS_plot3.pdf",dN.thetaS.plot3)
+dS.thetaS.plot1 <- make.thetaS.KS.Figure(cumsum.dS.core1,"thetaS")
+dS.thetaS.plot2 <- make.thetaS.KS.Figure(cumsum.dS.core2,"length")
+dS.thetaS.plot3 <- make.thetaS.KS.Figure(cumsum.dS.core3,"oriC")
+
+dN.thetaS.plot1 <- make.thetaS.KS.Figure(cumsum.dN.core1,"thetaS")
+dN.thetaS.plot2 <- make.thetaS.KS.Figure(cumsum.dN.core2,"length")
+dN.thetaS.plot3 <- make.thetaS.KS.Figure(cumsum.dN.core3,"oriC")
+
+FigS5 <- plot_grid(dS.thetaS.plot1, dS.thetaS.plot2, dS.thetaS.plot3,
+                   dN.thetaS.plot1, dN.thetaS.plot2, dN.thetaS.plot3,
+                   labels=c('A','B','C','D','E','F'), nrow=2)
+ggsave("../results/mutation-bias/figures/FigS5.pdf", height=7, width=10)
+
 
 ##########################
+
+
 
 ## not significant: but marginal result: p-value = 0.095.
 cumsum.all.over.metagenome.by.oriC <- ks.analysis(gene.only.mutation.data,REL606.genes,TRUE)
