@@ -1,39 +1,23 @@
-## metagenomics-analysis.R by Rohan Maddamsetti and Nkrumah Grant 
+## mutation-rate-analysis.R by Rohan Maddamsetti
 
 ## MAKE SURE THAT ZEROS IN MUTATION COUNTS ARE NOT THROWN OUT BY DPLYR!
-
-## IMPORTANT TODO:
-## The problem with setting up a probabilistic model for mutation rate variation is
-## that causal factors evolve during the evolution experiment! Modeling these
-## changes adds a lot of complexity. For this reason, rather than directly
-## modeling mutation occurrence over the genome as a periodic function of
-## distance from the replication origin, as as a function of leading/lagging strand,
-## we used importance sampling to sample randomized modules of genes based on the empirical
-## density of mutations per gene. We could also use this technique to sample genes
-## using a sampling function that takes gene length, leading/lagging strand and a periodic
-## function of distance from the oriC replication origin.
-
-## If I need an independent dataset to set phase parameters-- then use E. coli MA
-## experiment data to calibrate. Use data in Foster et al. (2013) in G3,
-## or use any more recent datasets from that group or others.
-
-##to calculate an intensity value
-##over the genome (regression approach to disentangle, citing Bailey & Bataillon paper.
 
 ## NOTE: Perhaps should cite my STLE paper-- recombination events tend to happen flanking
 ## the replication origin. Is that result connected to the wave-like mutation bias
 ## pattern seen here and in Patricia Foster's and Vaughn Cooper's evolution experiments?
+
 ## Also check out Hi-C papers and others reporting 3D chromosome in E. coli.
 
 ## load library functions.
 source("metagenomics-library.R")
+library(RColorBrewer)
 
 ##########################################################################
 ## MUTATION RATE AND BIASES DATA ANALYSIS
 ##########################################################################
 
 ## import thetaS estimates.
-thetaS.estimates <- read.csv("../data/Martincorena_Maddamsetti_thetaS_estimates.csv")
+thetaS.estimates <- read.csv("../data/Maddamsetti2015_thetaS_estimates.csv")
 
 ## get the lengths of all genes in REL606.
 ## This excludes genes in repetitive regions of the genome.
@@ -66,45 +50,213 @@ mutation.data <- read.csv(
     mutate(Population=factor(Population,levels=c(nonmutator.pops,hypermutator.pops))) %>%
     ## This is for plotting mutation biases around oriC.
     mutate(oriC.coordinate=rotate.REL606.chr(Position,"oriC")) %>%
-    mutate(terB.coordinate=rotate.REL606.chr(Position,"terB"))
+    mutate(terB.coordinate=rotate.REL606.chr(Position,"terB")) %>%
+    mutate(Mbp.coordinate=oriC.coordinate/1000000)
 
-## IMPORTANT: DEBUG THIS MERGE-- SHOULD MERGE ON LOCUS_TAG RATHER THAN GENE?
-##test <- inner_join(mutation.data,REL606.genes)
 gene.mutation.data <- inner_join(mutation.data,REL606.genes)
-
-#############!!!!!!!!!!!!!!!!!!!!!!!!!
-### IMPORTANT: THIS IS AN OBVIOUS SOURCE OF BUGS--
-## double-check whether intergenic mutations
-## are included or not-- as appropriate-- in all references to c.mutations
-## here and in the aerobic/anaerobic code.
-
-## for now, ONLY use mutation.data when examining mutation bias over the genome.
-## when examining evolution in different gene sets, use gene.mutation.data.
-
-
 ## It turns out that some gene names map to multiple genes!!!
+## There are only 4 such cases (8 genes). So just omit these from the analysis.
 duplicate.genes <- gene.mutation.data %>%
     filter(Gene!='intergenic') %>%
     group_by(Gene) %>%
     summarize(checkme=length(unique(gene_length))) %>%
     filter(checkme>1)
-
 ## filter those duplicates.
 gene.mutation.data <- gene.mutation.data %>%
     filter(!(Gene %in% duplicate.genes$Gene))
 
-##########################################################################
-## parallelism in dS at the same position in the same population
-## we get exactly one gene: ydfQ--
-## BUT THIS IS A BUG TO BE FIXED, CAUSED BY TWO LOCI WITH THE SAME BLATTNER NUMBER.
-bug.to.fix <- gene.dS.mutation.data %>% group_by(Population,Gene,Position) %>% summarize(count=n()) %>% arrange(desc(count)) %>% filter(count>1)
-buggy.ydfQ.mutations <- gene.dS.mutation.data %>% filter(Gene=='ydfQ')
+############################
+### VERY IMPORTANT NOTE:
+## mutation.data includes all mutations in the LTEE metagenomics data.
+## for this reason, ALWAYS use mutation.data when examining mutation bias over the genome.
+
+## gene.mutation.data only has mutations that have gene-level annotations.
+## when examining genes on different strands, use gene.mutation.data.
 
 ##########################################################################################
-## MUTATION BIAS ANALYSIS.
-## for indels and structural variation, we cannot distinguish between
-## mutation hotspots vs. selection.
+## EVIDENCE OF WAVE-PATTERN MUTATION BIAS.
 
+## LOOKS LIKES GENOME-WIDE MUTATION BIAS IN ARA+3, but not others!
+## look at mutation density over the chromosome.
+## In Ara+3, we see a wave pattern, as reported by Pat Foster's
+## group and by Vaughn Cooper's group!
+## By looking at mutations in topA, fis, and dusB, Ara+3 has only
+## one synonymous mutation in those three genes despite being an
+## early mutator. Therefore, perhaps the uniformity
+## of dS over LTEE genomes reflect unwinding/loosening of chromosomal
+## proteins packing up the DNA.
+
+make.summed.plot <- function(df) {
+    ggplot(df, aes(x=Mbp.coordinate, fill=Annotation)) +
+        ## use RColorBrewer scale
+        scale_fill_brewer(palette = "RdYlBu", direction=-1,drop=FALSE) +
+        geom_histogram(bins=100) + 
+        theme_classic() +
+        ylab("Count") +
+        xlab("Genomic position (Mb)") +
+        theme(legend.position="bottom")
+}
+
+make.facet.mut.plot <- function(df) {
+    make.summed.plot(df) + facet_wrap(.~Population,scales="free") 
+}
+
+point.mut.data <- mutation.data %>%
+    filter(Annotation %in% c('missense', 'synonymous', 'nonsense', 'noncoding'))
+indel.mut.data <- mutation.data %>% filter(Annotation %in% c('indel'))
+sv.mut.data <- mutation.data %>% filter(Annotation %in% c('sv'))
+
+## Figure 1: point mutations over the genome.
+point.mut.plot <- make.facet.mut.plot(point.mut.data)
+ggsave("../results/mutation-bias/figures/Fig1.pdf",point.mut.plot,width=7,height=7)
+
+
+## S1 Figure: indels over the genome.
+indel.mut.plot <- make.facet.mut.plot(indel.mut.data) +
+    scale_fill_manual(values="purple") + guides(fill=FALSE)
+ggsave("../results/mutation-bias/figures/S1Fig.pdf",indel.mut.plot,width=6,height=4)
+
+## S2 Figure: sv over the genome
+sv.mut.plot <- make.facet.mut.plot(sv.mut.data) +
+    scale_fill_manual(values="green") + guides(fill=FALSE)
+ggsave("../results/mutation-bias/figures/S2Fig.pdf",sv.mut.plot,width=6,height=4)
+
+## S3 Figure:
+## all mutations from all pops summed over the genome.
+## turn off legend so that x-axis is uniform across panels.
+summed.point.mut.plot <- make.summed.plot(point.mut.data) + guides(fill=FALSE)
+summed.indel.mut.plot <- make.summed.plot(indel.mut.data) +
+    guides(fill=FALSE) +
+    scale_fill_manual(values="purple")
+summed.sv.mut.plot <- make.summed.plot(sv.mut.data) +
+    guides(fill=FALSE) +
+    scale_fill_manual(values="green")
+summed.plot <- plot_grid(summed.point.mut.plot,
+                         summed.indel.mut.plot,
+                         summed.sv.mut.plot,
+                         labels=c('A','B','C'),
+                         ncol=1)
+ggsave("../results/mutation-bias/figures/S3Fig.pdf",summed.plot,width=6,height=8)
+
+
+## plot gene length against location in oriC coordinates.
+gene.length.location.plot <- ggplot(REL606.genes, aes(x=oriC_start,y=gene_length)) +
+    geom_point(size=0.5) + geom_smooth() + theme_classic()
+gene.length.location.plot
+
+##########################################################################################
+### EPISTASIS AND HISTORICAL CONTINGENCY IN DNA TOPOLOGY GENES topA, fis, dusB.
+
+## Calculate approximate probability of
+## no mutations in fis, topA, dusB (yhdG) in Ara+3.
+
+araplus3.mut.data <- filter(mutation.data,Population=='Ara+3')
+topA.info <- filter(REL606.genes, Gene=='topA')
+fis.info <- filter(REL606.genes, Gene=='fis')
+dusB.info <- filter(REL606.genes, Gene=='yhdG')
+
+## 1) assuming a uniform mutation rate.
+araplus3.n.muts <- nrow(araplus3.mut.data)
+fis.topA.dusB.length <- sum(c(topA.info$gene_length,
+                              fis.info$gene_length,
+                              dusB.info$gene_length))
+uniform.probability.that.not.hit(fis.topA.dusB.length,araplus3.n.muts)
+
+## 2) estimating local mutation rates by splitting the genome into z bins.
+
+bin.mutations <- function(mut.data, z) {
+    ## z is the number of bins we are using.
+    ## count the number of mutations in each bin, M(z_i).
+    ## filter araplus3.mut.data using each adjacent pair of fenceposts,
+    ## and count the number of rows to get mutations per bin.
+    mutations.by.bin.vec <- rep(0,z)
+
+    GENOME.LENGTH <- 4629812
+    c <- GENOME.LENGTH/z ## length of each bin
+    
+    ## define fenceposts for each bin.
+    ## this has z+1 entries.
+    fenceposts <- seq(0,z) * c
+    
+    for (i in 1:z) {
+        left <- fenceposts[i]
+        right <- fenceposts[i+1]
+        bin.data <- araplus3.mut.data %>%
+            filter(Position >= left & Position < right)
+        bin.mut.count <- nrow(bin.data)
+        mutations.by.bin.vec[i] <- bin.mut.count
+    }
+    
+    ## assert that all mutations have been assigned to a bin.
+    stopifnot(sum(mutations.by.bin.vec) == nrow(araplus3.mut.data))
+    
+    return(mutations.by.bin.vec)
+}
+
+find.bin <- function(locus.row, z) {
+    ## take a 1-row dataframe correponding to a REL606 gene,
+    ## and return the bin that it belongs to, given z bins.
+
+    GENOME.LENGTH <- 4629812
+    c <- GENOME.LENGTH/z ## length of each bin
+    
+    ## define right-hand fencepost for each bin. 
+    rightfencepost <- seq(1,z) * c
+    
+    for (i in 1:z) {
+        if ((locus.row$start < rightfencepost[i]) &
+            (locus.row$end < rightfencepost[i]))
+            return(i)
+    }
+    stopifnot(TRUE) ## we should always return a value in the for loop.
+    ## There is an unhandled corner case where the gene could straddle a boundary.
+    ## So we need to make sure that this doesn't happen in practice. 
+    return(-1)
+}
+
+local.probability.that.DNAtopology.not.hit <- function(mutdata, z) {
+    ## mutdata is ara+3 mutation data.
+    ## z is the number of bins over the genome.
+    ## THIS CODE ONLY WORKS FOR topA, fis, dusB.
+
+    GENOME.LENGTH <- 4629812
+    c <- GENOME.LENGTH/z ## length of each bin
+    
+    mutations.per.bin <- bin.mutations(araplus3.mut.data,z)
+    dusB.bin <- find.bin(dusB.info, z)
+    fis.bin <- find.bin(fis.info, z)
+    topA.bin <- find.bin(topA.info, z)
+    
+    target.lengths <- c(dusB.info$gene_length,
+                        fis.info$gene_length,
+                        topA.info$gene_length)
+    
+    target.bin.mut.counts <- c(mutations.per.bin[dusB.bin],
+                               mutations.per.bin[fis.bin],
+                               mutations.per.bin[topA.bin])
+    
+    target.muts.per.base <- target.bin.mut.counts/c
+
+    ## this is a dot product.
+    ## multiply the muts.per.base by gene length, and sum.
+    expected.num.muts.for.target <- sum(target.muts.per.base*target.lengths)
+
+    total.muts <- nrow(araplus3.mut.data)
+    expected.p.hit <- expected.num.muts.for.target/total.muts
+
+    p.not.hit <- (1 - expected.p.hit)^total.muts
+    return(p.not.hit)
+}
+
+araplus3.local.probability.DNAtopology.not.hit <- partial(
+    local.probability.that.DNAtopology.not.hit,
+    araplus3.mut.data)
+
+## 46 bins gives ~100 kB bins.
+bins.to.try <- c(1,23,46,92,115,230,460,920)
+map(bins.to.try,araplus3.local.probability.DNAtopology.not.hit)
+
+##########################################################################################
 ## EVIDENCE OF STRAND-SPECIFIC BIAS.
 
 ## There is evidence of a strand-specific mutation bias on genes
@@ -117,22 +269,16 @@ buggy.ydfQ.mutations <- gene.dS.mutation.data %>% filter(Gene=='ydfQ')
 ## the ratio of total mutations per strand on each side of the origin should give
 ## an estimate of the strength of this bias.
 
-summed.strand.mut.plot <- ggplot(gene.mutation.data,aes(x=oriC.coordinate,fill=Annotation)) +
-    geom_histogram(bins=100) +
-    theme_classic() +
-    facet_grid(strand~.,scales="fixed") 
-ggsave("../results/figures/summed.strand-mutation-bias-histogram.pdf",summed.strand.mut.plot,width=11,height=8)
-
-araplus3.gene.mutation.data <- gene.mutation.data %>% filter(Population=='Ara+3')
-araplus3.strand.mut.plot <- ggplot(araplus3.gene.mutation.data,aes(x=oriC.coordinate,fill=Annotation)) +
-    geom_histogram(bins=100) +
-    theme_classic() +
-    facet_grid(strand~.,scales="fixed") 
-ggsave("../results/figures/ara+3.strand-mutation-bias-histogram.pdf",araplus3.strand.mut.plot,width=11,height=8)
+FigS4 <- make.summed.plot(gene.mutation.data) +
+    facet_grid(strand~.,scales="fixed") +
+    scale_fill_brewer(palette = "RdPu",direction=-1,drop=FALSE)
+ggsave("../results/mutation-bias/figures/FigS4.pdf", FigS4,width=6,height=4)
 
 ## Variable names assume that the lagging strand has more mutations--
 ## I can't tell based on arbitrary orientation labeling conventions for
-## oriC.coordinate and strand!
+## oriC.coordinate and strand! This doesn't matter in terms of reporting the results,
+## however, as we measure asymmetry rather than the difference in number of
+## mutations.
 
 leadingstrand.gene.mut.data <- gene.mutation.data %>%
     filter(
@@ -150,7 +296,6 @@ dS.leadingstrand.gene.mut.data <- leadingstrand.gene.mut.data %>%
                                          filter(Annotation=='synonymous')
 dS.laggingstrand.gene.mut.data <- laggingstrand.gene.mut.data %>%
                                          filter(Annotation=='synonymous')
-
 
 araplus3.leadingstrand.gene.mut.data <- leadingstrand.gene.mut.data %>%
     filter(Population=="Ara+3")
@@ -174,10 +319,8 @@ laggingstrand.REL606.genes <- REL606.genes %>%
     ((oriC_start > 0) & (strand == -1)) | ((oriC_start < 0) & (strand == 1))
     )
 
-
 leading.gene.target <- sum(leadingstrand.REL606.genes$gene_length)
 lagging.gene.target <- sum(laggingstrand.REL606.genes$gene_length)
-
 
 nrow(leadingstrand.gene.mut.data)/nrow(laggingstrand.gene.mut.data)
 
@@ -194,91 +337,50 @@ strand.mut.vec <- c(nrow(laggingstrand.gene.mut.data),
 
 binom.test(x=strand.mut.vec,p=(lagging.gene.target/leading.gene.target))
 
+##########################################################################################
+## MUTATION RATE ANALYSIS
 
-## EVIDENCE OF WAVE-PATTERN MUTATION BIAS.
+##  plot of the cumulative number of different classes of mutations
+## across the whole genome, in order to show evolution of mutation rates in LTEE.
 
-## LOOKS LIKES GENOME-WIDE MUTATION BIAS IN ARA+3, but not others!
-## look at mutation density over the chromosome.
-## In Ara+3, we see a wave pattern, as reported by Pat Foster's
-## group and by Vaughn Cooper's group!
-## By looking at mutations in topA, fis, and dusB, Ara+3 has only
-## one synonymous mutation in those three genes despite being an
-## early mutator. Therefore, perhaps the uniformity
-## of dS over LTEE genomes reflect unwinding/loosening of chromosomal
-## proteins packing up the DNA.
+## THESE RESULTS ARE REALLY COOL! WE SEE DIFFERENT KINDS OF ANTI-MUTATOR ALLELES!
 
-mut.plot <- ggplot(mutation.data,aes(x=oriC.coordinate,fill=Annotation)) +
-    geom_histogram(bins=100) + 
-    theme_classic() +
-    facet_wrap(.~Population,scales="free") 
-ggsave("../results/figures/mutation-bias-histogram.pdf",mut.plot,width=11,height=8)
+## set normalization constant to 1, since we're looking over the whole genome.
+point.mutation.data <- mutation.data %>%
+    filter(Annotation %in% c("missense", "synonymous", "noncoding", "nonsense"))
+sv.mutation.data <- mutation.data %>%
+    filter(Annotation=='sv')
+indel.mutation.data <- mutation.data %>%
+    filter(Annotation=='indel')
 
-summed.mut.plot <- ggplot(mutation.data,aes(x=oriC.coordinate,fill=Annotation)) +
-    geom_histogram(bins=100) + 
-    theme_classic()
-ggsave("../results/figures/summed-mutation-bias-histogram.pdf",mut.plot,width=11,height=8)
+## IMPORTANT: set plot.to.end parameter to FALSE.
+c.point.muts <- calc.cumulative.muts(point.mutation.data,
+                                     normalization.constant=1,
+                                     plot.to.end=FALSE)
 
-## plot point mutations over the genome: dN, dS, nonsense, noncoding
-point.mut.data <- mutation.data %>%
-     filter(Annotation %in% c('missense', 'synonymous', 'nonsense', 'noncoding'))
+c.sv <- calc.cumulative.muts(sv.mutation.data,
+                             normalization.constant=1,
+                             plot.to.end=FALSE)
 
-point.mut.plot <- ggplot(point.mut.data,aes(x=oriC.coordinate,fill=Annotation)) +
-    geom_histogram(bins=100) + 
-    theme_classic() +
-    facet_wrap(.~Population,scales="free") 
-ggsave("../results/figures/point-mut-bias-histogram.pdf",point.mut.plot,width=11,height=8)
+c.indel <- calc.cumulative.muts(indel.mutation.data,                                       
+                                normalization.constant=1,
+                                plot.to.end=FALSE)
 
+point.mut.plot <- plot.cumulative.muts(c.point.muts) +
+    ylab("Cumulative number of mutations") +
+    facet_wrap(.~Population,scales='fixed',nrow=4)
 
-## plot non-point mutations over the genome:
-nonpoint.mut.data <- mutation.data %>%
-     filter(Annotation %in% c('indel', 'sv'))
+indel.plot <- plot.cumulative.muts(c.indel,my.color="purple") +
+    ylab("Cumulative number of mutations") +
+    facet_wrap(.~Population,scales='fixed',nrow=4)
 
-nonpoint.mut.plot <- ggplot(nonpoint.mut.data,aes(x=oriC.coordinate,fill=Annotation)) +
-    geom_histogram(bins=100) + 
-    theme_classic() +
-    facet_wrap(.~Population,scales="free") 
-ggsave("../results/figures/nonpoint-mut-bias-histogram.pdf",nonpoint.mut.plot,width=11,height=8)
+sv.plot <- plot.cumulative.muts(c.sv,my.color="green") +
+    ylab("Cumulative number of mutations") +
+    facet_wrap(.~Population,scales='fixed',nrow=4)
 
-summed.nonpoint.mut.plot <- ggplot(nonpoint.mut.data,aes(x=oriC.coordinate,fill=Annotation)) +
-    geom_histogram(bins=100) + 
-    theme_classic()
-ggsave("../results/figures/summed-nonpoint-mut-bias-histogram.pdf",summed.nonpoint.mut.plot,width=11,height=8)
-
-## plot the distribution of indels and SV over the genome, separately for the
-## different LTEE populations, and altogether.
-
-indel.mut.data <- mutation.data %>%
-     filter(Annotation %in% c('indel'))
-
-indel.mut.plot <- ggplot(indel.mut.data,aes(x=oriC.coordinate,fill=Annotation)) +
-    geom_histogram(bins=100) + 
-    theme_classic() +
-    facet_wrap(.~Population,scales="free") 
-ggsave("../results/figures/indel-mut-bias-histogram.pdf",indel.mut.plot,width=11,height=8)
-
-summed.indel.mut.plot <- ggplot(indel.mut.data,aes(x=oriC.coordinate,fill=Annotation)) +
-    geom_histogram(bins=100) + 
-    theme_classic()
-ggsave("../results/figures/summed-indel-mut-bias-histogram.pdf",summed.indel.mut.plot,width=11,height=8)
-
-sv.mut.data <- mutation.data %>%
-    filter(Annotation %in% c('sv'))
-
-sv.mut.plot <- ggplot(sv.mut.data,aes(x=oriC.coordinate,fill=Annotation)) +
-    geom_histogram(bins=100) + 
-    theme_classic() +
-    facet_wrap(.~Population,scales="free") 
-ggsave("../results/figures/sv-mut-bias-histogram.pdf",sv.mut.plot,width=11,height=8)
-
-summed.sv.mut.plot <- ggplot(sv.mut.data,aes(x=oriC.coordinate,fill=Annotation)) +
-    geom_histogram(bins=100) + 
-    theme_classic()
-ggsave("../results/figures/summed-sv-mut-bias-histogram.pdf",summed.sv.mut.plot,width=11,height=8)
-
-## plot gene length against location in oriC coordinates.
-gene.length.location.plot <- ggplot(REL606.genes, aes(x=oriC_start,y=gene_length)) +
-    geom_point(size=0.5) + geom_smooth() + theme_classic()
-gene.length.location.plot
+## using golden ratio phi for height/width ratio
+Fig3 <- plot_grid(point.mut.plot,indel.plot, sv.plot,labels=c('A','B','C'),nrow=1,rel_heights=2/(1+sqrt(5)))
+ggsave(filename="../results/mutation-bias/figures/Fig3.pdf",Fig3,width=7)
 
 ##########################################################################################
 ## SUPPLEMENTARY INFORMATION
@@ -489,8 +591,6 @@ make.thetaS.KS.Figure <- function(the.results.to.plot, rank_by="length") {
 }
 
 
-
-
 ## filter for point mutations (missense, synonymous, nonsense).
 gene.point.mutation.data <- gene.mutation.data %>%
     filter(Gene!='intergenic') %>%
@@ -529,9 +629,6 @@ gene.indel.mutation.data <- gene.mutation.data %>%
 gene.nodNdS.mutation.data <- gene.mutation.data %>%
     filter(Gene!='intergenic') %>%
     filter(Annotation %in% c("sv", "indel", "noncoding"))
-
-
-
 
 
 ## examine all mutations over genes in the genome.

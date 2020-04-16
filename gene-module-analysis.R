@@ -41,7 +41,7 @@ source("metagenomics-library.R")
 REL606.genes <- read.csv('../results/REL606_IDs.csv',as.is=TRUE) %>%
     mutate(gene_length=strtoi(gene_length)) %>%
     mutate(oriC_start=rotate.REL606.chr(start,"oriC")) %>%
-    mutate(oriC_end=rotate.REL606.chr(end,"oriC")) %>%
+    mutate(oriC_end=rotate.REL606.chr(end,"oriC"))
 
 ## Order nonmutator pops, then hypermutator pops by converting Population to
 ## factor type and setting the levels.
@@ -80,16 +80,14 @@ duplicate.genes <- gene.mutation.data %>%
     summarize(checkme=length(unique(gene_length))) %>%
     filter(checkme>1)
 
-## filter those duplicates.
+## There are four such cases: alr, bioD, ddl, maf (2 each)
+## filter them from the analysis.
 gene.mutation.data <- gene.mutation.data %>%
     filter(!(Gene %in% duplicate.genes$Gene))
 
 ##########################################################################
-## parallelism in dS at the same position in the same population
-## we get exactly one gene: ydfQ--
 ## BUT THIS IS A BUG TO BE FIXED, CAUSED BY TWO LOCI WITH THE SAME BLATTNER NUMBER.
-bug.to.fix <- gene.dS.mutation.data %>% group_by(Population,Gene,Position) %>% summarize(count=n()) %>% arrange(desc(count)) %>% filter(count>1)
-buggy.ydfQ.mutations <- gene.dS.mutation.data %>% filter(Gene=='ydfQ')
+bug.to.fix <- gene.mutation.data %>% group_by(Population,Gene,Position) %>% summarize(count=n()) %>% arrange(desc(count)) %>% filter(count>1)
 
 #################################################################################
 ## Control analysis 1:
@@ -245,6 +243,8 @@ no.dS.genes <- only.dS.allowed.genes %>% filter(Gene %in% no.mutation.genes$Gene
 ## let's examine essentiality from the KEIO collection.
 KEIO.data <- read.csv("../data/KEIO_Essentiality.csv", header=TRUE,as.is=TRUE) %>%
     dplyr::select(-JW_id)
+
+## TODO: CHECK FOR BUGS IN MERGE. CHECK ydfQ.
 
 KEIO.gene.mutation.densities <- left_join(gene.mutation.densities,KEIO.data)
 

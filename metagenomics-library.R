@@ -10,7 +10,7 @@ library(cowplot)
 ## calculate the probability that a locus (or set of loci) is not hit by mutations,
 ## assuming uniform mutation rate.
 ## l is locus length, and n is the number of mutations in the dataset.
-probability.that.not.hit <- function(l,n) {
+uniform.probability.that.not.hit <- function(l,n) {
     GENOME.LENGTH <- 4629812
     p <- (1 - (l/GENOME.LENGTH))^n
     return(p)
@@ -42,11 +42,12 @@ rotate.REL606.chr <- function(my.position, c) {
     }
 }
 
-## look at accumulation of stars over time.
+## look at accumulation of stars over time
 ## in other words, look at the rates at which the mutations occur over time.
 ## To normalize, we need to supply the number of sites at risk
 ## (such as sum of gene length).
-calc.cumulative.muts <- function(d, normalization.constant=NA) {
+## If plot.to.end is TRUE, then add one final row.
+calc.cumulative.muts <- function(d, normalization.constant=NA, plot.to.end=TRUE) {
 
     cumsum.per.pop.helper.func <- function(pop) {
         finalgen <- 6.3 ## this is outside of the data collection
@@ -77,8 +78,11 @@ calc.cumulative.muts <- function(d, normalization.constant=NA) {
                                    Generation=finalgen,
                                    count=max(summary.df$count),
                                    cs=max(summary.df$cs))
-            
-            almost.done.df <- bind_rows(summary.df, final.row.df)
+            if (plot.to.end) {
+                almost.done.df <- bind_rows(summary.df, final.row.df)
+            } else {
+                almost.done.df <- summary.df
+            }
         }
         ## add an row for Generation == 0 (for nicer plots).
         init.row.df <- tibble(
