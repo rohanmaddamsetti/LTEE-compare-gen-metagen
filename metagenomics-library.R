@@ -111,31 +111,157 @@ calc.cumulative.muts <- function(d, normalization.constant=NA, plot.to.end=TRUE)
     return(c.dat)
 }
 
+###############################
+## the next two functions are for estimating local mutation rates by
+## splitting the genome into z bins.
+
+## find.bin is useful for sampling random genes while preserving bin identity,
+## that is, only sampling genes near the genes of interest.
+
+bin.mutations <- function(mut.data, z) {
+    ## z is the number of bins we are using.
+    ## count the number of mutations in each bin, M(z_i).
+    ## filter araplus3.mut.data using each adjacent pair of fenceposts,
+    ## and count the number of rows to get mutations per bin.
+    mutations.by.bin.vec <- rep(0,z)
+
+    GENOME.LENGTH <- 4629812
+    c <- GENOME.LENGTH/z ## length of each bin
+    
+    ## define fenceposts for each bin.
+    ## this has z+1 entries.
+    fenceposts <- seq(0,z) * c
+    
+    for (i in 1:z) {
+        left <- fenceposts[i]
+        right <- fenceposts[i+1]
+        bin.data <- araplus3.mut.data %>%
+            filter(Position >= left & Position < right)
+        bin.mut.count <- nrow(bin.data)
+        mutations.by.bin.vec[i] <- bin.mut.count
+    }
+    
+    ## assert that all mutations have been assigned to a bin.
+    stopifnot(sum(mutations.by.bin.vec) == nrow(araplus3.mut.data))
+    
+    return(mutations.by.bin.vec)
+}
+
+find.bin <- function(locus.row, z) {
+    ## take a 1-row dataframe correponding to a REL606 gene,
+    ## and return the bin that it belongs to, given z bins.
+
+    GENOME.LENGTH <- 4629812
+    c <- GENOME.LENGTH/z ## length of each bin
+    
+    ## define right-hand fencepost for each bin. 
+    rightfencepost <- seq(1,z) * c
+    
+    for (i in 1:z) {
+        if ((locus.row$start < rightfencepost[i]) &
+            (locus.row$end < rightfencepost[i]))
+            return(i)
+    }
+    stopifnot(TRUE) ## we should always return a value in the for loop.
+    ## There is an unhandled corner case where the gene could straddle a boundary.
+    ## So we need to make sure that this doesn't happen in practice. 
+    return(-1)
+}
+
+
+###############################
+
 ## calculate the tail probabilities of the true cumulative mutation trajectory
 ## of a given vector of genes (a 'module'), based on resampling
-## random sets of genes. Returns both upper tail of null distribution,
+## random sets of genes. Returns the upper tail of null distribution,
 ## or P(random trajectory >= the actual trajectory).
 ## Output: a dataframe with three columns: Population, count, p.val
-calculate.trajectory.tail.probs <- function(data, gene.vec, N=10000, normalization.constant=NA) {
+calculate.trajectory.tail.probs <- function(data, gene.vec, N=10000, normalization.constant=NA, sample.genes.by.location=FALSE) {
 
-    ## resamples have the same cardinality as the gene.vec.
+    ## each sample has the same cardinality as the gene.vec.
     subset.size <- length(gene.vec)
-    
-    ## This function takes the index for the current draw, and samples the data,
-    ## generating a random gene set for which to calculate cumulative mutations.
-    generate.cumulative.mut.subset <- function(idx) {
-        rando.genes <- sample(unique(data$Gene),subset.size)
-        mut.subset <- filter(data,Gene %in% rando.genes)
-        c.mut.subset <- calc.cumulative.muts(mut.subset, normalization.constant) %>%
-            mutate(bootstrap_replicate=idx)
-        return(c.mut.subset)
+
+    if (sample.genes.by.location) {
+        ## then sample genes near the genes in the module of interest,
+        ## i.e. gene.vec.
+
+        ## for efficiency, pre-calculate gene bin assignments.
+        ## use 46 bins so that each bin is ~10000 bp. 
+        find.bin.46 <- partial(find.bin,z=46)
+        gene.info <- data %>%
+            select(Gene, locus_tag, blattner, gene_length,
+                   product, start, end, strand) %>%
+            distinct() ## remove duplicate rows,
+        ## as mutations in the same gene have the same gene info
+        
+        ## output a bin from each row in gene.info.
+        bin.list <- gene.info %>%
+            split(.$Gene) %>%
+            lapply(find.bin.46)
+        ## map each gene in the module of interest to their bin.
+        bin.vec <- sapply(gene.vec,function(gene) bin.list[[gene]])
+        ## associate each gene in the genome to its bin, and add as a column.
+        bin.df <- data.frame(Gene=names(bin.list),bin=as.numeric(bin.list))
+        
+        
+        ## map bins to the genes in those bins (excepting those in gene.vec).
+        nested.gene.info.with.bins <- left_join(gene.info, bin.df) %>%
+            ## when sampling, exclude the genes in the module of interest.
+            filter(!(Gene %in% gene.vec)) %>%
+            group_by(bin) %>%
+            nest()
+
+        ## add the genes to be sampled as a list column corresponding
+        ## to the genes in gene.vec,
+        ## such that each gene in the module maps to the other genes in its bin.
+        ## then, one of those genes will be sampled to make the random module,
+        ## while preserving bin location.
+        module.info.with.bins <- left_join(gene.info, bin.df) %>%
+            filter(Gene %in% gene.vec) %>%
+            left_join(nested.gene.info.with.bins)
+
+        sample.one <- partial(sample_n,size=1)
+        
+        sample.genes.by.genomebin <- function() {
+            ## map each gene in gene.vec to a random gene in its bin
+            ## in the genome.
+            module.to.random.module <- module.info.with.bins %>%
+                mutate(sampled.info = map(data, sample.one)) %>%
+                transmute(Gene, sampled.gene = map_chr(sampled.info, function(x) x$Gene))
+            return(module.to.random.module$sampled.gene)
+        }
+
+        generate.cumulative.mut.subset.by.loc <- function(idx) {
+            rando.genes <- sample.genes.by.genomebin()
+            mut.subset <- filter(data,Gene %in% rando.genes)
+            c.mut.subset <- calc.cumulative.muts(mut.subset, normalization.constant) %>%
+                mutate(bootstrap_replicate=idx)
+            return(c.mut.subset)
+        }
+
+        ## make a dataframe of bootstrapped trajectories.
+        ## look at accumulation of stars over time for random subsets of genes.
+        bootstrapped.trajectories <- map_dfr(.x=seq_len(N),
+                                             .f=generate.cumulative.mut.subset.by.loc)
+    } else {
+        ## This function takes the index for the current draw, and samples the data,
+        ## generating a random gene set for which to calculate cumulative mutations.
+        ## IMPORTANT: this function depends on variables defined in
+        ## calculate.trajectory.tail.probs.
+        generate.cumulative.mut.subset <- function(idx) {
+            rando.genes <- sample(unique(data$Gene),subset.size)
+            mut.subset <- filter(data,Gene %in% rando.genes)
+            c.mut.subset <- calc.cumulative.muts(mut.subset, normalization.constant) %>%
+                mutate(bootstrap_replicate=idx)
+            return(c.mut.subset)
+        }
+        
+        ## make a dataframe of bootstrapped trajectories.
+        ## look at accumulation of stars over time for random subsets of genes.
+        bootstrapped.trajectories <- map_dfr(.x=seq_len(N),
+                                             .f=generate.cumulative.mut.subset)
     }
-
-    ## make a dataframe of bootstrapped trajectories.
-    ## look at accumulation of stars over time for random subsets of genes.
-
-    bootstrapped.trajectories <- map_dfr(.x=seq_len(N),.f=generate.cumulative.mut.subset)
-
+    
     gene.vec.data <- data %>% filter(Gene %in% gene.vec)
     data.trajectory <- calc.cumulative.muts(gene.vec.data,normalization.constant)
     data.trajectory.summary <- data.trajectory %>%
@@ -147,8 +273,8 @@ calculate.trajectory.tail.probs <- function(data, gene.vec, N=10000, normalizati
         ## important: don't drop empty groups.
         group_by(bootstrap_replicate, Population,.drop=FALSE) %>%
         summarize(final.norm.cs=max(normalized.cs)) %>%
-        ungroup() 
-
+        ungroup()
+    
     trajectory.filter.helper <- function(pop.trajectories) {
         pop <- unique(pop.trajectories$Population)
         data.traj <- filter(data.trajectory.summary,Population == pop)
@@ -161,10 +287,10 @@ calculate.trajectory.tail.probs <- function(data, gene.vec, N=10000, normalizati
     uppertail.probs <- trajectory.summary %>%
         split(.$Population) %>%
         map_dfr(.f=trajectory.filter.helper) %>%
-        group_by(Population) %>%
+        group_by(Population,.drop=FALSE) %>%
         summarize(count=n()) %>%
         mutate(p.val=count/N)
-        
+    
     return(uppertail.probs)
 }
 
@@ -192,11 +318,12 @@ calc.slope.of.cumulative.muts <- function(c.muts) {
 ## Throughout, plots use the minimum subsample size to subsample the null distribution,
 ## to increase the variance in order to make a conservative comparison.
 plot.base.layer <- function(data, subset.size=50, N=1000, alpha = 0.05, normalization.constant=NA, my.color="gray") {
-
+    
     ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations.
+    ## IMPORTANT: this function depends on variables defined in plot.base.layer.
     generate.cumulative.mut.subset <- function(idx) {
-        rando.genes <- sample(unique(data$Gene),subset.size)
+        rando.genes <- base::sample(unique(data$Gene),subset.size)
         mut.subset <- filter(data,Gene %in% rando.genes)
         c.mut.subset <- calc.cumulative.muts(mut.subset, normalization.constant) %>%
             mutate(bootstrap_replicate=idx)
@@ -258,7 +385,7 @@ add.base.layer <- function(p, data, my.color, subset.size=50, N=1000, alpha = 0.
         ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations.
     generate.cumulative.mut.subset <- function(idx) {
-        rando.genes <- sample(unique(data$Gene),subset.size)
+        rando.genes <- base::sample(unique(data$Gene),subset.size)
         mut.subset <- filter(data,Gene %in% rando.genes)
         c.mut.subset <- calc.cumulative.muts(mut.subset, normalization.constant) %>%
             mutate(bootstrap_replicate=idx)
@@ -407,7 +534,7 @@ plot.slope.of.base.layer <- function(data, subset.size=300, N=1000, alpha = 0.05
     ## generating a random gene set for which to calculate cumulative mutations,
     ## and then its derivative.
     generate.slope.of.cumulative.mut.subset <- function(idx) {
-        rando.genes <- sample(unique(data$Gene),subset.size)
+        rando.genes <- base::sample(unique(data$Gene),subset.size)
         mut.subset <- filter(data,Gene %in% rando.genes)
         D.c.mut.subset <- calc.cumulative.muts(mut.subset, normalization.constant) %>%
             calc.slope.of.cumulative.muts() %>%

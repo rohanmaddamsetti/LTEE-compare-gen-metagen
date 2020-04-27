@@ -13,17 +13,9 @@
 ## using a sampling function that takes gene length, leading/lagging strand and a periodic
 ## function of distance from the oriC replication origin.
 
-## If I need an independent dataset to set phase parameters-- then use E. coli MA
-## experiment data to calibrate. Use data in Foster et al. (2013) in G3,
-## or use any more recent datasets from that group or others.
-
-##to calculate an intensity value
-##over the genome (regression approach to disentangle, citing Bailey & Bataillon paper.
-
-## NOTE: Perhaps should cite my STLE paper-- recombination events tend to happen flanking
-## the replication origin. Is that result connected to the wave-like mutation bias
-## pattern seen here and in Patricia Foster's and Vaughn Cooper's evolution experiments?
-## Also check out Hi-C papers and others reporting 3D chromosome in E. coli.
+## maybe write to Olivier Tenaillon or Alejandro Couce about transposon mutagenesis
+## data-- maybe we can use the ones with no effect as a 'gold standard' for
+## looking at relaxed selection?
 
 source("metagenomics-library.R")
 
@@ -60,7 +52,6 @@ mutation.data <- read.csv(
     mutate(Population=factor(Population,levels=c(nonmutator.pops,hypermutator.pops)))
 
 ## IMPORTANT: DEBUG THIS MERGE-- SHOULD MERGE ON LOCUS_TAG RATHER THAN GENE?
-##test <- inner_join(mutation.data,REL606.genes)
 gene.mutation.data <- inner_join(mutation.data,REL606.genes)
 
 #############!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -68,10 +59,8 @@ gene.mutation.data <- inner_join(mutation.data,REL606.genes)
 ## double-check whether intergenic mutations
 ## are included or not-- as appropriate-- in all references to c.mutations
 ## here and in the aerobic/anaerobic code.
-
 ## for now, ONLY use mutation.data when examining mutation bias over the genome.
 ## when examining evolution in different gene sets, use gene.mutation.data.
-
 
 ## It turns out that some gene names map to multiple genes!!!
 duplicate.genes <- gene.mutation.data %>%
@@ -155,6 +144,63 @@ ggsave("../results/figures/S4Figure.pdf",S4Fig)
 #########################################################################
 ## PURIFYING SELECTION ANALYSIS.
 
+## get 544 essential and near-essential genes reported by Couce et al. 2018.
+## Of these, 517 map onto the genes in this analysis.
+
+## I manually fixed the names of a couple genes in this dataset.
+## The original names are in the "Name" column, and updated names
+## are in the "Gene" column.
+Couce.essential.genes <- read.csv("../data/Couce-LTEE-essential-pnas.1705887114.st01.csv") %>%
+    left_join(REL606.genes) %>% filter(!(is.na(locus_tag)))
+
+## a significant proportion of genes under positive selection in the LTEE are
+## essential genes, as reported in Maddamsetti et al. (2018).
+## filter these ones out, since we are interested in purifying selection.
+
+## some of these genes are under positive selection. 21 out of 50 nonmut genes.
+nonmut.top.hit.essential <- Couce.essential.genes %>%
+    filter(Gene %in% top.nonmut.genomics$Gene.name)
+## what about the hypermutators? 3 out of 50 top hypermut genes.
+hypermut.top.hit.essential <- Couce.essential.genes %>%
+    filter(Gene %in% top.hypermut.genomics$Gene.name)
+
+## filter out these top genes (removing 24 genes).
+no.top.Couce.essential.genes <- Couce.essential.genes %>%
+    filter(!(Gene %in% nonmut.top.hit.essential$Gene)) %>%
+    filter(!(Gene %in% hypermut.top.hit.essential$Gene))
+
+## do a bi-directional mapping of these genes.
+## ask whether these genes are depleted in mutations
+## (some of these are under positive selection, like spoT!)
+## then ask if those depleted in mutations are in this set too.
+
+## with filtering.
+no.top.essential.mut.data <- gene.mutation.data %>%
+    filter(Gene %in% no.top.Couce.essential.genes$Gene)
+
+c.no.top.essential.genes <- calc.cumulative.muts(no.top.essential.mut.data)
+
+no.top.essential.base.layer <- plot.base.layer(
+    gene.mutation.data,
+    subset.size=length(unique(no.top.Couce.essential.genes$Gene)))
+
+## with filtering top genes in the genomics.
+no.top.essential.plot <- no.top.essential.base.layer %>% 
+    add.cumulative.mut.layer(c.no.top.essential.genes, my.color="black")
+ggsave("../results/gene-modules/figures/Couce-no-top-essential-plot.pdf",no.top.essential.plot)
+
+essential.mut.data <- gene.mutation.data %>%
+    filter(Gene %in% Couce.essential.genes$Gene)
+c.essential.genes <- calc.cumulative.muts(essential.mut.data)
+
+essential.base.layer <- plot.base.layer(
+    gene.mutation.data,
+    subset.size=length(unique(Couce.essential.genes$Gene)))
+## without filtering top genes in the genomics.
+essential.plot <- essential.base.layer %>% 
+    add.cumulative.mut.layer(c.essential.genes, my.color="black")
+
+
 ## Find all genes that have no mutations whatsoever in any population.
 
 ## IMPORTANT: most of these genes are very short. Many of them are probably
@@ -186,7 +232,7 @@ no.mutation.genes <- REL606.genes %>%
     filter(!(str_detect(LTEE.genomics.mutated.genestr,Gene))) %>%
     arrange(desc(gene_length)) %>%
     ## estimate the probability that these genes were not hit by chance.
-    mutate(pval = probability.that.not.hit(gene_length,total.gene.mut.count)) %>%
+    mutate(pval = uniform.probability.that.not.hit(gene_length,total.gene.mut.count)) %>%
     mutate(fdr.qval = p.adjust(pval,"fdr"))
 
 write.csv(no.mutation.genes,file="../results/no-mutation-genes.csv")
@@ -228,7 +274,7 @@ only.dS.allowed.genes <- gene.mutation.densities %>%
     filter(!(str_detect(LTEE.genomics.mutated.genestr,Gene))) %>%
     arrange(desc(gene_length)) %>%
     ## estimate the probability that these genes were only hit by dS by chance.
-    mutate(pval = probability.that.not.hit(gene_length,no.dS.count)) %>%
+    mutate(pval = uniform.probability.that.not.hit(gene_length,no.dS.count)) %>%
     mutate(fdr.qval = p.adjust(pval,"fdr"))
 
 write.csv(only.dS.allowed.genes,file="../results/only-dS-allowed-genes.csv")
@@ -240,7 +286,23 @@ just.dS.genes <- only.dS.allowed.genes %>% filter(!(Gene %in% no.mutation.genes$
 no.dS.genes <- only.dS.allowed.genes %>% filter(Gene %in% no.mutation.genes$Gene)
 
 ## If these sets are under purifying selection, then they should be more essential.
-## let's examine essentiality from the KEIO collection.
+
+## let's examine overlap with Couce Tn10 mutagenesis report.
+no.dS.genes.in.Couce <- no.dS.genes %>%
+    filter(Gene %in% Couce.essential.genes$Gene)
+## make this into a table to report in the paper.
+
+## the overlap is highly significant:
+## 18 genes in Couce data and no.dS.genes.
+## 64 no.dS genes.
+## 517 Couce essential genes after filters.
+## 3956 genes after filters.
+## figure out whether to use contingency table or binomial test.
+
+no.dS.genes.not.in.Couce <- no.dS.genes %>%
+    filter(!(Gene %in% Couce.essential.genes$Gene))
+
+## now, let's examine essentiality from the KEIO collection.
 KEIO.data <- read.csv("../data/KEIO_Essentiality.csv", header=TRUE,as.is=TRUE) %>%
     dplyr::select(-JW_id)
 
@@ -268,9 +330,67 @@ notpur1 <- filter(purifying1,maybe.purifying==FALSE)
 
 wilcox.test(x=pur1$Score,notpur1$Score)
 
-## TODO: group together genes-- are they significant when considered as one
+## group together genes-- are they significant when considered as one
 ## big mutational target? Look at cliques in figure 5, and the proteins
 ## annotated as hypothetical proteins/toxin-antitoxins as well.
+hypothetical.no.dS <- no.dS.genes.not.in.Couce %>% filter(str_detect(.$product,"hypothetical"))
+
+hypothetical.target <- sum(hypothetical.no.dS$gene_length)
+uniform.probability.that.not.hit(hypothetical.target, no.dS.count)
+## probability for just these 'hypothetical proteins' is < 10^-10.
+## highly significant global signal of purifying selection,
+## even on just these hypothetical proteins with no dS.
+
+##########################################################################
+
+## repeat purifying selection analysis, using the KEIO data.
+## filter out top essential genes.
+KEIO.essential <- KEIO.data %>% filter(Score >= 3) %>%
+    filter(!(Gene %in% nonmut.top.hit.essential$Gene)) %>%
+    filter(!(Gene %in% hypermut.top.hit.essential$Gene))
+
+KEIO.essential.mut.data <- gene.mutation.data %>%
+    filter(Gene %in% KEIO.essential$Gene)
+c.KEIO.essential <- calc.cumulative.muts(KEIO.essential.mut.data)
+
+KEIO.essential.base.layer <- plot.base.layer(
+    gene.mutation.data,
+    subset.size=length(unique(KEIO.essential.mut.data$Gene)))
+
+## This result is not as successful as the result using the
+## Couce et al. 2018 Mariner transposon mutagenesis dataset.
+KEIO.essential.plot <- KEIO.essential.base.layer %>% 
+    add.cumulative.mut.layer(c.KEIO.essential, my.color="black")
+
+## Maybe we can use the KEIO data as a proxy for gold-standard genes
+## under relaxed selection (i.e. no fitness change after knockout).
+
+relaxed1 <- KEIO.data %>% filter(Score == -4) %>%
+    filter(!(Gene=='none' | blattner=='none'))
+relaxed1.mut.data <- gene.mutation.data %>%
+    filter(Gene %in% relaxed1$Gene)
+c.relaxed1 <- calc.cumulative.muts(relaxed1.mut.data)
+
+relaxed1.base.layer <- plot.base.layer(
+    gene.mutation.data,
+    subset.size=length(unique(relaxed1.mut.data$Gene)))
+
+relaxed1.plot <- relaxed1.base.layer %>% 
+    add.cumulative.mut.layer(c.relaxed1, my.color="black")
+
+relaxed2 <- KEIO.data %>% filter(MOPS_24hr_OD600 > 0.4) %>%
+    filter(!(Gene=='none' | blattner=='none'))
+relaxed2.mut.data <- gene.mutation.data %>%
+    filter(Gene %in% relaxed2$Gene)
+c.relaxed2 <- calc.cumulative.muts(relaxed2.mut.data)
+
+relaxed2.base.layer <- plot.base.layer(
+    gene.mutation.data,
+    subset.size=length(unique(relaxed2.mut.data$Gene)))
+
+relaxed2.plot <- relaxed1.base.layer %>% 
+    add.cumulative.mut.layer(c.relaxed2, my.color="black")
+
 ##########################################################################
 ## look at accumulation of stars over time for genes in different transcriptional
 ## modules inferred by Sastry et al. (2020) paper from Bernhard Palsson's group.
@@ -299,8 +419,10 @@ Imodulon.regulator.mut.data <- gene.mutation.data %>%
 c.Imodulon.regulators <- calc.cumulative.muts(Imodulon.regulator.mut.data)
 
 ## calculate more rigorous statistics than the figures.
-## IMPORTANT BUG: WHY ARE ONLY 7 OF 12 POPS IN the PVAL DATAFRAME ???
 Imodulon.regulator.pvals <- calculate.trajectory.tail.probs(gene.mutation.data, unique(Imodulon.regulators$regulator))
+## recalculate, sampling from the same genomic regions (bins).
+## results should be unchanged.
+Imodulon.regulator.pvals.loc <- calculate.trajectory.tail.probs(gene.mutation.data, unique(Imodulon.regulators$regulator),sample.genes.by.location=FALSE)
 
 ## Now look at genes that are regulated within Imodulons.
 ## I expect relaxed or purifying selection overall.
@@ -329,8 +451,7 @@ Imodulon.plot <- Imodulon.regulators.base.layer %>% ## null for regulators
                    my.color="pink") %>%
     add.cumulative.mut.layer(c.Imodulon.regulators, my.color="black") %>%
     add.cumulative.mut.layer(c.Imodulon.regulated, my.color="red")
-ggsave("../results/figures/Imodulon-plot.pdf",Imodulon.plot)
-
+ggsave("../results/gene-modules/figures/Imodulon-plot.pdf",Imodulon.plot)
 
 ## Make plots for each I-modulon.
 
@@ -387,6 +508,62 @@ jpeg("../results/figures/I-modulon-plots/plot-%d.jpeg")
 Imodulons.to.regulators %>% group_split(I.modulon) %>%
     map(.f=make.modulon.plots.helper)
 dev.off()
+##########################################################################
+
+## Let's examine cis-regulatory evolution by examining non-coding mutations.
+
+## 1972 noncoding mutations with a gene annotation.
+noncoding.mutation.data <- mutation.data %>%
+    filter(Annotation=='noncoding') %>%
+    filter(Gene != 'intergenic')
+
+## 427 with greater than 1 hit.
+noncoding.by.gene <- noncoding.mutation.data %>%
+    group_by(Gene) %>% summarize(count=n()) %>% arrange(desc(count)) %>%
+    left_join(REL606.genes) %>%
+    filter(count>1)
+
+## 136 with greater than 2 hits.
+noncoding.by.gene2 <- noncoding.by.gene %>% filter(count>2)
+
+## 44 with greater than 3 hits.
+noncoding.by.gene3 <- noncoding.by.gene %>% filter(count>3)
+
+## Let's split into I-modulon regulators and regulated genes.
+
+## 49 mutations associated with 79 I-modulon regulators.
+Imodulon.regulator.noncoding.data <- noncoding.mutation.data %>%
+    filter(Gene %in% Imodulon.regulators$regulator)
+## 547 associated with 1748 I-modulon regulated genes.
+Imodulon.regulated.noncoding.data <- noncoding.mutation.data %>%
+    filter(Gene %in% Imodulon.regulated$Gene)
+## so seems like I-modulon regulators have more noncoding hits than expected.
+
+## 10 I-modulon regulators with multiple non-coding hits
+Imodulon.regulator.noncoding.data2 <- noncoding.by.gene %>%
+    filter(Gene %in% Imodulon.regulators$regulator)
+
+## 117 I-modulon.regulated with multiple non-coding hits.
+Imodulon.regulated.noncoding.data2 <- noncoding.by.gene %>%
+    filter(Gene %in% Imodulon.regulated$Gene)
+
+## what are the multiple non-coding hits that are not in an I-modulon?
+## 300 of these!
+non.Imodulon.noncoding.hits <- noncoding.by.gene %>%
+    filter(!(Gene %in% Imodulon.regulators$regulator)) %>%
+    filter(!(Gene %in% Imodulon.regulated$Gene))
+
+non.Imodulon.noncoding.hits2 <- non.Imodulon.noncoding.hits %>%
+    filter(count>2)
+
+## let's look at the timing for different classes of mutations
+## in I-modulon regulators.
+Iregulon.regulator.timing.plot <- ggplot(data=Imodulon.regulator.mut.data,
+                    aes(x=t0,fill=Annotation)) +
+                    geom_histogram() +
+                    theme_classic() +
+                    facet_wrap(fixation~Population,scales='free_y',nrow=4)
+## fixations may be misleading due to coexisting clades.                    
 
 ##########################################################################
 ## look at accumulation of stars over time for genes in the different proteome

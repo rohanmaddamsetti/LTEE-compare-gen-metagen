@@ -152,58 +152,6 @@ fis.topA.dusB.length <- sum(c(topA.info$gene_length,
                               dusB.info$gene_length))
 uniform.probability.that.not.hit(fis.topA.dusB.length,araplus3.n.muts)
 
-## 2) estimating local mutation rates by splitting the genome into z bins.
-
-bin.mutations <- function(mut.data, z) {
-    ## z is the number of bins we are using.
-    ## count the number of mutations in each bin, M(z_i).
-    ## filter araplus3.mut.data using each adjacent pair of fenceposts,
-    ## and count the number of rows to get mutations per bin.
-    mutations.by.bin.vec <- rep(0,z)
-
-    GENOME.LENGTH <- 4629812
-    c <- GENOME.LENGTH/z ## length of each bin
-    
-    ## define fenceposts for each bin.
-    ## this has z+1 entries.
-    fenceposts <- seq(0,z) * c
-    
-    for (i in 1:z) {
-        left <- fenceposts[i]
-        right <- fenceposts[i+1]
-        bin.data <- araplus3.mut.data %>%
-            filter(Position >= left & Position < right)
-        bin.mut.count <- nrow(bin.data)
-        mutations.by.bin.vec[i] <- bin.mut.count
-    }
-    
-    ## assert that all mutations have been assigned to a bin.
-    stopifnot(sum(mutations.by.bin.vec) == nrow(araplus3.mut.data))
-    
-    return(mutations.by.bin.vec)
-}
-
-find.bin <- function(locus.row, z) {
-    ## take a 1-row dataframe correponding to a REL606 gene,
-    ## and return the bin that it belongs to, given z bins.
-
-    GENOME.LENGTH <- 4629812
-    c <- GENOME.LENGTH/z ## length of each bin
-    
-    ## define right-hand fencepost for each bin. 
-    rightfencepost <- seq(1,z) * c
-    
-    for (i in 1:z) {
-        if ((locus.row$start < rightfencepost[i]) &
-            (locus.row$end < rightfencepost[i]))
-            return(i)
-    }
-    stopifnot(TRUE) ## we should always return a value in the for loop.
-    ## There is an unhandled corner case where the gene could straddle a boundary.
-    ## So we need to make sure that this doesn't happen in practice. 
-    return(-1)
-}
-
 local.probability.that.DNAtopology.not.hit <- function(mutdata, z) {
     ## mutdata is ara+3 mutation data.
     ## z is the number of bins over the genome.
@@ -238,6 +186,7 @@ local.probability.that.DNAtopology.not.hit <- function(mutdata, z) {
     return(p.not.hit)
 }
 
+## 2) estimating local mutation rates by splitting the genome into z bins.
 araplus3.local.probability.DNAtopology.not.hit <- partial(
     local.probability.that.DNAtopology.not.hit,
     araplus3.mut.data)
@@ -327,7 +276,7 @@ strand.mut.vec <- c(nrow(laggingstrand.gene.mut.data),
 
 binom.test(x=strand.mut.vec,p=(lagging.gene.target/leading.gene.target))
 
-##########################################################################################
+########################################################################################
 ## MUTATION RATE ANALYSIS
 
 ##  plot of the cumulative number of different classes of mutations
@@ -371,8 +320,31 @@ sv.plot <- plot.cumulative.muts(c.sv,my.color="green") +
 ## using golden ratio phi for height/width ratio
 Fig3 <- plot_grid(point.mut.plot,indel.plot, sv.plot,labels=c('A','B','C'),nrow=1,rel_heights=2/(1+sqrt(5)))
 ggsave(filename="../results/mutation-bias/figures/Fig3.pdf",Fig3,width=7)
+########################################################################################
+## examine DNA repair and DNA polymerase/replication genes for mutator and anti-mutator
+## candidates.
 
-##########################################################################################
+interesting.loci <- read.csv("../data/DNA-repair-and-replication.csv",header=TRUE,as.is=TRUE)
+
+interesting.muts <- filter(mutation.data, Gene %in% unique(interesting.loci$Gene)) %>%
+    filter(Annotation %in% c('missense','sv','indel','nonsense'))
+
+interesting.parallel.nuc <- interesting.muts %>%
+    group_by(Gene, Position) %>% summarize(count=n()) %>%
+    arrange(desc(count)) %>% filter(count>1)
+
+## Look for mutations in LTEE similar to those in:
+## Deatherage et al. (2018). These are candidate anti-mutator alleles.
+
+PResERV.genes <- c('polA','rne')
+preserv.muts <- filter(mutation.data,Gene %in% PResERV.genes)
+preserv.parallel <- preserv.muts %>% group_by(Gene,Position) %>%
+    summarize(count=n()) %>% arrange(desc(count))
+
+## There is one parallel mutation in rne: Position 1158096.
+test <- filter(mutation.data,Position==1158096)
+
+########################################################################################
 ## reanalysis of synonymous variation in natural populations.
 ## looks like problems with the K-S test... 
 
