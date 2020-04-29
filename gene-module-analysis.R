@@ -1,27 +1,14 @@
 ## gene-module-analysis.R by Rohan Maddamsetti
 
-## MAKE SURE THAT ZEROS IN MUTATION COUNTS ARE NOT THROWN OUT BY DPLYR!
-
-## IMPORTANT TODO:
-## The problem with setting up a probabilistic model for mutation rate variation is
-## that causal factors evolve during the evolution experiment! Modeling these
-## changes adds a lot of complexity. For this reason, rather than directly
-## modeling mutation occurrence over the genome as a periodic function of
-## distance from the replication origin, as as a function of leading/lagging strand,
-## we used importance sampling to sample randomized modules of genes based on the empirical
-## density of mutations per gene. We could also use this technique to sample genes
-## using a sampling function that takes gene length, leading/lagging strand and a periodic
-## function of distance from the oriC replication origin.
-
-## maybe write to Olivier Tenaillon or Alejandro Couce about transposon mutagenesis
-## data-- maybe we can use the ones with no effect as a 'gold standard' for
-## looking at relaxed selection?
-
 source("metagenomics-library.R")
 
 ##########################################################################
 ## GENE MODULE DATA ANALYSIS
 ##########################################################################
+
+## get growth and essentiality data from KEIO collection.
+KEIO.data <- read.csv("../data/KEIO_Essentiality.csv", header=TRUE,as.is=TRUE) %>%
+    dplyr::select(-JW_id)
 
 ## get the lengths of all genes in REL606.
 ## This excludes genes in repetitive regions of the genome.
@@ -77,69 +64,37 @@ gene.mutation.data <- gene.mutation.data %>%
 ##########################################################################
 ## BUT THIS IS A BUG TO BE FIXED, CAUSED BY TWO LOCI WITH THE SAME BLATTNER NUMBER.
 bug.to.fix <- gene.mutation.data %>% group_by(Population,Gene,Position) %>% summarize(count=n()) %>% arrange(desc(count)) %>% filter(count>1)
+#########################################################################
+## RELAXED SELECTION CONTROL.
 
-#################################################################################
-## Control analysis 1:
-## look at the accumulation of stars over time for top genes in the
-## Tenaillon et al. (2016) genomics data.
-## split data into before 50K and after 50K,
-## to ask whether we see continued fine-tuning in these genes, overall.
+## list of neutral genes from Alejandro Couce.
+## His description: these are known 'neutral' genes
+## we use to calibrate our analyses (i.e., genes we know to be cryptic, non
+## expressed or have been experimentally shown to be neutral; see attached file).
 
-## base plots of null distribution for comparison.
-pre50K.rando.plot <- plot.base.layer(filter(gene.mutation.data,Generation <= 5))
-post50K.rando.plot <- plot.base.layer(filter(gene.mutation.data,Generation > 5))
+neutral.genes <- read.csv("../data/neutral_compilation.csv", header=TRUE,as.is=TRUE) 
+## Warning: this list of genes includes citT. Should be excluded when looking at Ara-3,
+## which evolved Cit+ phenotype.
 
-## 1) plot top genes in non-mutators.
-nonmut.genomics <- read.csv('../data/tenaillon2016-nonmutator-parallelism.csv')
-top.nonmut.genomics <- top_n(nonmut.genomics, 50, wt=G.score)
+neutral.mut.data <- gene.mutation.data %>%
+    filter(Gene %in% neutral.genes$Gene)
 
-top.nonmut.mutation.data <- gene.mutation.data %>%
-    filter(Gene %in% top.nonmut.genomics$Gene.name)
+c.neutral.genes <- calc.cumulative.muts(neutral.mut.data)
 
-pre50K.top.nonmut.data <- top.nonmut.mutation.data %>%
-    filter(Generation <= 5)
+neutral.base.layer <- plot.base.layer(
+    gene.mutation.data,
+    subset.size=length(unique(neutral.genes$Gene)))
 
-post50K.top.nonmut.data <- top.nonmut.mutation.data %>%
-    filter(Generation > 5)
+## with filtering top genes in the genomics.
+neutral.plot <- neutral.base.layer %>% 
+    add.cumulative.mut.layer(c.neutral.genes, my.color="black")
+ggsave("../results/gene-modules/figures/neutral-plot.pdf", neutral.plot)
 
-c.pre50K.top.nonmuts <- calc.cumulative.muts(pre50K.top.nonmut.data) %>%
-    filter(Generation<=5)
-c.post50K.top.nonmuts <- calc.cumulative.muts(post50K.top.nonmut.data) %>%
-    filter(Generation > 5)
-
-S1Fig <- pre50K.rando.plot %>%
-    add.cumulative.mut.layer(c.pre50K.top.nonmuts,my.color="black")
-ggsave("../results/figures/S1Figure.pdf",S1Fig)
-S2Fig <- post50K.rando.plot %>%
-    add.cumulative.mut.layer(c.post50K.top.nonmuts,my.color="black")
-ggsave("../results/figures/S2Figure.pdf",S2Fig)
-
-## data favors coupon-collecting/mutation accumulation:
-## genes under selection before 50K don't look so special after 50K.
-
-## 3) plot top genes in hypermutators.
-hypermut.genomics <- read.csv('../data/tenaillon2016-mutator-parallelism.csv')
-top.hypermut.genomics <- top_n(hypermut.genomics, 50, wt=G.score)
-
-top.hypermut.data <- gene.mutation.data %>%
-    filter(Gene %in% top.hypermut.genomics$Gene.name)
-
-pre50K.top.hypermut <- top.hypermut.data %>%
-    filter(Generation <= 5)
-
-post50K.top.hypermut <- top.hypermut.data %>%
-    filter(Generation > 5)
-
-c.pre50K.top.hypermut <- calc.cumulative.muts(pre50K.top.hypermut)
-c.post50K.top.hypermut <- calc.cumulative.muts(post50K.top.hypermut)
-
-S3Fig <- pre50K.rando.plot %>%
-    add.cumulative.mut.layer(c.pre50K.top.hypermut,my.color="black")
-ggsave("../results/figures/S3Figure.pdf",S3Fig)
-
-S4Fig <- post50K.rando.plot %>%
-    add.cumulative.mut.layer(c.post50K.top.hypermut,my.color="black")
-ggsave("../results/figures/S4Figure.pdf",S4Fig)
+## calculate more rigorous statistics than the figures.
+neutral.pvals <- calculate.trajectory.tail.probs(gene.mutation.data, unique(neutral.genes$Gene))
+## recalculate, sampling from the same genomic regions (bins).
+## results should be unchanged.
+neutral.pvals.loc <- calculate.trajectory.tail.probs(gene.mutation.data, unique(neutral.genes$Gene),sample.genes.by.location=FALSE)
 
 #########################################################################
 ## PURIFYING SELECTION ANALYSIS.
@@ -303,9 +258,6 @@ no.dS.genes.not.in.Couce <- no.dS.genes %>%
     filter(!(Gene %in% Couce.essential.genes$Gene))
 
 ## now, let's examine essentiality from the KEIO collection.
-KEIO.data <- read.csv("../data/KEIO_Essentiality.csv", header=TRUE,as.is=TRUE) %>%
-    dplyr::select(-JW_id)
-
 ## TODO: CHECK FOR BUGS IN MERGE. CHECK ydfQ.
 
 KEIO.gene.mutation.densities <- left_join(gene.mutation.densities,KEIO.data)
@@ -390,6 +342,69 @@ relaxed2.base.layer <- plot.base.layer(
 
 relaxed2.plot <- relaxed1.base.layer %>% 
     add.cumulative.mut.layer(c.relaxed2, my.color="black")
+
+#################################################################################
+## Control analysis for positive selection:
+## look at the accumulation of stars over time for top genes in the
+## Tenaillon et al. (2016) genomics data.
+## split data into before 50K and after 50K,
+## to ask whether we see continued fine-tuning in these genes, overall.
+
+## base plots of null distribution for comparison.
+pre50K.rando.plot <- plot.base.layer(filter(gene.mutation.data,Generation <= 5))
+post50K.rando.plot <- plot.base.layer(filter(gene.mutation.data,Generation > 5))
+
+## 1) plot top genes in non-mutators.
+nonmut.genomics <- read.csv('../data/tenaillon2016-nonmutator-parallelism.csv')
+top.nonmut.genomics <- top_n(nonmut.genomics, 50, wt=G.score)
+
+top.nonmut.mutation.data <- gene.mutation.data %>%
+    filter(Gene %in% top.nonmut.genomics$Gene.name)
+
+pre50K.top.nonmut.data <- top.nonmut.mutation.data %>%
+    filter(Generation <= 5)
+
+post50K.top.nonmut.data <- top.nonmut.mutation.data %>%
+    filter(Generation > 5)
+
+c.pre50K.top.nonmuts <- calc.cumulative.muts(pre50K.top.nonmut.data) %>%
+    filter(Generation<=5)
+c.post50K.top.nonmuts <- calc.cumulative.muts(post50K.top.nonmut.data) %>%
+    filter(Generation > 5)
+
+S1Fig <- pre50K.rando.plot %>%
+    add.cumulative.mut.layer(c.pre50K.top.nonmuts,my.color="black")
+ggsave("../results/figures/S1Figure.pdf",S1Fig)
+S2Fig <- post50K.rando.plot %>%
+    add.cumulative.mut.layer(c.post50K.top.nonmuts,my.color="black")
+ggsave("../results/figures/S2Figure.pdf",S2Fig)
+
+## data favors coupon-collecting/mutation accumulation:
+## genes under selection before 50K don't look so special after 50K.
+
+## 3) plot top genes in hypermutators.
+hypermut.genomics <- read.csv('../data/tenaillon2016-mutator-parallelism.csv')
+top.hypermut.genomics <- top_n(hypermut.genomics, 50, wt=G.score)
+
+top.hypermut.data <- gene.mutation.data %>%
+    filter(Gene %in% top.hypermut.genomics$Gene.name)
+
+pre50K.top.hypermut <- top.hypermut.data %>%
+    filter(Generation <= 5)
+
+post50K.top.hypermut <- top.hypermut.data %>%
+    filter(Generation > 5)
+
+c.pre50K.top.hypermut <- calc.cumulative.muts(pre50K.top.hypermut)
+c.post50K.top.hypermut <- calc.cumulative.muts(post50K.top.hypermut)
+
+S3Fig <- pre50K.rando.plot %>%
+    add.cumulative.mut.layer(c.pre50K.top.hypermut,my.color="black")
+ggsave("../results/figures/S3Figure.pdf",S3Fig)
+
+S4Fig <- post50K.rando.plot %>%
+    add.cumulative.mut.layer(c.post50K.top.hypermut,my.color="black")
+ggsave("../results/figures/S4Figure.pdf",S4Fig)
 
 ##########################################################################
 ## look at accumulation of stars over time for genes in different transcriptional
