@@ -9,7 +9,14 @@ This script skips over repetitive regions, per Section 4.3.1
 "Removing mutations in repetitive regions of the genome"
 in the Supplemental Information of Ben Good's LTEE metagenomics paper.
 
-We excluded mutations that arose in repetitive regions of the genome, as these can be difficult to resolve using short-read data. A site was marked as repetitive if (1) it was annotated as a repeat region in the REL606 reference, (2) it was present in the set of masked regions compiled by Tenaillon et al. [3], or (3) it fell within the putative prophage element identified by Tenaillon et al. [3] (REL606 genome coordinates 880528–904682).
+We excluded mutations that arose in repetitive regions of the genome,
+as these can be difficult to resolve using short-read data.
+A site was marked as repetitive if 
+(1) it was annotated as a repeat region in the REL606 reference, 
+(2) it was present in the set of masked regions compiled by 
+Tenaillon et al. [2016], or 
+(3) it fell within the putative prophage element at REL606 genome 
+coordinates 880528–904682.
 
 I added this last region to Tenaillon's mask file, and saved it as:
 REL606.L20.G15.P0.M35.RM-edited.mask.gd.

@@ -176,7 +176,7 @@ find.bin <- function(locus.row, z) {
 ## random sets of genes. Returns the upper tail of null distribution,
 ## or P(random trajectory >= the actual trajectory).
 ## Output: a dataframe with three columns: Population, count, p.val
-calculate.trajectory.tail.probs <- function(data, gene.vec, N=10000, normalization.constant=NA, sample.genes.by.location=FALSE) {
+calc.traj.pvals <- function(data, gene.vec, N=10000, normalization.constant=NA, sample.genes.by.location=FALSE) {
 
     ## each sample has the same cardinality as the gene.vec.
     subset.size <- length(gene.vec)
@@ -249,7 +249,7 @@ calculate.trajectory.tail.probs <- function(data, gene.vec, N=10000, normalizati
         ## IMPORTANT: this function depends on variables defined in
         ## calculate.trajectory.tail.probs.
         generate.cumulative.mut.subset <- function(idx) {
-            rando.genes <- sample(unique(data$Gene),subset.size)
+            rando.genes <- base::sample(unique(data$Gene),subset.size)
             mut.subset <- filter(data,Gene %in% rando.genes)
             c.mut.subset <- calc.cumulative.muts(mut.subset, normalization.constant) %>%
                 mutate(bootstrap_replicate=idx)
