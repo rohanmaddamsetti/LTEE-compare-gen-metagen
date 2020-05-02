@@ -7,6 +7,14 @@ library(cowplot)
 ##########################################################################
 ## FUNCTIONS FOR DATA ANALYSIS
 ##########################################################################
+
+## function for plotting better y-axis labels.
+## see solution here for nice scientific notation on axes.
+## https://stackoverflow.com/questions/10762287/how-can-i-format-axis-labels-with-exponents-with-ggplot2-and-scales
+fancy_scientific <- function(x) {
+    ifelse(x==0, "0", parse(text=gsub("[+]", "", gsub("e", " %*% 10^", scales::scientific_format()(x)))))
+}
+
 ## calculate the probability that a locus (or set of loci) is not hit by mutations,
 ## assuming uniform mutation rate.
 ## l is locus length, and n is the number of mutations in the dataset.
@@ -178,6 +186,9 @@ find.bin <- function(locus.row, z) {
 ## Output: a dataframe with three columns: Population, count, p.val
 calc.traj.pvals <- function(data, gene.vec, N=10000, normalization.constant=NA, sample.genes.by.location=FALSE) {
 
+    ## check type for gene.vec (e.g., if factor, change to vanilla vector of strings)
+    gene.vec <- as.character(gene.vec)
+    
     ## each sample has the same cardinality as the gene.vec.
     subset.size <- length(gene.vec)
 
@@ -200,9 +211,9 @@ calc.traj.pvals <- function(data, gene.vec, N=10000, normalization.constant=NA, 
             lapply(find.bin.46)
         ## map each gene in the module of interest to their bin.
         bin.vec <- sapply(gene.vec,function(gene) bin.list[[gene]])
+
         ## associate each gene in the genome to its bin, and add as a column.
         bin.df <- data.frame(Gene=names(bin.list),bin=as.numeric(bin.list))
-        
         
         ## map bins to the genes in those bins (excepting those in gene.vec).
         nested.gene.info.with.bins <- left_join(gene.info, bin.df) %>%
@@ -375,8 +386,11 @@ plot.base.layer <- function(data, subset.size=50, N=1000, alpha = 0.05, normaliz
         theme(axis.title.x = element_text(size=14),
               axis.title.y = element_text(size=14),
               axis.text.x  = element_text(size=14),
-              axis.text.y  = element_text(size=14))
-    return(p)                
+              axis.text.y  = element_text(size=14)) +
+        scale_y_continuous(labels=fancy_scientific,
+                           breaks = scales::extended_breaks(n = 6),
+                           limits = c(0, NA))
+    return(p)
 }
 
 ## add a base layer to a plot. used in Imodulon code.

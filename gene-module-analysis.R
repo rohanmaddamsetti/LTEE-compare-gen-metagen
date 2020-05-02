@@ -94,26 +94,26 @@ neutral.pvals.loc <- calc.traj.pvals(gene.mutation.data, unique(neutral.genes$Ge
 #########################################################################
 ## PURIFYING SELECTION CONTROL EXPERIMENT AND ANALYSIS.
 
-## Get essential and near-essential genes reported by Couce et al. 2017.
+## Get essential and near-essential genes reported in
+## Supplementary Table 1 of Couce et al. 2017.
 ## I manually fixed the names of a couple genes in this dataset.
 ## The original names are in the "Name" column, and updated names
 ## are in the "Gene" column.
-Couce.essential.genes <- read.csv("../data/Couce-LTEE-essential-pnas.1705887114.st01.csv") %>%
+essential.genes <- read.csv("../data/Couce2017-LTEE-essential.csv") %>%
     inner_join(REL606.genes) %>% filter(!(is.na(locus_tag)))
 
 ## a significant proportion of genes under positive selection in the LTEE are
 ## essential genes, as reported in Maddamsetti et al. (2017).
 ## filter these ones out, since we are interested in purifying selection.
-
-## some of these genes are under positive selection. 21 out of 50 nonmut genes.
-nonmut.top.hit.essential <- Couce.essential.genes %>%
+## 21 out of 50 top non-mut genes are essential.
+nonmut.top.hit.essential <- essential.genes %>%
     filter(Gene %in% top.nonmut.genomics$Gene.name)
 ## what about the hypermutators? 3 out of 50 top hypermut genes.
-hypermut.top.hit.essential <- Couce.essential.genes %>%
+hypermut.top.hit.essential <- essential.genes %>%
     filter(Gene %in% top.hypermut.genomics$Gene.name)
 
 ## ## filtering out top G-score genes in the LTEE genomics dataset.
-purifying.genes <- Couce.essential.genes %>%
+purifying.genes <- essential.genes %>%
     filter(!(Gene %in% nonmut.top.hit.essential$Gene)) %>%
     filter(!(Gene %in% hypermut.top.hit.essential$Gene))
 
@@ -272,29 +272,27 @@ Fig4 <- pre50K.rando.plot %>%
     add.cumulative.mut.layer(c.pre50K.top.nonmuts,my.color="black")
 ggsave("../results/gene-modules/figures/Fig4.pdf",Fig4)
 
-############### BUG! THIS IS FOR THE ENTIRE TRAJECTORY!
-## calculate more rigorous statistics than the figures.
-pre50K.top.nonmut.pvals <- calc.traj.pvals(gene.mutation.data,
-                                           unique(top.nonmut.genomics$Gene.name))
-## recalculate, sampling from the same genomic regions (bins).
-## results should be unchanged.
-pre50K.top.nonmut.pvals.loc <- calc.traj.pvals(gene.mutation.data,
-                                               unique(top.nonmut.genomics$Gene.name),
-                                               sample.genes.by.location=TRUE)
-#################################################### FIX BUG IN THIS CALL!!!!
 Fig5 <- post50K.rando.plot %>%
     add.cumulative.mut.layer(c.post50K.top.nonmuts,my.color="black")
 ggsave("../results/gene-modules/figures/Fig5.pdf",Fig5)
 
 ## calculate more rigorous statistics than the figures.
-post50K.top.nonmut.pvals <- calc.traj.pvals(gene.mutation.data,
+pre50K.top.nonmut.pvals <- calc.traj.pvals(filter(gene.mutation.data,Generation<=5),
                                            unique(top.nonmut.genomics$Gene.name))
 ## recalculate, sampling from the same genomic regions (bins).
 ## results should be unchanged.
-pre50K.top.nonmut.pvals.loc <- calc.traj.pvals(gene.mutation.data,
+pre50K.top.nonmut.pvals.loc <- calc.traj.pvals(filter(gene.mutation.data,Generation<=5),
                                                unique(top.nonmut.genomics$Gene.name),
                                                sample.genes.by.location=TRUE)
-#################################################### FIX BUG IN THIS CALL!!!!
+
+## calculate more rigorous statistics than the figures.
+post50K.top.nonmut.pvals <- calc.traj.pvals(filter(gene.mutation.data,Generation>5),
+                                           unique(top.nonmut.genomics$Gene.name))
+## recalculate, sampling from the same genomic regions (bins).
+## results should be unchanged.
+post50K.top.nonmut.pvals.loc <- calc.traj.pvals(filter(gene.mutation.data,Generation>5),
+                                               unique(top.nonmut.genomics$Gene.name),
+                                               sample.genes.by.location=TRUE)
 
 ## 2) plot top genes in hypermutators.
 top.hypermut.data <- gene.mutation.data %>%
@@ -317,7 +315,27 @@ S2Fig <- post50K.rando.plot %>%
     add.cumulative.mut.layer(c.post50K.top.hypermut,my.color="black")
 ggsave("../results/gene-modules/figures/S2Figure.pdf",S2Fig)
 
+## calculate more rigorous statistics than the figures.
+pre50K.top.hypermut.pvals <- calc.traj.pvals(filter(gene.mutation.data,Generation<=5),
+                                           unique(top.hypermut.genomics$Gene.name))
+## recalculate, sampling from the same genomic regions (bins).
+## results should be unchanged.
+pre50K.top.hypermut.pvals.loc <- calc.traj.pvals(filter(gene.mutation.data,Generation<=5),
+                                               unique(top.hypermut.genomics$Gene.name),
+                                               sample.genes.by.location=TRUE)
+
+## calculate more rigorous statistics than the figures.
+post50K.top.hypermut.pvals <- calc.traj.pvals(filter(gene.mutation.data,Generation>5),
+                                           unique(top.hypermut.genomics$Gene.name))
+## recalculate, sampling from the same genomic regions (bins).
+## results should be unchanged.
+post50K.top.hypermut.pvals.loc <- calc.traj.pvals(filter(gene.mutation.data,Generation>5),
+                                               unique(top.hypermut.genomics$Gene.name),
+                                               sample.genes.by.location=TRUE)
+
 ##########################################################################
+## GENE MODULE ANALYSIS.
+
 ## look at accumulation of stars over time for genes in different transcriptional
 ## modules inferred by Sastry et al. (2020) paper from Bernhard Palsson's group.
 
@@ -325,45 +343,35 @@ ggsave("../results/gene-modules/figures/S2Figure.pdf",S2Fig)
 ## Q1) are the regulators of the I-modulons under stronger selection than
 ## the genes that they regulate?
 
-## Two ways of testing:
-## A) group all regulators together, against all regulated genes.
-## B) paired comparison. compare regulator against regulated genes for each I-modulon.
-
 ## Q2) Do any I-modulons show evidence of positive or purifying selection?
 ## I may have to do some kind of FDR correction for multiple hypothesis testing.
 
 ## I made this file by hand, by going through the I-modulons in imodulon_gene_names.txt,
 ## and the regulator annotations in modulon.pdf, both in precise-db-repo.
 Imodulons.to.regulators <- read.csv("../data/rohans-I-modulons-to-regulators.csv")
-
 Imodulon.regulators <-Imodulons.to.regulators %>%
     filter(!(is.na(regulator)))
-    
 Imodulon.regulator.mut.data <- gene.mutation.data %>%
     filter(Gene %in% Imodulon.regulators$regulator)
-
 c.Imodulon.regulators <- calc.cumulative.muts(Imodulon.regulator.mut.data)
 
 ## calculate more rigorous statistics than the figures.
 Imodulon.regulator.pvals <- calc.traj.pvals(gene.mutation.data, unique(Imodulon.regulators$regulator))
 ## recalculate, sampling from the same genomic regions (bins).
 ## results should be unchanged.
-Imodulon.regulator.pvals.loc <- calc.traj.pvals(gene.mutation.data, unique(Imodulon.regulators$regulator),sample.genes.by.location=FALSE)
+Imodulon.regulator.pvals.loc <- calc.traj.pvals(gene.mutation.data, unique(Imodulon.regulators$regulator),sample.genes.by.location=TRUE)
 
 ## Now look at genes that are regulated within Imodulons.
 ## I expect relaxed or purifying selection overall.
 
 ## this file was generated by reformat-I-modulons.py
-genes.to.Imodulons <- read.csv("../results/genes-to-I-modulons.csv")
-
+genes.to.Imodulons <- read.csv("../results/gene-modules/genes-to-I-modulons.csv")
 Imodulon.regulated <- genes.to.Imodulons %>% filter(!(is.na(Gene))) %>%
     ## remove any I-modulon regulators from the I-modulon genes to
     ## make an orthogonal comparison.
     filter(!(Gene %in% Imodulon.regulators$regulator))
-    
 Imodulon.regulated.mut.data <- gene.mutation.data %>%
     filter(Gene %in% Imodulon.regulated$Gene)
-
 c.Imodulon.regulated <- calc.cumulative.muts(Imodulon.regulated.mut.data)
 
 Imodulon.regulators.base.layer <- plot.base.layer(
@@ -371,20 +379,20 @@ Imodulon.regulators.base.layer <- plot.base.layer(
     subset.size=length(unique(Imodulon.regulators$regulator)))
 
 ## Figure for paper:  compare I-modulon regulators to the genes they regulate.
-Imodulon.plot <- Imodulon.regulators.base.layer %>% ## null for regulators
+Fig6 <- Imodulon.regulators.base.layer %>% ## null for regulators
     add.base.layer(gene.mutation.data, ## add null for regulated genes
                    subset.size=length(unique(Imodulon.regulated$Gene)),
                    my.color="pink") %>%
     add.cumulative.mut.layer(c.Imodulon.regulators, my.color="black") %>%
     add.cumulative.mut.layer(c.Imodulon.regulated, my.color="red")
-ggsave("../results/gene-modules/figures/Imodulon-plot.pdf",Imodulon.plot)
+ggsave("../results/gene-modules/figures/Fig6.pdf", Fig6)
 
 ## Make plots for each I-modulon.
 
 ## This helper function refers to several global variables.
 ## TODO: Best to wrap this into the context of a larger function later,
 ## to maintain modularity.
-make.modulon.plots.helper <- function(my.I.modulon) {
+make.modulon.plots.helper <- function(my.I.modulon,plot.regulators=FALSE) {
     
     my.modulon.name <- unique(my.I.modulon$I.modulon)
     modulon.text <- paste(my.modulon.name,"I-modulon")
@@ -412,8 +420,9 @@ make.modulon.plots.helper <- function(my.I.modulon) {
     p <- modulon.base.layer %>%
         add.cumulative.mut.layer(c.my.modulon.muts,my.color="red")
 
-    ## if any regulators exist, add layers for mutations in those genes.
-    if (regulator.size > 0) {
+    ## if any regulators exist and flag set, then
+    ## add layers for mutations in those genes.
+    if ((regulator.size > 0) & plot.regulators) {
         my.regulator.mut.data <- gene.mutation.data %>%
             filter(Gene %in% my.regulators$regulator)
         c.my.regulators <- calc.cumulative.muts(my.regulator.mut.data)
@@ -429,72 +438,13 @@ make.modulon.plots.helper <- function(my.I.modulon) {
 }
 
 ## too big for PDF! plot to separate jpegs.
-jpeg("../results/figures/I-modulon-plots/plot-%d.jpeg")
+jpeg("../results/gene-modules/figures/I-modulon-plots/plot-%d.jpeg")
 ## split into groups by I-modulon, and map them to the plotting helper.
 Imodulons.to.regulators %>% group_split(I.modulon) %>%
     map(.f=make.modulon.plots.helper)
 dev.off()
 ##########################################################################
 
-## Let's examine cis-regulatory evolution by examining non-coding mutations.
-
-## TODO: double check these numbers!
-
-## 1922 noncoding mutations with a gene annotation.
-noncoding.mutation.data <- gene.mutation.data %>%
-    filter(Annotation=='noncoding') %>%
-    filter(Gene != 'intergenic')
-
-
-## 427 with greater than 1 hit.
-noncoding.by.gene <- noncoding.mutation.data %>%
-    group_by(Gene) %>% summarize(count=n()) %>% arrange(desc(count)) %>%
-    left_join(REL606.genes) %>%
-    filter(count>1)
-
-## 136 with greater than 2 hits.
-noncoding.by.gene2 <- noncoding.by.gene %>% filter(count>2)
-
-## 44 with greater than 3 hits.
-noncoding.by.gene3 <- noncoding.by.gene %>% filter(count>3)
-
-## Let's split into I-modulon regulators and regulated genes.
-
-## 49 mutations associated with 79 I-modulon regulators.
-Imodulon.regulator.noncoding.data <- noncoding.mutation.data %>%
-    filter(Gene %in% Imodulon.regulators$regulator)
-## 547 associated with 1748 I-modulon regulated genes.
-Imodulon.regulated.noncoding.data <- noncoding.mutation.data %>%
-    filter(Gene %in% Imodulon.regulated$Gene)
-## so seems like I-modulon regulators have more noncoding hits than expected.
-
-## 10 I-modulon regulators with multiple non-coding hits
-Imodulon.regulator.noncoding.data2 <- noncoding.by.gene %>%
-    filter(Gene %in% Imodulon.regulators$regulator)
-
-## 117 I-modulon.regulated with multiple non-coding hits.
-Imodulon.regulated.noncoding.data2 <- noncoding.by.gene %>%
-    filter(Gene %in% Imodulon.regulated$Gene)
-
-## what are the multiple non-coding hits that are not in an I-modulon?
-## 300 of these!
-non.Imodulon.noncoding.hits <- noncoding.by.gene %>%
-    filter(!(Gene %in% Imodulon.regulators$regulator)) %>%
-    filter(!(Gene %in% Imodulon.regulated$Gene))
-
-non.Imodulon.noncoding.hits2 <- non.Imodulon.noncoding.hits %>%
-    filter(count>2)
-
-## let's look at the timing for different classes of mutations
-## in I-modulon regulators.
-Iregulon.regulator.timing.plot <- ggplot(data=Imodulon.regulator.mut.data,
-                    aes(x=t0,fill=Annotation)) +
-                    geom_histogram() +
-                    theme_classic() +
-                    facet_wrap(fixation~Population,scales='free_y',nrow=4)
-## fixations may be misleading due to coexisting clades.                    
-
-##########################################################################
 ## look at accumulation of stars over time for genes in the different proteome
 ## sectors.
 ## in other words, look at the rates at which the mutations occur over time.
@@ -502,12 +452,10 @@ Iregulon.regulator.timing.plot <- ggplot(data=Imodulon.regulator.mut.data,
 
 ## get proteome sector assignments from Hui et al. 2015 Supplementary Table 2.
 ## I saved a reduced version of the data.
-proteome.assignments <- read.csv('../data/Hui-2015-proteome-section-assignments.csv',as.is=TRUE)
+proteome.assignments <- read.csv('../data/Hui-2015-proteome-sector-assignments.csv',as.is=TRUE)
 REL606.proteome.assignments <- inner_join(REL606.genes,proteome.assignments)
-
 ## add proteome assignment to gene mutation.data.
 sector.mut.data <- inner_join(gene.mutation.data,REL606.proteome.assignments)
-
 ##six sectors:  "A" "S" "O" "U" "R" "C"
 A.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='A')
 S.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='S')
@@ -522,9 +470,7 @@ proteome.subset.size <- min(length(unique(A.sector.mut.data$Gene)),
                             length(unique(U.sector.mut.data$Gene)),
                             length(unique(R.sector.mut.data$Gene)),
                             length(unique(C.sector.mut.data$Gene)))
-
 proteome.rando.layer <- plot.base.layer(gene.mutation.data,subset.size=proteome.subset.size)
-
 
 c.A.muts <- calc.cumulative.muts(A.sector.mut.data)
 c.S.muts <- calc.cumulative.muts(S.sector.mut.data)
@@ -534,15 +480,14 @@ c.R.muts <- calc.cumulative.muts(R.sector.mut.data)
 c.C.muts <- calc.cumulative.muts(C.sector.mut.data)
 
 ## plot for proteome sectors.
-sector.plot <- proteome.rando.layer %>%
+Fig7 <- proteome.rando.layer %>%
     add.cumulative.mut.layer(c.A.muts, my.color="black") %>%
     add.cumulative.mut.layer(c.S.muts,my.color="red") %>%
     add.cumulative.mut.layer(c.O.muts,my.color="blue") %>%
     add.cumulative.mut.layer(c.U.muts,my.color="green") %>%
     add.cumulative.mut.layer(c.R.muts,my.color="yellow") %>%
     add.cumulative.mut.layer(c.C.muts,my.color="orange")
-ggsave(sector.plot,filename='../results/figures/sector-plot.pdf')
-
+ggsave(Fig7, filename='../results/gene-modules/figures/Fig7.pdf')
 ##########################################################################
 ## look at accumulation of stars over time for genes in different eigengenes
 ## inferred by Wytock and Motter (2018).
@@ -552,7 +497,6 @@ ggsave(sector.plot,filename='../results/figures/sector-plot.pdf')
 
 eigengenes <- read.csv('../data/Wytock2018-eigengenes.csv',as.is=TRUE)
 REL606.eigengenes <- inner_join(REL606.genes,eigengenes)
-
 ## add eigengene assignment to gene.mutation.data.
 eigengene.mut.data <- inner_join(gene.mutation.data, REL606.eigengenes)
 
@@ -588,7 +532,7 @@ c.eigen7.muts <- calc.cumulative.muts(eigengene7.mut.data)
 c.eigen8.muts <- calc.cumulative.muts(eigengene8.mut.data)
 c.eigen9.muts <- calc.cumulative.muts(eigengene9.mut.data)
 
-eigen.plot <- eigen.rando.layer %>%
+Fig8 <- eigen.rando.layer %>%
     add.cumulative.mut.layer(c.eigen1.muts, my.color="red") %>%
     add.cumulative.mut.layer(c.eigen2.muts,my.color="orange") %>%
     add.cumulative.mut.layer(c.eigen3.muts,my.color="yellow") %>%
@@ -598,12 +542,53 @@ eigen.plot <- eigen.rando.layer %>%
     add.cumulative.mut.layer(c.eigen7.muts,my.color="violet") %>%
     add.cumulative.mut.layer(c.eigen8.muts,my.color="pink") %>%
     add.cumulative.mut.layer(c.eigen9.muts,my.color="black")
-ggsave(eigen.plot,filename='../results/figures/eigen-plot.pdf')
-
-## why does Ara+3 an upswing of mutations in eigengene 6?
-## Seems to be entirely driven by an excess of mutations in entF.
-## Looks like a bona fide example of historical contingency!
-eigengene6.mut.data %>% filter(Population=='Ara+3') %>%
-    group_by(Gene) %>% summarize(count=n())
-
+ggsave(Fig8, filename='../results/gene-modules/figures/Fig8.pdf')
 ######################################################################################
+## CIS-REGULATORY EVOLUTION IN REGULATORS VERSUS EFFECTORS IN I-MODULONS.
+## Let's examine cis-regulatory evolution by examining non-coding mutations.
+
+## 1920 noncoding mutations with a gene annotation.
+noncoding.mutation.data <- gene.mutation.data %>%
+    filter(Annotation=='noncoding') %>%
+    filter(Gene != 'intergenic')
+
+## Let's split into I-modulon regulators and regulated genes.
+## 48 mutations associated with 70 I-modulon regulators.
+Imodulon.regulator.noncoding.data <- noncoding.mutation.data %>%
+    filter(Gene %in% Imodulon.regulators$regulator)
+## 542 associated with 1394 I-modulon regulated genes.
+Imodulon.regulated.noncoding.data <- noncoding.mutation.data %>%
+    filter(Gene %in% Imodulon.regulated$Gene)
+## so seems like I-modulon regulators have more noncoding hits than expected.
+binom.test(x=48, n=(48+542),p=(70/1394))
+
+## 415 with greater than 1 hit.
+noncoding.by.gene <- noncoding.mutation.data %>%
+    group_by(Gene) %>% summarize(count=n()) %>% arrange(desc(count)) %>%
+    left_join(REL606.genes) %>%
+    filter(count>1)
+
+## 134 with greater than 2 hits.
+noncoding.by.gene2 <- noncoding.by.gene %>% filter(count>2)
+
+## 44 with greater than 3 hits.
+noncoding.by.gene3 <- noncoding.by.gene %>% filter(count>3)
+
+## 10 I-modulon regulators with multiple non-coding hits
+Imodulon.regulator.noncoding.data2 <- noncoding.by.gene %>%
+    filter(Gene %in% Imodulon.regulators$regulator)
+
+## 115 I-modulon.regulated with multiple non-coding hits.
+Imodulon.regulated.noncoding.data2 <- noncoding.by.gene %>%
+    filter(Gene %in% Imodulon.regulated$Gene)
+
+## what are the multiple non-coding hits that are not in an I-modulon?
+## 290 of these!
+non.Imodulon.noncoding.hits <- noncoding.by.gene %>%
+    filter(!(Gene %in% Imodulon.regulators$regulator)) %>%
+    filter(!(Gene %in% Imodulon.regulated$Gene))
+
+## 94 of these.
+non.Imodulon.noncoding.hits2 <- non.Imodulon.noncoding.hits %>%
+    filter(count>2)             
+##########################################################################

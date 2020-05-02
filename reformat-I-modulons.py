@@ -7,7 +7,7 @@ This script reads in the listing of genes in each I-modulon in
 precise-db-repo/data/imodulon_gene_names.txt,
 and reformats it into an R-friendly format for metagenomics-analysis.R.
 
-Usage: python reformat-I-modulons.py > ../results/genes-to-I-modulons.csv
+Usage: python reformat-I-modulons.py > ../results/gene-modules/genes-to-I-modulons.csv
 '''
 
 print("Gene,I.modulon")
