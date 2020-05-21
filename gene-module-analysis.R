@@ -332,7 +332,6 @@ post50K.top.hypermut.pvals <- calc.traj.pvals(filter(gene.mutation.data,Generati
 post50K.top.hypermut.pvals.loc <- calc.traj.pvals(filter(gene.mutation.data,Generation>5),
                                                unique(top.hypermut.genomics$Gene.name),
                                                sample.genes.by.location=TRUE)
-
 ##########################################################################
 ## GENE MODULE ANALYSIS.
 
@@ -434,15 +433,17 @@ make.modulon.plots.helper <- function(my.I.modulon,plot.regulators=FALSE) {
     }
     ## add a title to the plots.
     p <- p + ggtitle(modulon.text)
-    print(p)
+    return(p)
 }
 
-## too big for PDF! plot to separate jpegs.
-jpeg("../results/gene-modules/figures/I-modulon-plots/plot-%d.jpeg")
+## too big for PDF-- plot to separate pngs.
+## to make Supplementary File S1, run "python stitchS1File.py".
+png("../results/gene-modules/figures/I-modulon-plots/plot-%02d.png")
 ## split into groups by I-modulon, and map them to the plotting helper.
 Imodulons.to.regulators %>% group_split(I.modulon) %>%
     map(.f=make.modulon.plots.helper)
 dev.off()
+
 ##########################################################################
 
 ## look at accumulation of stars over time for genes in the different proteome

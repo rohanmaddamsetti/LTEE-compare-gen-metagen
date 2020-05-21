@@ -90,7 +90,7 @@ make.summed.plot <- function(df) {
 }
 
 make.facet.mut.plot <- function(df) {
-    make.summed.plot(df) + facet_wrap(.~Population,scales="free") 
+    make.summed.plot(df) + facet_wrap(.~Population,scales="free",nrow=4) 
 }
 
 point.mut.data <- mutation.data %>%
@@ -358,7 +358,7 @@ test <- filter(mutation.data,Position==1158096)
 
 ## Right now I don't know the answer to this question. Report this as
 ## a Technical Comment to my 2015 MBE paper,
-## in the Supplementary Text and in Supplementary Figure S5.
+## in the Supplementary Text and in Supplementary Figure S1.
 
 ########################################################################
 ## DO NOT replace this with thetaS analysis-- that will only work for core genes!
@@ -430,10 +430,10 @@ make.KS.Figure <- function(the.results.to.plot, order_by_oriC=FALSE) {
 }
 
 ## IMPORTANT NOTE: THIS WILL ONLY WORK ON CORE GENES.
-## TODO: add use.maddamsetti parameter to use one or other set of parameter estimates.
+## set use.maddamsetti parameter to use one or other set of parameter estimates.
 ## for experimenting with how the ranking on the x-axis changes the statistics,
 ## I added the rev parameter to reverse the order of genes on the x-axis.
-thetaS.KS.analysis <- function(the.data, REL606.genes, rank_by="length") {
+thetaS.KS.analysis <- function(the.data, REL606.genes, rank_by="length",use.maddamsetti=TRUE) {
 
     ## rank_by can have three values: "length", "thetaS", or "oriC".
     stopifnot(rank_by %in% c("length","thetaS","oriC"))
@@ -446,13 +446,17 @@ thetaS.KS.analysis <- function(the.data, REL606.genes, rank_by="length") {
         group_by(locus_tag, Gene, gene_length, oriC_start) %>%
         summarize(hits=n()) %>%
         ungroup()
-
-    ## have to do it this way, so that zeros are included.
-    hit.genes.df <- full_join(REL606.genes,hit.genes.df) %>%
-        mutate(thetaS=Martincorena_thetaS) %>%
-        ##mutate(thetaS=Maddamsetti_thetaS) %>%
-        filter(!(is.na(thetaS))) %>% ## only keep core genes.
-        replace_na(list(hits=0))
+    ## have to do it this complicated way, so that zeros are included.
+    hit.genes.df <- full_join(REL606.genes,hit.genes.df)
+    if (use.maddamsetti) {
+        hit.genes.df <- mutate(hit.genes.df, thetaS=Maddamsetti_thetaS)
+    } else {
+        hit.genes.df <- mutate(hit.genes.df, thetaS=Martincorena_thetaS)
+    }
+    hit.genes.df <- hit.genes.df %>%
+    filter(!(is.na(thetaS))) %>% ## only keep core genes.
+        replace_na(list(hits=0)) %>%
+        mutate(density=hits/gene_length)
 
     if (rank_by == "oriC") {
         hit.genes.df <- hit.genes.df %>%
@@ -492,6 +496,7 @@ thetaS.KS.analysis <- function(the.data, REL606.genes, rank_by="length") {
     results.to.plot <- data.frame(locus_tag=hit.genes.df$locus_tag,
                                   Gene=hit.genes.df$Gene,
                                   gene_length=hit.genes.df$gene_length,
+                                  density=hit.genes.df$density,
                                   thetaS=hit.genes.df$thetaS,
                                   empirical=empirical.cdf,
                                   null=null.cdf,
@@ -539,7 +544,7 @@ make.thetaS.KS.Figure <- function(the.results.to.plot, rank_by="length") {
     } else if (rank_by == "length") {
         plot <- plot + scale_x_continuous('Genes ranked by length')
     } else if (rank_by == "thetaS") {
-        plot <- plot + scale_x_continuous(expression(Genes~ranked~by~italic(theta[s])))
+        plot <- plot + scale_x_continuous(expression(Genes~ranked~by~theta[s]))
         
     } else {
         stop("error 2 in make.KS.Figure.")
@@ -567,15 +572,46 @@ cumsum.dN.core1 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"thetaS
 cumsum.dN.core2 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"length")
 cumsum.dN.core3 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"oriC")
 
-dS.thetaS.plot1 <- make.thetaS.KS.Figure(cumsum.dS.core1,"thetaS")
-dS.thetaS.plot2 <- make.thetaS.KS.Figure(cumsum.dS.core2,"length")
-dS.thetaS.plot3 <- make.thetaS.KS.Figure(cumsum.dS.core3,"oriC")
+dS.thetaS.plot1 <- make.thetaS.KS.Figure(cumsum.dS.core1,"thetaS") + ggtitle("Synonymous mutations")
+dS.thetaS.plot2 <- make.thetaS.KS.Figure(cumsum.dS.core2,"length") + ggtitle("Synonymous mutations") 
+dS.thetaS.plot3 <- make.thetaS.KS.Figure(cumsum.dS.core3,"oriC") + ggtitle("Synonymous mutations") 
 
-dN.thetaS.plot1 <- make.thetaS.KS.Figure(cumsum.dN.core1,"thetaS")
-dN.thetaS.plot2 <- make.thetaS.KS.Figure(cumsum.dN.core2,"length")
-dN.thetaS.plot3 <- make.thetaS.KS.Figure(cumsum.dN.core3,"oriC")
+dN.thetaS.plot1 <- make.thetaS.KS.Figure(cumsum.dN.core1,"thetaS") + ggtitle("Missense mutations")
+dN.thetaS.plot2 <- make.thetaS.KS.Figure(cumsum.dN.core2,"length") + ggtitle("Missense mutations")
+dN.thetaS.plot3 <- make.thetaS.KS.Figure(cumsum.dN.core3,"oriC") + ggtitle("Missense mutations")
 
-FigS5 <- plot_grid(dS.thetaS.plot1, dS.thetaS.plot2, dS.thetaS.plot3,
+FigS1 <- plot_grid(dS.thetaS.plot1, dS.thetaS.plot2, dS.thetaS.plot3,
                    dN.thetaS.plot1, dN.thetaS.plot2, dN.thetaS.plot3,
                    labels=c('A','B','C','D','E','F'), nrow=2)
-ggsave("../results/mutation-bias/figures/FigS5.pdf", height=7, width=10)
+ggsave("../results/mutation-bias/figures/FigS1.pdf", height=7, width=10)
+
+
+## Now, look at correlations between thetaS and dS.density and dN.density.
+## marginally insignificant correlation using my estimates.
+cor.test(cumsum.dS.core1$density,cumsum.dS.core1$thetaS)
+cor.test(cumsum.dN.core1$density,cumsum.dN.core1$thetaS)
+
+cumsum.dS.core4 <- thetaS.KS.analysis(gene.dS.mutation.data,REL606.genes,"thetaS",use.maddamsetti=FALSE)
+cumsum.dN.core4 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"thetaS",use.maddamsetti=FALSE)
+
+## not significant at all when using Martincorena estimates.
+cor.test(cumsum.dS.core4$density,cumsum.dS.core4$thetaS)
+cor.test(cumsum.dN.core4$density,cumsum.dN.core4$thetaS)
+
+## look at just Ara+3.
+araplus3.dS.mutation.data <- filter(gene.dS.mutation.data,Population=='Ara+3')
+araplus3.dN.mutation.data <- filter(gene.dN.mutation.data,Population=='Ara+3')
+
+cumsum.dS.core5 <- thetaS.KS.analysis(araplus3.dS.mutation.data,REL606.genes,"thetaS")
+cumsum.dN.core5 <- thetaS.KS.analysis(araplus3.dN.mutation.data,REL606.genes,"thetaS")
+## not significant at all.
+cor.test(cumsum.dS.core5$density,cumsum.dS.core5$thetaS)
+cor.test(cumsum.dN.core5$density,cumsum.dN.core5$thetaS)
+
+
+cumsum.dS.core6 <- thetaS.KS.analysis(araplus3.dS.mutation.data,REL606.genes,"thetaS",use.maddamsetti=FALSE)
+cumsum.dN.core6 <- thetaS.KS.analysis(araplus3.dN.mutation.data,REL606.genes,"thetaS",use.maddamsetti=FALSE)
+
+## not significant at all.
+cor.test(cumsum.dS.core6$density,cumsum.dS.core6$thetaS)
+cor.test(cumsum.dN.core6$density,cumsum.dN.core6$thetaS)
