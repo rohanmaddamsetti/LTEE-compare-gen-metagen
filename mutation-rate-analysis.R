@@ -2,8 +2,7 @@
 
 ## load library functions.
 source("metagenomics-library.R")
-library(RColorBrewer)
-
+library(viridis)
 ##########################################################################
 ## MUTATION RATE AND BIASES DATA ANALYSIS
 ##########################################################################
@@ -40,6 +39,8 @@ mutation.data <- read.csv(
     mutate(Generation=t0/10000) %>%
     ## This for changing the ordering of populations in plots.
     mutate(Population=factor(Population,levels=c(nonmutator.pops,hypermutator.pops))) %>%
+    ## This is for getting the colors right.
+    mutate(Annotation=factor(Annotation)) %>% 
     ## This is for plotting mutation biases around oriC.
     mutate(oriC.coordinate=rotate.REL606.chr(Position,"oriC")) %>%
     mutate(terB.coordinate=rotate.REL606.chr(Position,"terB")) %>%
@@ -60,11 +61,33 @@ gene.mutation.data <- gene.mutation.data %>%
 ############################
 ### VERY IMPORTANT NOTE:
 ## mutation.data includes all mutations in the LTEE metagenomics data.
-## for this reason, ALWAYS use mutation.data when examining mutation bias over the genome.
+## for this reason, ALWAYS use mutation.data when examining mutation bias
+## over the genome.
 
 ## gene.mutation.data only has mutations that have gene-level annotations.
 ## when examining genes on different strands, use gene.mutation.data.
+############################
 
+## we need a consistent color scale for all 6 classes of mutations in all plots.
+## let's use the viridis color scheme.
+
+## general function to get matching colors for mutation annotations.
+## mu.data := the LTEE metagenomics data (with Annotation column)
+## vec := vector, which is a subset of the values in that Annotation column.
+## returns the colors that match the annotations in vec, based on a
+## scale derived from the values in mu.data$Annotation.
+
+mut.annotation.vec <- levels(mutation.data$Annotation)
+pal <- viridisLite::viridis(length(mut.annotation.vec))
+
+get.pal.colors.for.mut.data <- function(mut.annot.v, palett, vec) {
+    idx <- match(vec, mut.annot.v)
+    return(palett[idx])
+}
+## use partial function application to maintain modularity.
+## want to look up the values in mutation.data, while
+## not using mutation.data as a global value within the function.
+get.pal.colors <- partial(get.pal.colors.for.mut.data, mut.annotation.vec, pal)
 ##########################################################################################
 ## EVIDENCE OF WAVE-PATTERN MUTATION BIAS.
 
@@ -78,19 +101,18 @@ gene.mutation.data <- gene.mutation.data %>%
 ## of dS over LTEE genomes reflect unwinding/loosening of chromosomal
 ## proteins packing up the DNA.
 
-make.summed.plot <- function(df) {
+make.summed.plot <- function(df, color.vals,number.of.bins = 46) {
     ggplot(df, aes(x=Mbp.coordinate, fill=Annotation)) +
-        ## use RColorBrewer scale
-        scale_fill_brewer(palette = "RdYlBu", direction=-1,drop=FALSE) +
-        geom_histogram(bins=100) + 
+        scale_fill_manual(values = color.vals) +
+        geom_histogram(bins = number.of.bins) + 
         theme_classic() +
         ylab("Count") +
         xlab("Genomic position (Mb)") +
         theme(legend.position="bottom")
 }
 
-make.facet.mut.plot <- function(df) {
-    make.summed.plot(df) + facet_wrap(.~Population,scales="free",nrow=4) 
+make.facet.mut.plot <- function(df, color.vals) {
+    make.summed.plot(df, color.vals) + facet_wrap(.~Population,scales="free",nrow=4) 
 }
 
 point.mut.data <- mutation.data %>%
@@ -99,29 +121,32 @@ indel.mut.data <- mutation.data %>% filter(Annotation %in% c('indel'))
 sv.mut.data <- mutation.data %>% filter(Annotation %in% c('sv'))
 
 ## Figure 1: point mutations over the genome.
-point.mut.plot <- make.facet.mut.plot(point.mut.data)
+## try to get the right colors.
+point.colorvalues <- get.pal.colors(unique(point.mut.data$Annotation))
+point.mut.plot <- make.facet.mut.plot(point.mut.data, point.colorvalues)
 ggsave("../results/mutation-bias/figures/Fig1.pdf",point.mut.plot,width=7,height=7)
 
 ## S1 Figure: indels over the genome.
-indel.mut.plot <- make.facet.mut.plot(indel.mut.data) +
-    scale_fill_manual(values="purple") + guides(fill=FALSE)
+indel.colorvalues <- get.pal.colors(unique(indel.mut.data$Annotation))
+indel.mut.plot <- make.facet.mut.plot(indel.mut.data, indel.colorvalues) +
+    guides(fill=FALSE)
 ggsave("../results/mutation-bias/figures/S1Fig.pdf",indel.mut.plot,width=6,height=4)
 
 ## S2 Figure: sv over the genome
-sv.mut.plot <- make.facet.mut.plot(sv.mut.data) +
-    scale_fill_manual(values="green") + guides(fill=FALSE)
+sv.colorvalues <- get.pal.colors(unique(sv.mut.data$Annotation))
+sv.mut.plot <- make.facet.mut.plot(sv.mut.data, sv.colorvalues) +
+    guides(fill=FALSE)
 ggsave("../results/mutation-bias/figures/S2Fig.pdf",sv.mut.plot,width=6,height=4)
 
 ## S3 Figure:
 ## all mutations from all pops summed over the genome.
 ## turn off legend so that x-axis is uniform across panels.
-summed.point.mut.plot <- make.summed.plot(point.mut.data) + guides(fill=FALSE)
-summed.indel.mut.plot <- make.summed.plot(indel.mut.data) +
-    guides(fill=FALSE) +
-    scale_fill_manual(values="purple")
-summed.sv.mut.plot <- make.summed.plot(sv.mut.data) +
-    guides(fill=FALSE) +
-    scale_fill_manual(values="green")
+summed.point.mut.plot <- make.summed.plot(point.mut.data, point.colorvalues) +
+    guides(fill=FALSE)
+summed.indel.mut.plot <- make.summed.plot(indel.mut.data, indel.colorvalues) +
+    guides(fill=FALSE)
+summed.sv.mut.plot <- make.summed.plot(sv.mut.data, sv.colorvalues) +
+    guides(fill=FALSE) 
 summed.plot <- plot_grid(summed.point.mut.plot,
                          summed.indel.mut.plot,
                          summed.sv.mut.plot,
@@ -132,7 +157,8 @@ ggsave("../results/mutation-bias/figures/S3Fig.pdf",summed.plot,width=6,height=8
 ## plot gene length against location in oriC coordinates.
 gene.length.location.plot <- ggplot(REL606.genes, aes(x=oriC_start,y=gene_length)) +
     geom_point(size=0.5) + geom_smooth() + theme_classic()
-gene.length.location.plot
+ggsave("../results/mutation-bias/figures/gene_length_vs_location.pdf", gene.length.location.plot)
+cor.test(REL606.genes$oriC_start, REL606.genes$gene_length, method="kendall")
 
 ##########################################################################################
 ### EPISTASIS AND HISTORICAL CONTINGENCY IN DNA TOPOLOGY GENES topA, fis, dusB.
@@ -195,7 +221,7 @@ araplus3.local.probability.DNAtopology.not.hit <- partial(
 bins.to.try <- c(1,23,46,92,115,230,460,920)
 map(bins.to.try,araplus3.local.probability.DNAtopology.not.hit)
 
-##########################################################################################
+#####################################################################################
 ## EVIDENCE OF STRAND-SPECIFIC BIAS.
 
 ## There is evidence of a strand-specific mutation bias on genes
@@ -207,11 +233,10 @@ map(bins.to.try,araplus3.local.probability.DNAtopology.not.hit)
 ## so the asymmetry on each strand over the origin SHOWS the strand-specfic bias.
 ## the ratio of total mutations per strand on each side of the origin should give
 ## an estimate of the strength of this bias.
-
-FigS4 <- make.summed.plot(gene.mutation.data) +
-    facet_grid(strand~.,scales="fixed") +
-    scale_fill_brewer(palette = "RdPu",direction=-1,drop=FALSE)
-ggsave("../results/mutation-bias/figures/FigS4.pdf", FigS4,width=6,height=4)
+all.colorvalues <- get.pal.colors(levels(gene.mutation.data$Annotation))
+S4Fig <- make.summed.plot(gene.mutation.data, all.colorvalues) +
+    facet_grid(strand~.,scales="fixed")
+ggsave("../results/mutation-bias/figures/S4Fig.pdf", S4Fig, width=6, height=4)
 
 ## Variable names assume that the lagging strand has more mutations--
 ## I can't tell based on arbitrary orientation labeling conventions for
@@ -309,11 +334,11 @@ point.mut.plot <- plot.cumulative.muts(c.point.muts) +
     ylab("Cumulative number of mutations") +
     facet_wrap(.~Population,scales='fixed',nrow=4)
 
-indel.plot <- plot.cumulative.muts(c.indel,my.color="purple") +
+indel.plot <- plot.cumulative.muts(c.indel,my.color=get.pal.colors("indel")) +
     ylab("Cumulative number of mutations") +
     facet_wrap(.~Population,scales='fixed',nrow=4)
 
-sv.plot <- plot.cumulative.muts(c.sv,my.color="green") +
+sv.plot <- plot.cumulative.muts(c.sv,my.color=get.pal.colors("sv")) +
     ylab("Cumulative number of mutations") +
     facet_wrap(.~Population,scales='fixed',nrow=4)
 
@@ -580,38 +605,30 @@ dN.thetaS.plot1 <- make.thetaS.KS.Figure(cumsum.dN.core1,"thetaS") + ggtitle("Mi
 dN.thetaS.plot2 <- make.thetaS.KS.Figure(cumsum.dN.core2,"length") + ggtitle("Missense mutations")
 dN.thetaS.plot3 <- make.thetaS.KS.Figure(cumsum.dN.core3,"oriC") + ggtitle("Missense mutations")
 
-FigS1 <- plot_grid(dS.thetaS.plot1, dS.thetaS.plot2, dS.thetaS.plot3,
+FigS10 <- plot_grid(dS.thetaS.plot1, dS.thetaS.plot2, dS.thetaS.plot3,
                    dN.thetaS.plot1, dN.thetaS.plot2, dN.thetaS.plot3,
                    labels=c('A','B','C','D','E','F'), nrow=2)
-ggsave("../results/mutation-bias/figures/FigS1.pdf", height=7, width=10)
+ggsave("../results/mutation-bias/figures/FigS10.pdf", height=7, width=10)
 
+## Use pcor.R for partial correlation tests, freely available from:
+## http://www.yilab.gatech.edu/pcor.R
+source("pcor.R")
 
 ## Now, look at correlations between thetaS and dS.density and dN.density.
 ## marginally insignificant correlation using my estimates.
-cor.test(cumsum.dS.core1$density,cumsum.dS.core1$thetaS)
-cor.test(cumsum.dN.core1$density,cumsum.dN.core1$thetaS)
+cor.test(cumsum.dS.core1$density,cumsum.dS.core1$thetaS, method="kendall")
+## gene length still correlates with dS
+cor.test(cumsum.dS.core1$gene_length,cumsum.dS.core1$density, method="kendall")
+## gene length also correlates with thetaS
+cor.test(cumsum.dS.core1$gene_length,cumsum.dS.core1$thetaS, method="kendall")
+
+cor.test(cumsum.dN.core1$density,cumsum.dN.core1$thetaS, method="kendall")
 
 cumsum.dS.core4 <- thetaS.KS.analysis(gene.dS.mutation.data,REL606.genes,"thetaS",use.maddamsetti=FALSE)
 cumsum.dN.core4 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"thetaS",use.maddamsetti=FALSE)
 
 ## not significant at all when using Martincorena estimates.
-cor.test(cumsum.dS.core4$density,cumsum.dS.core4$thetaS)
-cor.test(cumsum.dN.core4$density,cumsum.dN.core4$thetaS)
-
-## look at just Ara+3.
-araplus3.dS.mutation.data <- filter(gene.dS.mutation.data,Population=='Ara+3')
-araplus3.dN.mutation.data <- filter(gene.dN.mutation.data,Population=='Ara+3')
-
-cumsum.dS.core5 <- thetaS.KS.analysis(araplus3.dS.mutation.data,REL606.genes,"thetaS")
-cumsum.dN.core5 <- thetaS.KS.analysis(araplus3.dN.mutation.data,REL606.genes,"thetaS")
-## not significant at all.
-cor.test(cumsum.dS.core5$density,cumsum.dS.core5$thetaS)
-cor.test(cumsum.dN.core5$density,cumsum.dN.core5$thetaS)
-
-
-cumsum.dS.core6 <- thetaS.KS.analysis(araplus3.dS.mutation.data,REL606.genes,"thetaS",use.maddamsetti=FALSE)
-cumsum.dN.core6 <- thetaS.KS.analysis(araplus3.dN.mutation.data,REL606.genes,"thetaS",use.maddamsetti=FALSE)
-
-## not significant at all.
-cor.test(cumsum.dS.core6$density,cumsum.dS.core6$thetaS)
-cor.test(cumsum.dN.core6$density,cumsum.dN.core6$thetaS)
+cor.test(cumsum.dS.core4$density,cumsum.dS.core4$thetaS, method="kendall")
+## even though gene length still correlates with dS and thetaS.
+cor.test(cumsum.dS.core4$gene_length,cumsum.dS.core4$thetaS, method="kendall")
+cor.test(cumsum.dS.core4$gene_length,cumsum.dS.core4$density, method="kendall")
