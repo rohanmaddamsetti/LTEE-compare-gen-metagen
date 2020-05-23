@@ -70,25 +70,13 @@ gene.mutation.data <- gene.mutation.data %>%
 
 ## we need a consistent color scale for all 6 classes of mutations in all plots.
 ## let's use the viridis color scheme.
-
-## general function to get matching colors for mutation annotations.
-## mu.data := the LTEE metagenomics data (with Annotation column)
-## vec := vector, which is a subset of the values in that Annotation column.
-## returns the colors that match the annotations in vec, based on a
-## scale derived from the values in mu.data$Annotation.
+## https://stackoverflow.com/questions/6919025/how-to-assign-colors-to-categorical-variables-in-ggplot2-that-have-stable-mappin
 
 mut.annotation.vec <- levels(mutation.data$Annotation)
 pal <- viridisLite::viridis(length(mut.annotation.vec))
-
-get.pal.colors.for.mut.data <- function(mut.annot.v, palett, vec) {
-    idx <- match(vec, mut.annot.v)
-    return(palett[idx])
-}
-## use partial function application to maintain modularity.
-## want to look up the values in mutation.data, while
-## not using mutation.data as a global value within the function.
-get.pal.colors <- partial(get.pal.colors.for.mut.data, mut.annotation.vec, pal)
-##########################################################################################
+names(pal) <- mut.annotation.vec
+COL_SCALE <- scale_fill_manual(name = "Annotation", values = pal)
+###################################################################################
 ## EVIDENCE OF WAVE-PATTERN MUTATION BIAS.
 
 ## LOOKS LIKES GENOME-WIDE MUTATION BIAS IN ARA+3, but not others!
@@ -101,9 +89,8 @@ get.pal.colors <- partial(get.pal.colors.for.mut.data, mut.annotation.vec, pal)
 ## of dS over LTEE genomes reflect unwinding/loosening of chromosomal
 ## proteins packing up the DNA.
 
-make.summed.plot <- function(df, color.vals,number.of.bins = 46) {
+make.summed.plot <- function(df, number.of.bins = 46) {
     ggplot(df, aes(x=Mbp.coordinate, fill=Annotation)) +
-        scale_fill_manual(values = color.vals) +
         geom_histogram(bins = number.of.bins) + 
         theme_classic() +
         ylab("Count") +
@@ -111,41 +98,42 @@ make.summed.plot <- function(df, color.vals,number.of.bins = 46) {
         theme(legend.position="bottom")
 }
 
-make.facet.mut.plot <- function(df, color.vals) {
-    make.summed.plot(df, color.vals) + facet_wrap(.~Population,scales="free",nrow=4) 
+make.facet.mut.plot <- function(df) {
+    make.summed.plot(df) + facet_wrap(.~Population,scales="free",nrow=4) 
 }
 
 point.mut.data <- mutation.data %>%
-    filter(Annotation %in% c('missense', 'synonymous', 'nonsense', 'noncoding'))
+    filter(Annotation %in% c('missense', 'noncoding', 'nonsense', 'synonymous'))
 indel.mut.data <- mutation.data %>% filter(Annotation %in% c('indel'))
 sv.mut.data <- mutation.data %>% filter(Annotation %in% c('sv'))
 
 ## Figure 1: point mutations over the genome.
-## try to get the right colors.
-point.colorvalues <- get.pal.colors(unique(point.mut.data$Annotation))
-point.mut.plot <- make.facet.mut.plot(point.mut.data, point.colorvalues)
+point.mut.plot <- make.facet.mut.plot(point.mut.data) + COL_SCALE
 ggsave("../results/mutation-bias/figures/Fig1.pdf",point.mut.plot,width=7,height=7)
 
 ## S1 Figure: indels over the genome.
-indel.colorvalues <- get.pal.colors(unique(indel.mut.data$Annotation))
-indel.mut.plot <- make.facet.mut.plot(indel.mut.data, indel.colorvalues) +
+indel.mut.plot <- make.facet.mut.plot(indel.mut.data) +
+    COL_SCALE +
     guides(fill=FALSE)
 ggsave("../results/mutation-bias/figures/S1Fig.pdf",indel.mut.plot,width=6,height=4)
 
 ## S2 Figure: sv over the genome
-sv.colorvalues <- get.pal.colors(unique(sv.mut.data$Annotation))
-sv.mut.plot <- make.facet.mut.plot(sv.mut.data, sv.colorvalues) +
+sv.mut.plot <- make.facet.mut.plot(sv.mut.data) +
+    COL_SCALE +
     guides(fill=FALSE)
 ggsave("../results/mutation-bias/figures/S2Fig.pdf",sv.mut.plot,width=6,height=4)
 
 ## S3 Figure:
 ## all mutations from all pops summed over the genome.
 ## turn off legend so that x-axis is uniform across panels.
-summed.point.mut.plot <- make.summed.plot(point.mut.data, point.colorvalues) +
+summed.point.mut.plot <- make.summed.plot(point.mut.data) +
+    COL_SCALE +
     guides(fill=FALSE)
-summed.indel.mut.plot <- make.summed.plot(indel.mut.data, indel.colorvalues) +
+summed.indel.mut.plot <- make.summed.plot(indel.mut.data) +
+    COL_SCALE +
     guides(fill=FALSE)
-summed.sv.mut.plot <- make.summed.plot(sv.mut.data, sv.colorvalues) +
+summed.sv.mut.plot <- make.summed.plot(sv.mut.data) +
+    COL_SCALE +
     guides(fill=FALSE) 
 summed.plot <- plot_grid(summed.point.mut.plot,
                          summed.indel.mut.plot,
@@ -160,7 +148,7 @@ gene.length.location.plot <- ggplot(REL606.genes, aes(x=oriC_start,y=gene_length
 ggsave("../results/mutation-bias/figures/gene_length_vs_location.pdf", gene.length.location.plot)
 cor.test(REL606.genes$oriC_start, REL606.genes$gene_length, method="kendall")
 
-##########################################################################################
+###################################################################################
 ### EPISTASIS AND HISTORICAL CONTINGENCY IN DNA TOPOLOGY GENES topA, fis, dusB.
 
 ## Calculate approximate probability of
@@ -233,9 +221,10 @@ map(bins.to.try,araplus3.local.probability.DNAtopology.not.hit)
 ## so the asymmetry on each strand over the origin SHOWS the strand-specfic bias.
 ## the ratio of total mutations per strand on each side of the origin should give
 ## an estimate of the strength of this bias.
-all.colorvalues <- get.pal.colors(levels(gene.mutation.data$Annotation))
-S4Fig <- make.summed.plot(gene.mutation.data, all.colorvalues) +
-    facet_grid(strand~.,scales="fixed")
+
+S4Fig <- make.summed.plot(gene.mutation.data) +
+    facet_grid(strand~.,scales="fixed") +
+    COL_SCALE
 ggsave("../results/mutation-bias/figures/S4Fig.pdf", S4Fig, width=6, height=4)
 
 ## Variable names assume that the lagging strand has more mutations--
@@ -334,11 +323,11 @@ point.mut.plot <- plot.cumulative.muts(c.point.muts) +
     ylab("Cumulative number of mutations") +
     facet_wrap(.~Population,scales='fixed',nrow=4)
 
-indel.plot <- plot.cumulative.muts(c.indel,my.color=get.pal.colors("indel")) +
+indel.plot <- plot.cumulative.muts(c.indel, my.color = pal[['indel']]) +
     ylab("Cumulative number of mutations") +
     facet_wrap(.~Population,scales='fixed',nrow=4)
 
-sv.plot <- plot.cumulative.muts(c.sv,my.color=get.pal.colors("sv")) +
+sv.plot <- plot.cumulative.muts(c.sv, my.color = pal[['sv']]) +
     ylab("Cumulative number of mutations") +
     facet_wrap(.~Population,scales='fixed',nrow=4)
 
