@@ -445,8 +445,6 @@ make.KS.Figure <- function(the.results.to.plot, order_by_oriC=FALSE) {
 
 ## IMPORTANT NOTE: THIS WILL ONLY WORK ON CORE GENES.
 ## set use.maddamsetti parameter to use one or other set of parameter estimates.
-## for experimenting with how the ranking on the x-axis changes the statistics,
-## I added the rev parameter to reverse the order of genes on the x-axis.
 thetaS.KS.analysis <- function(the.data, REL606.genes, rank_by="length",use.maddamsetti=TRUE) {
 
     ## rank_by can have three values: "length", "thetaS", or "oriC".
@@ -520,8 +518,6 @@ thetaS.KS.analysis <- function(the.data, REL606.genes, rank_by="length",use.madd
     return(results.to.plot)
 }
 
-## for experimenting with how the ranking on the x-axis changes the statistics,
-## I added the rev parameter to reverse the order of genes on the x-axis.
 make.thetaS.KS.Figure <- function(the.results.to.plot, rank_by="length") {
 
     ## rank_by can have three values: "length", "thetaS", or "oriC".
