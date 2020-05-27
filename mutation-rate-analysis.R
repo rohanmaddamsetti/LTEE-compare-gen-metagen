@@ -77,139 +77,53 @@ pal <- viridisLite::viridis(length(mut.annotation.vec))
 names(pal) <- mut.annotation.vec
 COL_SCALE <- scale_fill_manual(name = "Annotation", values = pal)
 ###################################################################################
-## EVIDENCE OF WAVE-PATTERN MUTATION BIAS.
+## MUTATION RATE ANALYSIS
 
-## LOOKS LIKES GENOME-WIDE MUTATION BIAS IN ARA+3, but not others!
-## look at mutation density over the chromosome.
-## In Ara+3, we see a wave pattern, as reported by Pat Foster's
-## group and by Vaughn Cooper's group!
-## By looking at mutations in topA, fis, and dusB, Ara+3 has only
-## one synonymous mutation in those three genes despite being an
-## early mutator. Therefore, perhaps the uniformity
-## of dS over LTEE genomes reflect unwinding/loosening of chromosomal
-## proteins packing up the DNA.
+##  plot of the cumulative number of different classes of mutations
+## across the whole genome, in order to show evolution of mutation rates in LTEE.
 
-make.summed.plot <- function(df, number.of.bins = 46) {
-    ggplot(df, aes(x=Mbp.coordinate, fill=Annotation)) +
-        geom_histogram(bins = number.of.bins) + 
-        theme_classic() +
-        ylab("Count") +
-        xlab("Genomic position (Mb)") +
-        theme(legend.position="bottom")
-}
+## THESE RESULTS ARE REALLY COOL! WE SEE DIFFERENT KINDS OF ANTI-MUTATOR ALLELES!
 
-make.facet.mut.plot <- function(df) {
-    make.summed.plot(df) + facet_wrap(.~Population,scales="free",nrow=4) 
-}
+## set normalization constant to 1, since we're looking over the whole genome.
+point.mutation.data <- mutation.data %>%
+    filter(Annotation %in% c("missense", "synonymous", "noncoding", "nonsense"))
+sv.mutation.data <- mutation.data %>%
+    filter(Annotation=='sv')
+indel.mutation.data <- mutation.data %>%
+    filter(Annotation=='indel')
 
-point.mut.data <- mutation.data %>%
-    filter(Annotation %in% c('missense', 'noncoding', 'nonsense', 'synonymous'))
-indel.mut.data <- mutation.data %>% filter(Annotation %in% c('indel'))
-sv.mut.data <- mutation.data %>% filter(Annotation %in% c('sv'))
+## IMPORTANT: set plot.to.end parameter to FALSE.
+c.point.muts <- calc.cumulative.muts(point.mutation.data,
+                                     normalization.constant=1,
+                                     plot.to.end=FALSE)
 
-## Figure 1: point mutations over the genome.
-point.mut.plot <- make.facet.mut.plot(point.mut.data) + COL_SCALE
-ggsave("../results/mutation-bias/figures/Fig1.pdf",point.mut.plot,width=7,height=7)
+c.sv <- calc.cumulative.muts(sv.mutation.data,
+                             normalization.constant=1,
+                             plot.to.end=FALSE)
 
-## S1 Figure: indels over the genome.
-indel.mut.plot <- make.facet.mut.plot(indel.mut.data) +
-    COL_SCALE +
-    guides(fill=FALSE)
-ggsave("../results/mutation-bias/figures/S1Fig.pdf",indel.mut.plot,width=6,height=4)
+c.indel <- calc.cumulative.muts(indel.mutation.data,                                       
+                                normalization.constant=1,
+                                plot.to.end=FALSE)
 
-## S2 Figure: sv over the genome
-sv.mut.plot <- make.facet.mut.plot(sv.mut.data) +
-    COL_SCALE +
-    guides(fill=FALSE)
-ggsave("../results/mutation-bias/figures/S2Fig.pdf",sv.mut.plot,width=6,height=4)
+point.mut.plot <- plot.cumulative.muts(c.point.muts) +
+    ylab("Cumulative number of mutations") +
+    facet_wrap(.~Population,scales='fixed',nrow=4)
 
-## S3 Figure:
-## all mutations from all pops summed over the genome.
-## turn off legend so that x-axis is uniform across panels.
-summed.point.mut.plot <- make.summed.plot(point.mut.data) +
-    COL_SCALE +
-    guides(fill=FALSE)
-summed.indel.mut.plot <- make.summed.plot(indel.mut.data) +
-    COL_SCALE +
-    guides(fill=FALSE)
-summed.sv.mut.plot <- make.summed.plot(sv.mut.data) +
-    COL_SCALE +
-    guides(fill=FALSE) 
-summed.plot <- plot_grid(summed.point.mut.plot,
-                         summed.indel.mut.plot,
-                         summed.sv.mut.plot,
-                         labels=c('A','B','C'),
-                         ncol=1)
-ggsave("../results/mutation-bias/figures/S3Fig.pdf",summed.plot,width=6,height=8)
+indel.plot <- plot.cumulative.muts(c.indel, my.color = pal[['indel']]) +
+    ylab("Cumulative number of mutations") +
+    facet_wrap(.~Population,scales='fixed',nrow=4)
 
-## plot gene length against location in oriC coordinates.
-gene.length.location.plot <- ggplot(REL606.genes, aes(x=oriC_start,y=gene_length)) +
-    geom_point(size=0.5) + geom_smooth() + theme_classic()
-ggsave("../results/mutation-bias/figures/gene_length_vs_location.pdf", gene.length.location.plot)
-cor.test(REL606.genes$oriC_start, REL606.genes$gene_length, method="kendall")
+sv.plot <- plot.cumulative.muts(c.sv, my.color = pal[['sv']]) +
+    ylab("Cumulative number of mutations") +
+    facet_wrap(.~Population,scales='fixed',nrow=4)
 
-###################################################################################
-### EPISTASIS AND HISTORICAL CONTINGENCY IN DNA TOPOLOGY GENES topA, fis, dusB.
-
-## Calculate approximate probability of
-## no mutations in fis, topA, dusB (yhdG) in Ara+3.
-
-araplus3.mut.data <- filter(mutation.data,Population=='Ara+3')
-topA.info <- filter(REL606.genes, Gene=='topA')
-fis.info <- filter(REL606.genes, Gene=='fis')
-dusB.info <- filter(REL606.genes, Gene=='yhdG')
-
-## 1) assuming a uniform mutation rate.
-araplus3.n.muts <- nrow(araplus3.mut.data)
-fis.topA.dusB.length <- sum(c(topA.info$gene_length,
-                              fis.info$gene_length,
-                              dusB.info$gene_length))
-uniform.probability.that.not.hit(fis.topA.dusB.length,araplus3.n.muts)
-
-local.probability.that.DNAtopology.not.hit <- function(mutdata, z) {
-    ## mutdata is ara+3 mutation data.
-    ## z is the number of bins over the genome.
-    ## THIS CODE ONLY WORKS FOR topA, fis, dusB.
-
-    GENOME.LENGTH <- 4629812
-    c <- GENOME.LENGTH/z ## length of each bin
-    
-    mutations.per.bin <- bin.mutations(araplus3.mut.data,z)
-    dusB.bin <- find.bin(dusB.info, z)
-    fis.bin <- find.bin(fis.info, z)
-    topA.bin <- find.bin(topA.info, z)
-    
-    target.lengths <- c(dusB.info$gene_length,
-                        fis.info$gene_length,
-                        topA.info$gene_length)
-    
-    target.bin.mut.counts <- c(mutations.per.bin[dusB.bin],
-                               mutations.per.bin[fis.bin],
-                               mutations.per.bin[topA.bin])
-    
-    target.muts.per.base <- target.bin.mut.counts/c
-
-    ## this is a dot product.
-    ## multiply the muts.per.base by gene length, and sum.
-    expected.num.muts.for.target <- sum(target.muts.per.base*target.lengths)
-
-    total.muts <- nrow(araplus3.mut.data)
-    expected.p.hit <- expected.num.muts.for.target/total.muts
-
-    p.not.hit <- (1 - expected.p.hit)^total.muts
-    return(p.not.hit)
-}
-
-## 2) estimating local mutation rates by splitting the genome into z bins.
-araplus3.local.probability.DNAtopology.not.hit <- partial(
-    local.probability.that.DNAtopology.not.hit,
-    araplus3.mut.data)
-
-## 46 bins gives ~100 kB bins.
-bins.to.try <- c(1,23,46,92,115,230,460,920)
-map(bins.to.try,araplus3.local.probability.DNAtopology.not.hit)
-
-#####################################################################################
+## using golden ratio phi for height/width ratio
+Fig1 <- plot_grid(point.mut.plot,indel.plot, sv.plot,labels=c('A','B','C'),nrow=1,rel_heights=2/(1+sqrt(5)))
+ggsave(filename="../results/mutation-bias/figures/Fig1.pdf",Fig3,width=7)
+########################################################################################
+## Figures 2 and 3: time course trajectory plots for
+## oxidative damage repair and mismatch repair genes.
+########################################################################################
 ## EVIDENCE OF STRAND-SPECIFIC BIAS.
 
 ## There is evidence of a strand-specific mutation bias on genes
@@ -222,10 +136,10 @@ map(bins.to.try,araplus3.local.probability.DNAtopology.not.hit)
 ## the ratio of total mutations per strand on each side of the origin should give
 ## an estimate of the strength of this bias.
 
-S4Fig <- make.summed.plot(gene.mutation.data) +
+Fig4 <- make.summed.plot(gene.mutation.data) +
     facet_grid(strand~.,scales="fixed") +
     COL_SCALE
-ggsave("../results/mutation-bias/figures/S4Fig.pdf", S4Fig, width=6, height=4)
+ggsave("../results/mutation-bias/figures/Fig4.pdf", Fig4, width=6, height=4)
 
 ## Variable names assume that the lagging strand has more mutations--
 ## I can't tell based on arbitrary orientation labeling conventions for
@@ -291,50 +205,105 @@ strand.mut.vec <- c(nrow(laggingstrand.gene.mut.data),
 binom.test(x=strand.mut.vec,p=(lagging.gene.target/leading.gene.target))
 
 ########################################################################################
-## MUTATION RATE ANALYSIS
+## EVIDENCE OF WAVE-PATTERN MUTATION BIAS.
 
-##  plot of the cumulative number of different classes of mutations
-## across the whole genome, in order to show evolution of mutation rates in LTEE.
+## LOOKS LIKES GENOME-WIDE MUTATION BIAS IN ARA+3, but not others!
+## look at mutation density over the chromosome.
+## In Ara+3, we see a wave pattern, as reported by Pat Foster's
+## group and by Vaughn Cooper's group!
+## By looking at mutations in topA, fis, and dusB, Ara+3 has only
+## one synonymous mutation in those three genes despite being an
+## early mutator. Therefore, perhaps the uniformity
+## of dS over LTEE genomes reflect unwinding/loosening of chromosomal
+## proteins packing up the DNA.
 
-## THESE RESULTS ARE REALLY COOL! WE SEE DIFFERENT KINDS OF ANTI-MUTATOR ALLELES!
+make.summed.plot <- function(df, number.of.bins = 46) {
+    ggplot(df, aes(x=Mbp.coordinate, fill=Annotation)) +
+        geom_histogram(bins = number.of.bins) + 
+        theme_classic() +
+        ylab("Count") +
+        xlab("Genomic position (Mb)") +
+        theme(legend.position="bottom")
+}
 
-## set normalization constant to 1, since we're looking over the whole genome.
-point.mutation.data <- mutation.data %>%
-    filter(Annotation %in% c("missense", "synonymous", "noncoding", "nonsense"))
-sv.mutation.data <- mutation.data %>%
-    filter(Annotation=='sv')
-indel.mutation.data <- mutation.data %>%
-    filter(Annotation=='indel')
+make.facet.mut.plot <- function(df) {
+    make.summed.plot(df) + facet_wrap(.~Population,scales="free",nrow=4) 
+}
 
-## IMPORTANT: set plot.to.end parameter to FALSE.
-c.point.muts <- calc.cumulative.muts(point.mutation.data,
-                                     normalization.constant=1,
-                                     plot.to.end=FALSE)
+hypermut.mutation.data <- mutation.data %>%
+    filter(Population %in% hypermutator.pops)
+## Figure 5: mutations over the genome in hypermutator populations.
+hypermut.plot <- make.facet.mut.plot(hypermut.mutation.data) + COL_SCALE
+ggsave("../results/mutation-bias/figures/Fig5.pdf", hypermut.plot,width=7,height=7)
 
-c.sv <- calc.cumulative.muts(sv.mutation.data,
-                             normalization.constant=1,
-                             plot.to.end=FALSE)
+## Fig S4. Excluding Ara+3, don't see any wave.
+no.Araplus3 <- hypermut.mutation.data %>%
+    filter(Population != 'Ara+3')
+no.Araplus3.plot <- make.summed.plot(no.Araplus3) + COL_SCALE
+ggsave("../results/mutation-bias/figures/FigS4.pdf", no.Araplus3.plot,width=4,height=4)
 
-c.indel <- calc.cumulative.muts(indel.mutation.data,                                       
-                                normalization.constant=1,
-                                plot.to.end=FALSE)
+###################################################################################
+### EPISTASIS AND HISTORICAL CONTINGENCY IN DNA TOPOLOGY GENES topA, fis, dusB.
 
-point.mut.plot <- plot.cumulative.muts(c.point.muts) +
-    ylab("Cumulative number of mutations") +
-    facet_wrap(.~Population,scales='fixed',nrow=4)
+## Calculate approximate probability of
+## no mutations in fis, topA, dusB (yhdG) in Ara+3.
 
-indel.plot <- plot.cumulative.muts(c.indel, my.color = pal[['indel']]) +
-    ylab("Cumulative number of mutations") +
-    facet_wrap(.~Population,scales='fixed',nrow=4)
+araplus3.mut.data <- filter(mutation.data,Population=='Ara+3')
+topA.info <- filter(REL606.genes, Gene=='topA')
+fis.info <- filter(REL606.genes, Gene=='fis')
+dusB.info <- filter(REL606.genes, Gene=='yhdG')
 
-sv.plot <- plot.cumulative.muts(c.sv, my.color = pal[['sv']]) +
-    ylab("Cumulative number of mutations") +
-    facet_wrap(.~Population,scales='fixed',nrow=4)
+## 1) assuming a uniform mutation rate.
+araplus3.n.muts <- nrow(araplus3.mut.data)
+fis.topA.dusB.length <- sum(c(topA.info$gene_length,
+                              fis.info$gene_length,
+                              dusB.info$gene_length))
+uniform.probability.that.not.hit(fis.topA.dusB.length,araplus3.n.muts)
 
-## using golden ratio phi for height/width ratio
-Fig3 <- plot_grid(point.mut.plot,indel.plot, sv.plot,labels=c('A','B','C'),nrow=1,rel_heights=2/(1+sqrt(5)))
-ggsave(filename="../results/mutation-bias/figures/Fig3.pdf",Fig3,width=7)
-########################################################################################
+local.probability.that.DNAtopology.not.hit <- function(mutdata, z) {
+    ## mutdata is ara+3 mutation data.
+    ## z is the number of bins over the genome.
+    ## THIS CODE ONLY WORKS FOR topA, fis, dusB.
+
+    GENOME.LENGTH <- 4629812
+    c <- GENOME.LENGTH/z ## length of each bin
+    
+    mutations.per.bin <- bin.mutations(araplus3.mut.data,z)
+    dusB.bin <- find.bin(dusB.info, z)
+    fis.bin <- find.bin(fis.info, z)
+    topA.bin <- find.bin(topA.info, z)
+    
+    target.lengths <- c(dusB.info$gene_length,
+                        fis.info$gene_length,
+                        topA.info$gene_length)
+    
+    target.bin.mut.counts <- c(mutations.per.bin[dusB.bin],
+                               mutations.per.bin[fis.bin],
+                               mutations.per.bin[topA.bin])
+    
+    target.muts.per.base <- target.bin.mut.counts/c
+
+    ## this is a dot product.
+    ## multiply the muts.per.base by gene length, and sum.
+    expected.num.muts.for.target <- sum(target.muts.per.base*target.lengths)
+
+    total.muts <- nrow(araplus3.mut.data)
+    expected.p.hit <- expected.num.muts.for.target/total.muts
+
+    p.not.hit <- (1 - expected.p.hit)^total.muts
+    return(p.not.hit)
+}
+
+## 2) estimating local mutation rates by splitting the genome into z bins.
+araplus3.local.probability.DNAtopology.not.hit <- partial(
+    local.probability.that.DNAtopology.not.hit,
+    araplus3.mut.data)
+
+## 46 bins gives ~100 kB bins.
+bins.to.try <- c(1,23,46,92,115,230,460,920)
+map(bins.to.try,araplus3.local.probability.DNAtopology.not.hit)
+
+#####################################################################################
 ## examine DNA repair and DNA polymerase/replication genes for mutator and anti-mutator
 ## candidates.
 
@@ -347,273 +316,69 @@ interesting.parallel.nuc <- interesting.muts %>%
     group_by(Gene, Position) %>% summarize(count=n()) %>%
     arrange(desc(count)) %>% filter(count>1)
 
-## Look for mutations in LTEE similar to those in:
-## Deatherage et al. (2018). These are candidate anti-mutator alleles.
-
-PResERV.genes <- c('polA','rne')
-preserv.muts <- filter(mutation.data,Gene %in% PResERV.genes)
-preserv.parallel <- preserv.muts %>% group_by(Gene,Position) %>%
-    summarize(count=n()) %>% arrange(desc(count))
-
-## There is one parallel mutation in rne: Position 1158096.
-test <- filter(mutation.data,Position==1158096)
+most.interesting.muts <- filter(mutation.data,Position %in% interesting.parallel.nuc$Position)
 
 ########################################################################################
 ## reanalysis of synonymous variation in natural populations.
-## looks like problems with the K-S test... 
+## looks like I set up the K-S test incorrectly in my
+## my 2015 Mol. Biol. Evol. paper.
 
-## goal was to investigate dS (and other classes of mutations) across the genome
-## in the metagenomics data, revamping code from my 2015 Mol. Biol. Evol. paper.
+## this reanalysis finds the same conclusion. So it seems like my
+## 2015 Mol. Bio. Evol. paper came to the "right" conclusion
+## using dodgy statistics.
 
-## IMPORTANT ISSUE: changing the CDF (by changing rank on x-axis),
-## while keeping the same set of probability masses for each gene
-## changes K-S test statistics! How do I interpret this?
-## Perhaps because K-S is for continuous and not discrete distributions?
-
-## Right now I don't know the answer to this question. Report this as
-## a Technical Comment to my 2015 MBE paper,
-## in the Supplementary Text and in Supplementary Figure S1.
-
-########################################################################
-## DO NOT replace this with thetaS analysis-- that will only work for core genes!
-ks.analysis <- function(the.data, REL606.genes, order_by_oriC=FALSE) {
-    ## For each set of data (all data, non-mutators, MMR mutators, mutT mutators)
-    ## do the following: 1) make a uniform cdf on mutation rate per base,
-    ## 2) make an empirical cdf of mutations per gene.
-    ## do K-S tests for goodness of fit of the empirical cdf with
-    ## the uniform cdf.
-    
-    hit.genes.df <- the.data %>%
-        group_by(locus_tag, Gene, gene_length, oriC_start) %>%
-        summarize(hits=n()) %>%
-        ungroup()
-    
-    ## have to do it this way, so that zeros are included.
-    hit.genes.df <- full_join(REL606.genes,hit.genes.df) %>% replace_na(list(hits=0)) %>%
-        arrange(desc(gene_length))
-
-    if (order_by_oriC) { ## oriC will be roughly in the middle
-        hit.genes.df <- hit.genes.df %>% arrange(oriC_start)
-    }
-
-    
-    ## Calculate the empirical distribution of synonymous substitutions per gene.
-    hit.genes.length <- sum(hit.genes.df$gene_length)
-    mutation.total <- sum(hit.genes.df$hits)
-    empirical.cdf <- cumsum(hit.genes.df$hits)/mutation.total
-    ## Null hypothesis: probability of a mutation per base is uniform.
-    null.cdf <- cumsum(hit.genes.df$gene_length)/hit.genes.length
-    
-    ## Do Kolmogorov-Smirnov tests for goodness of fit.
-    print(ks.test(empirical.cdf, null.cdf, simulate.p.value=TRUE))
-    
-    results.to.plot <- data.frame(locus_tag=hit.genes.df$locus_tag,
-                                  Gene=hit.genes.df$Gene,
-                                  gene_length=hit.genes.df$gene_length,
-                                  empirical=empirical.cdf,
-                                  null=null.cdf,
-                                  oriC_start=hit.genes.df$oriC_start)
-    return(results.to.plot)
-}
-
-make.KS.Figure <- function(the.results.to.plot, order_by_oriC=FALSE) {
-    
-    if (order_by_oriC) {
-        the.results.to.plot <- the.results.to.plot %>% arrange(oriC_start)
-    } else {
-        the.results.to.plot <- the.results.to.plot %>% arrange(gene_length)
-    }
-    
-    ## for plotting convenience, add an index to the data frame.
-    the.results.to.plot$index <- seq_len(nrow(the.results.to.plot))
-  
-    p <- ggplot(the.results.to.plot, aes(x=index)) +
-        geom_line(aes(y=empirical), colour="red") + 
-        geom_line(aes(y=null), linetype=2) + 
-        scale_y_continuous('Cumulative proportion of mutations',limits=c(0,1)) +
-        theme_classic() +
-        theme(axis.title=element_text(size=18),axis.text=element_text(size=12))
-
-    if (order_by_oriC) {
-        p <- p + scale_x_continuous('Genes ranked by chromosomal location',
-                                    limits=c(0,4400))
-    } else {
-        p <- p + scale_x_continuous('Genes ranked by length',limits=c(0,4400))
-    }
-    return(p)
-}
-
-## IMPORTANT NOTE: THIS WILL ONLY WORK ON CORE GENES.
-## set use.maddamsetti parameter to use one or other set of parameter estimates.
-thetaS.KS.analysis <- function(the.data, REL606.genes, rank_by="length",use.maddamsetti=TRUE) {
-
-    ## rank_by can have three values: "length", "thetaS", or "oriC".
-    stopifnot(rank_by %in% c("length","thetaS","oriC"))
-    
-    ## 1) make an empirical cdf of mutations per core gene.
-    ## do K-S tests for goodness of fit of the empirical cdf with cdfs for
-    ## thetaS.
-    
-    hit.genes.df <- the.data %>%
-        group_by(locus_tag, Gene, gene_length, oriC_start) %>%
-        summarize(hits=n()) %>%
-        ungroup()
-    ## have to do it this complicated way, so that zeros are included.
-    hit.genes.df <- full_join(REL606.genes,hit.genes.df)
-    if (use.maddamsetti) {
-        hit.genes.df <- mutate(hit.genes.df, thetaS=Maddamsetti_thetaS)
-    } else {
-        hit.genes.df <- mutate(hit.genes.df, thetaS=Martincorena_thetaS)
-    }
-    hit.genes.df <- hit.genes.df %>%
-    filter(!(is.na(thetaS))) %>% ## only keep core genes.
-        replace_na(list(hits=0)) %>%
-        mutate(density=hits/gene_length)
-
-    if (rank_by == "oriC") {
-        hit.genes.df <- hit.genes.df %>%
-            arrange(oriC_start) ## oriC will be roughly in the middle
-    } else if (rank_by == "length") {
-        hit.genes.df <- hit.genes.df %>%
-            arrange(gene_length)
-    } else if (rank_by == "thetaS") {
-        hit.genes.df <- hit.genes.df %>%
-            arrange(thetaS)
-    } else {
-        stop("error in thetaS.KS.analysis.")
-    }
-    
-    ## Calculate the empirical distribution of synonymous substitutions per gene.
-    hit.genes.length <- sum(hit.genes.df$gene_length)
-    mutation.total <- sum(hit.genes.df$hits)
-    empirical.cdf <- cumsum(hit.genes.df$hits)/mutation.total
-    ## Null hypothesis: probability of a mutation per base is uniform.
-    null.cdf <- cumsum(hit.genes.df$gene_length)/hit.genes.length
-    ## Alternative hypothesis: mutation rate is proportional to thetaS.
-    ## alternative 1: thetaS is the mutation rate per base pair.
-    thetaS.is.per.bp.total <- sum(hit.genes.df$thetaS * hit.genes.df$gene_length)
-    alt1.cdf <- cumsum(hit.genes.df$thetaS * hit.genes.df$gene_length /thetaS.is.per.bp.total)
-    ## alternative 2: thetaS is the mutation rate per gene.
-    thetaS.is.per.gene.total <- sum(hit.genes.df$thetaS)
-    alt2.cdf <- cumsum(hit.genes.df$thetaS/thetaS.is.per.gene.total)
-    
-    ## Do Kolmogorov-Smirnov tests for goodness of fit.
-    print("uniform mutation rate hypothesis")
-    print(ks.test(empirical.cdf, null.cdf, simulate.p.value=TRUE))
-    print("mutation rate per bp is proportional to thetaS hypothesis")
-    print(ks.test(empirical.cdf, alt1.cdf, simulate.p.value=TRUE))
-    print("mutation rate per gene is proportional to thetaS hypothesis")
-    print(ks.test(empirical.cdf, alt2.cdf, simulate.p.value=TRUE))
-    
-    results.to.plot <- data.frame(locus_tag=hit.genes.df$locus_tag,
-                                  Gene=hit.genes.df$Gene,
-                                  gene_length=hit.genes.df$gene_length,
-                                  density=hit.genes.df$density,
-                                  thetaS=hit.genes.df$thetaS,
-                                  empirical=empirical.cdf,
-                                  null=null.cdf,
-                                  alt1=alt1.cdf,
-                                  alt2=alt2.cdf,
-                                  oriC_start=hit.genes.df$oriC_start)
-    return(results.to.plot)
-}
-
-make.thetaS.KS.Figure <- function(the.results.to.plot, rank_by="length") {
-
-    ## rank_by can have three values: "length", "thetaS", or "oriC".
-    stopifnot(rank_by %in% c("length","thetaS","oriC"))
-
-    if (rank_by == "oriC") {
-        ## oriC will be roughly in the middle
-        the.results.to.plot <- the.results.to.plot %>% arrange(oriC_start)
-    } else if (rank_by == "length") {
-        the.results.to.plot <- the.results.to.plot %>% arrange(gene_length)
-    } else if (rank_by == "thetaS") {
-        the.results.to.plot <- the.results.to.plot %>% arrange(thetaS)
-    } else {
-        stop("error in make.KS.Figure.")
-    }
-
-    ## for plotting convenience, add an index to the data frame.
-    the.results.to.plot$index <- seq_len(nrow(the.results.to.plot))
-
-    ## we don't plot alt2 for clarity (it doesn't change the message).
-    plot <- ggplot(the.results.to.plot, aes(x=index)) +
-        geom_line(aes(y=empirical), colour="red") + 
-        geom_line(aes(y=null), linetype=2) +
-        geom_line(aes(y=alt1), linetype='dotted') +
-        scale_y_continuous('Cumulative proportion of mutations',limits=c(0,1)) +
-        theme_classic()
-    
-    if (rank_by == "oriC") {
-        ## find the index for gidA and mioC, which sandwich oriC.
-        ## use these to plot the location of oriC.
-        gidA.index <- filter(the.results.to.plot,Gene=='gidA')$index
-        mioC.index <- filter(the.results.to.plot,Gene=='mioC')$index
-        plot <- plot + scale_x_continuous('Genes ranked by chromosomal location') + geom_vline(xintercept=(gidA.index+mioC.index)/2,linetype='dotted',color='grey')
-    } else if (rank_by == "length") {
-        plot <- plot + scale_x_continuous('Genes ranked by length')
-    } else if (rank_by == "thetaS") {
-        plot <- plot + scale_x_continuous(expression(Genes~ranked~by~theta[s]))
-        
-    } else {
-        stop("error 2 in make.KS.Figure.")
-    }
-    
-    return(plot)
-}
-
-####################################################
 gene.dS.mutation.data <- gene.mutation.data %>%
     filter(Annotation=='synonymous')
 
-gene.dN.mutation.data <- gene.mutation.data %>%
-    filter(Annotation=='missense')
+## analysis over all LTEE populations.
+dS.summary.df <- gene.dS.mutation.data %>%
+    group_by(locus_tag, Gene, gene_length, oriC_start) %>%
+    summarize(hits=n()) %>%
+    ungroup()
+## have to do it this complicated way, so that zeros are included.
+hit.genes.df <- full_join(REL606.genes,dS.summary.df) %>%
+    ## use the corrected thetaS estimates in Martincorena et al. (2012).
+    mutate(thetaS=Martincorena_thetaS) %>%
+    ## treat thetaS as if its an estimate of per bp mutation rate,
+    ## as advocated by Martincorena et al. (2012).
+    mutate(thetaS_by_length=thetaS*gene_length) %>%
+    filter(!(is.na(thetaS))) %>% ## only keep core genes.
+    replace_na(list(hits=0)) %>%
+    mutate(density=hits/gene_length)
 
-## NOTE: thetaS KS analysis will only work for core genes!
-## IMPORTANT!! RESULTS DEPEND ON X-AXIS ORDERING!
-## This will be reported as a technical comment on my 2015 MBE paper.
+## analysis over all LTEE populations.
+## let's use a Poisson GLM approach.
+m1 <- glm(hits ~ 0 + gene_length, family="poisson", data=hit.genes.df)
+summary(m1)
 
-cumsum.dS.core1 <- thetaS.KS.analysis(gene.dS.mutation.data,REL606.genes,"thetaS")
-cumsum.dS.core2 <- thetaS.KS.analysis(gene.dS.mutation.data,REL606.genes,"length")
-cumsum.dS.core3 <- thetaS.KS.analysis(gene.dS.mutation.data,REL606.genes,"oriC")
+m2 <- glm(hits ~ 0 + thetaS_by_length, family="poisson", data=hit.genes.df)
+summary(m2) ## worse than m1
 
-cumsum.dN.core1 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"thetaS")
-cumsum.dN.core2 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"length")
-cumsum.dN.core3 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"oriC")
+m3 <- glm(hits ~ 0 + thetaS, family="poisson", data=hit.genes.df)
+summary(m3) ## worse than m1
 
-dS.thetaS.plot1 <- make.thetaS.KS.Figure(cumsum.dS.core1,"thetaS") + ggtitle("Synonymous mutations")
-dS.thetaS.plot2 <- make.thetaS.KS.Figure(cumsum.dS.core2,"length") + ggtitle("Synonymous mutations") 
-dS.thetaS.plot3 <- make.thetaS.KS.Figure(cumsum.dS.core3,"oriC") + ggtitle("Synonymous mutations") 
+## calculate for individual LTEE populations.
+pop.dS.summary.df <- gene.dS.mutation.data %>%
+    ## key difference is group_by Population here too.
+    group_by(Population,locus_tag, Gene, gene_length, oriC_start) %>%
+    summarize(hits=n()) %>%
+    ungroup()
+pop.hit.genes.df <- full_join(REL606.genes, pop.dS.summary.df) %>%
+    mutate(thetaS=Martincorena_thetaS) %>%
+    mutate(thetaS_by_length=thetaS*gene_length) %>%
+    filter(!(is.na(thetaS))) %>% ## only keep core genes.
+    replace_na(list(hits=0)) %>%
+    mutate(density=hits/gene_length)
 
-dN.thetaS.plot1 <- make.thetaS.KS.Figure(cumsum.dN.core1,"thetaS") + ggtitle("Missense mutations")
-dN.thetaS.plot2 <- make.thetaS.KS.Figure(cumsum.dN.core2,"length") + ggtitle("Missense mutations")
-dN.thetaS.plot3 <- make.thetaS.KS.Figure(cumsum.dN.core3,"oriC") + ggtitle("Missense mutations")
+araplus3.hit.genes.df <- pop.hit.genes.df %>%
+    filter(Population == 'Ara+3')
 
-FigS10 <- plot_grid(dS.thetaS.plot1, dS.thetaS.plot2, dS.thetaS.plot3,
-                   dN.thetaS.plot1, dN.thetaS.plot2, dN.thetaS.plot3,
-                   labels=c('A','B','C','D','E','F'), nrow=2)
-ggsave("../results/mutation-bias/figures/FigS10.pdf", height=7, width=10)
+## let's use a Poisson GLM approach.
+araplus3.m1 <- glm(hits ~ 0 + gene_length, family="poisson", data=araplus3.hit.genes.df)
+summary(araplus3.m1)
 
-## Use pcor.R for partial correlation tests, freely available from:
-## http://www.yilab.gatech.edu/pcor.R
-source("pcor.R")
+araplus3.m2 <- glm(hits ~ 0 + thetaS_by_length, family="poisson", data=araplus3.hit.genes.df)
+summary(araplus3.m2) ## worse than araplus3.m1
 
-## Now, look at correlations between thetaS and dS.density and dN.density.
-## marginally insignificant correlation using my estimates.
-cor.test(cumsum.dS.core1$density,cumsum.dS.core1$thetaS, method="kendall")
-## gene length still correlates with dS
-cor.test(cumsum.dS.core1$gene_length,cumsum.dS.core1$density, method="kendall")
-## gene length also correlates with thetaS
-cor.test(cumsum.dS.core1$gene_length,cumsum.dS.core1$thetaS, method="kendall")
-
-cor.test(cumsum.dN.core1$density,cumsum.dN.core1$thetaS, method="kendall")
-
-cumsum.dS.core4 <- thetaS.KS.analysis(gene.dS.mutation.data,REL606.genes,"thetaS",use.maddamsetti=FALSE)
-cumsum.dN.core4 <- thetaS.KS.analysis(gene.dN.mutation.data,REL606.genes,"thetaS",use.maddamsetti=FALSE)
-
-## not significant at all when using Martincorena estimates.
-cor.test(cumsum.dS.core4$density,cumsum.dS.core4$thetaS, method="kendall")
-## even though gene length still correlates with dS and thetaS.
-cor.test(cumsum.dS.core4$gene_length,cumsum.dS.core4$thetaS, method="kendall")
-cor.test(cumsum.dS.core4$gene_length,cumsum.dS.core4$density, method="kendall")
+araplus3.m3 <- glm(hits ~ 0 + thetaS, family="poisson", data=ara.plus3.hit.genes.df)
+summary(araplus3.m3) ## worse than araplus3.m1
