@@ -176,7 +176,6 @@ find.bin <- function(locus.row, z) {
     return(-1)
 }
 
-
 ###############################
 
 ## calculate the tail probabilities of the true cumulative mutation trajectory
@@ -324,11 +323,11 @@ calc.slope.of.cumulative.muts <- function(c.muts) {
     return(D.of.c.muts)
 }
 
-## This plot visualizes a two-tailed test (alpha = 0.05)
+## This plot visualizes a two-tailed test (alphaval = 0.05)
 ## against a bootstrapped null distribution.
 ## Throughout, plots use the minimum subsample size to subsample the null distribution,
 ## to increase the variance in order to make a conservative comparison.
-plot.base.layer <- function(data, subset.size=50, N=1000, alpha = 0.05, normalization.constant=NA, my.color="gray") {
+plot.base.layer <- function(data, subset.size=50, N=1000, alphaval = 0.05, normalization.constant=NA, my.color="gray") {
     
     ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations.
@@ -348,8 +347,8 @@ plot.base.layer <- function(data, subset.size=50, N=1000, alpha = 0.05, normaliz
 
     bootstrapped.trajectories <- map_dfr(.x=seq_len(N),.f=generate.cumulative.mut.subset)
 
-    ## filter out the top alpha/2 and bottom alpha/2 trajectories from each population,
-    ## for a two-sided test. default is alpha == 0.05.
+    ## filter out the top alphaval/2 and bottom alphaval/2 trajectories from each population,
+    ## for a two-sided test. default is alphaval == 0.05.
     
     trajectory.summary <- bootstrapped.trajectories %>%
         ## important: don't drop empty groups.
@@ -359,13 +358,13 @@ plot.base.layer <- function(data, subset.size=50, N=1000, alpha = 0.05, normaliz
     
     top.trajectories <- trajectory.summary %>%
         group_by(Population) %>%
-        top_frac(alpha/2) %>%
+        slice_max(prop=alphaval/2, order_by=final.norm.cs) %>%
         dplyr::select(-final.norm.cs) %>%
         mutate(in.top=TRUE)
     
     bottom.trajectories <- trajectory.summary %>%
         group_by(Population) %>%
-        top_frac(-alpha/2) %>%
+        slice_min(prop=alphaval/2, order_by=final.norm.cs) %>%
         dplyr::select(-final.norm.cs) %>%
         mutate(in.bottom=TRUE)
     
@@ -394,7 +393,7 @@ plot.base.layer <- function(data, subset.size=50, N=1000, alpha = 0.05, normaliz
 }
 
 ## add a base layer to a plot. used in Imodulon code.
-add.base.layer <- function(p, data, my.color, subset.size=50, N=1000, alpha = 0.05, normalization.constant=NA) {
+add.base.layer <- function(p, data, my.color, subset.size=50, N=1000, alphaval = 0.05, normalization.constant=NA) {
     
         ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations.
@@ -412,8 +411,8 @@ add.base.layer <- function(p, data, my.color, subset.size=50, N=1000, alpha = 0.
     ## say, 1000 or 10000 random subsets of genes.
     bootstrapped.trajectories <- map_dfr(.x=seq_len(N),.f=generate.cumulative.mut.subset)
 
-    ## filter out the top alpha/2 and bottom alpha/2 trajectories from each population,
-    ## for a two-sided test. default is alpha == 0.05.
+    ## filter out the top alphaval/2 and bottom alphaval/2 trajectories from each population,
+    ## for a two-sided test. default is alphaval == 0.05.
     
     trajectory.summary <- bootstrapped.trajectories %>%
         ## important: don't drop empty groups.
@@ -423,13 +422,13 @@ add.base.layer <- function(p, data, my.color, subset.size=50, N=1000, alpha = 0.
     
     top.trajectories <- trajectory.summary %>%
         group_by(Population) %>%
-        top_frac(alpha/2) %>%
+        slice_max(prop=alphaval/2, order_by=final.norm.cs) %>%
         dplyr::select(-final.norm.cs) %>%
         mutate(in.top=TRUE)
     
     bottom.trajectories <- trajectory.summary %>%
         group_by(Population) %>%
-        top_frac(-alpha/2) %>%
+        slice_min(prop=alphaval/2, order_by=final.norm.cs) %>%
         dplyr::select(-final.norm.cs) %>%
         mutate(in.bottom=TRUE)
     
@@ -495,6 +494,150 @@ add.slope.of.cumulative.mut.layer <- function(p, layer.df, my.color) {
     return(p)
 }
 
+######################################################################
+## code for Mehta hypermutator data.
+## modification of calc.cumulative.muts; that function specifically
+## works on the LTEE metagenomics data.
+## To normalize, we need to supply the number of sites at risk
+## (such as sum of gene length).
+## If plot.to.end is TRUE, then add one final row.
+calc.Mehta.cumulative.muts <- function(d, normalization.constant=NA, plot.to.end=TRUE) {
+
+    cumsum.per.pop.helper.func <- function(pop) {
+
+        final.day <- 28 ## no more than 28 days in this experiment.
+        
+        df <- d %>% filter(Population==pop)
+        if (nrow(df) == 0) { ## if no mutations in this pop.
+            almost.done.df <- tibble(Population = pop,
+                                     Day = final.day,
+                                     count=0,
+                                     cs=0)
+        } else {
+            summary.df <- df %>%
+                arrange(t0) %>%
+                group_by(Population,Day) %>%
+                summarize(count=n()) %>%
+                mutate(cs=cumsum(count)) %>%
+                ungroup()
+            ## if the final generation is not in ret.df,
+            ## then add one final row (for nicer plots).
+            final.row.df <- tibble(Population = pop,
+                                   Day = final.day,
+                                   count=max(summary.df$count),
+                                   cs=max(summary.df$cs))
+            if (plot.to.end) {
+                almost.done.df <- bind_rows(summary.df, final.row.df)
+            } else {
+                almost.done.df <- summary.df
+            }
+        }
+        ## add an row for Day == 0 (for nicer plots).
+        init.row.df <- tibble(
+            Population = pop,
+            Day = 0,
+            count = 0,
+            cs = 0)
+        
+        ret.df <- bind_rows(init.row.df,almost.done.df)
+        return(ret.df)
+    }
+    
+    ## if normalization.constant is not provided, then
+    ## calculate based on gene length by default.
+    if (is.na(normalization.constant)) {
+        my.genes <- d %>% dplyr::select(Gene, gene_length) %>% distinct()
+        normalization.constant <- sum(my.genes$gene_length)
+    }
+    
+    c.dat <- map_dfr(.x=levels(d$Population),
+                     .f=cumsum.per.pop.helper.func) %>%
+        mutate(normalized.cs=cs/normalization.constant) %>%
+        ## remove any NA values.
+        na.omit()
+    
+    return(c.dat)
+}
+
+########### Plotting code for Mehta hypermutator data.
+## main difference is using Day instead of Generation,
+## and calling calc.Mehta.cumulative.muts().
+plot.Mehta.base.layer <- function(data, subset.size=50, N=1000, alphaval = 0.05, normalization.constant=NA, my.color="gray") {
+    
+    ## This function takes the index for the current draw, and samples the data,
+    ## generating a random gene set for which to calculate cumulative mutations.
+    ## IMPORTANT: this function depends on variables defined in plot.base.layer.
+    generate.Mehta.cumulative.mut.subset <- function(idx) {
+        rando.genes <- base::sample(unique(data$Gene),subset.size)
+        mut.subset <- filter(data,Gene %in% rando.genes)
+        c.mut.subset <- calc.Mehta.cumulative.muts(mut.subset, normalization.constant) %>%
+            mutate(bootstrap_replicate=idx)
+        return(c.mut.subset)
+    }
+
+    ## make a dataframe of bootstrapped trajectories.
+    ## look at accumulation of stars over time for random subsets of genes.
+    ## I want to plot the distribution of cumulative mutations over time for
+    ## say, 1000 or 10000 random subsets of genes.
+
+    bootstrapped.trajectories <- map_dfr(.x=seq_len(N),.f=generate.Mehta.cumulative.mut.subset)
+
+    ## filter out the top alphaval/2 and bottom alphaval/2 trajectories from each population,
+    ## for a two-sided test. default is alphaval == 0.05.
+    
+    trajectory.summary <- bootstrapped.trajectories %>%
+        ## important: don't drop empty groups.
+        group_by(bootstrap_replicate, Population,.drop=FALSE) %>%
+        summarize(final.norm.cs=max(normalized.cs)) %>%
+        ungroup() 
+    
+    top.trajectories <- trajectory.summary %>%
+        group_by(Population) %>%
+        slice_max(prop=alphaval/2, order_by=final.norm.cs) %>%
+        dplyr::select(-final.norm.cs) %>%
+        mutate(in.top=TRUE)
+    
+    bottom.trajectories <- trajectory.summary %>%
+        group_by(Population) %>%
+        slice_min(prop=alphaval/2, order_by=final.norm.cs) %>%
+        dplyr::select(-final.norm.cs) %>%
+        mutate(in.bottom=TRUE)
+    
+    filtered.trajectories <- bootstrapped.trajectories %>%
+        left_join(top.trajectories) %>%
+        left_join(bottom.trajectories) %>%
+        filter(is.na(in.top)) %>%
+        filter(is.na(in.bottom)) %>%
+        dplyr::select(-in.top,-in.bottom)
+
+    p <- ggplot(filtered.trajectories,aes(x=Day,y=normalized.cs)) +
+        ylab('Cumulative number of mutations (normalized)') +
+        theme_classic() +
+        geom_point(size=0.2, color=my.color) +
+        facet_wrap(.~Population,scales='free',nrow=4) +
+        xlab('Day') +
+        xlim(0, 28) +
+        theme(axis.title.x = element_text(size=14),
+              axis.title.y = element_text(size=14),
+              axis.text.x  = element_text(size=14),
+              axis.text.y  = element_text(size=14)) +
+        scale_y_continuous(labels=fancy_scientific,
+                           breaks = scales::extended_breaks(n = 6),
+                           limits = c(0, NA))
+    return(p)
+}
+
+
+add.Mehta.cumulative.mut.layer <- function(p, layer.df, my.color) {
+    p <- p +
+        geom_point(data=layer.df,
+                   aes(x=Day,y=normalized.cs),
+                   color=my.color, size=0.2) +
+        geom_step(data=layer.df, aes(x=Day,y=normalized.cs),
+                  size=0.2, color=my.color)
+    return(p)
+}
+
 ################################################################################
 ## Examine the distribution of various classes of mutations across genes in the
 ## genomics or metagenomics data. Which genes are enriched? Which genes are depleted?
@@ -539,10 +682,10 @@ pop.calc.gene.mutation.density <- function(gene.mutation.data, mut_type_vec) {
     return(density.df)
 }
 
-## This plot visualizes a two-tailed test (alpha = 0.05)
+## This plot visualizes a two-tailed test (alphaval = 0.05)
 ## against a bootstrapped null distribution for the derivative of cumulative mutations.
 ## This is what we want to use for publication.
-plot.slope.of.base.layer <- function(data, subset.size=300, N=1000, alpha = 0.05, normalization.constant=NA) {
+plot.slope.of.base.layer <- function(data, subset.size=300, N=1000, alphaval = 0.05, normalization.constant=NA) {
 
     ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations,
@@ -563,8 +706,8 @@ plot.slope.of.base.layer <- function(data, subset.size=300, N=1000, alpha = 0.05
 
     bootstrapped.trajectories <- map_dfr(.x=seq_len(N),.f=generate.slope.of.cumulative.mut.subset)
 
-    ## filter out the top alpha/2 and bottom alpha/2 trajectories from each population,
-    ## for a two-sided test. default is alpha == 0.05.
+    ## filter out the top alphaval/2 and bottom alphaval/2 trajectories from each population,
+    ## for a two-sided test. default is alphaval == 0.05.
     
     trajectory.summary <- bootstrapped.trajectories %>%
         ## important: don't drop empty groups.
@@ -574,13 +717,13 @@ plot.slope.of.base.layer <- function(data, subset.size=300, N=1000, alpha = 0.05
     
     top.trajectories <- trajectory.summary %>%
         group_by(Population) %>%
-        top_frac(alpha/2) %>%
+        slice_max(prop=alphaval/2, order_by=final.norm.cs) %>%
         dplyr::select(-final.D.norm.cs) %>%
         mutate(in.top=TRUE)
     
     bottom.trajectories <- trajectory.summary %>%
         group_by(Population) %>%
-        top_frac(-alpha/2) %>%
+        slice_min(prop=alphaval/2, order_by=final.norm.cs) %>%
         dplyr::select(-final.D.norm.cs) %>%
         mutate(in.bottom=TRUE)
     

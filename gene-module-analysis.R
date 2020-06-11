@@ -334,6 +334,115 @@ post50K.top.hypermut.pvals.loc <- calc.traj.pvals(filter(gene.mutation.data,Gene
                                                sample.genes.by.location=TRUE)
 ##########################################################################
 ## GENE MODULE ANALYSIS.
+##########################################################################
+
+## TODO!!! RENUMBER FIGURES INTO SUPPLEMENT.
+
+## First, negative results that go into the supplement.
+## downstream modules in the GRN that are predictive of growth show little 
+## sign of selection.
+
+## look at accumulation of stars over time for genes in the different proteome
+## sectors.
+## in other words, look at the rates at which the mutations occur over time.
+## plot cumulative sum of anaerobic and aerobic dS and dN in each population.
+
+## get proteome sector assignments from Hui et al. 2015 Supplementary Table 2.
+## I saved a reduced version of the data.
+proteome.assignments <- read.csv('../data/Hui-2015-proteome-sector-assignments.csv',as.is=TRUE)
+REL606.proteome.assignments <- inner_join(REL606.genes,proteome.assignments)
+## add proteome assignment to gene mutation.data.
+sector.mut.data <- inner_join(gene.mutation.data,REL606.proteome.assignments)
+##six sectors:  "A" "S" "O" "U" "R" "C"
+A.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='A')
+S.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='S')
+O.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='O')
+U.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='U')
+R.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='R')
+C.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='C')
+
+proteome.subset.size <- min(length(unique(A.sector.mut.data$Gene)),
+                            length(unique(S.sector.mut.data$Gene)),
+                            length(unique(O.sector.mut.data$Gene)),
+                            length(unique(U.sector.mut.data$Gene)),
+                            length(unique(R.sector.mut.data$Gene)),
+                            length(unique(C.sector.mut.data$Gene)))
+proteome.rando.layer <- plot.base.layer(gene.mutation.data,subset.size=proteome.subset.size)
+
+c.A.muts <- calc.cumulative.muts(A.sector.mut.data)
+c.S.muts <- calc.cumulative.muts(S.sector.mut.data)
+c.O.muts <- calc.cumulative.muts(O.sector.mut.data)
+c.U.muts <- calc.cumulative.muts(U.sector.mut.data)
+c.R.muts <- calc.cumulative.muts(R.sector.mut.data)
+c.C.muts <- calc.cumulative.muts(C.sector.mut.data)
+
+## plot for proteome sectors.
+Fig7 <- proteome.rando.layer %>%
+    add.cumulative.mut.layer(c.A.muts, my.color="black") %>%
+    add.cumulative.mut.layer(c.S.muts,my.color="red") %>%
+    add.cumulative.mut.layer(c.O.muts,my.color="blue") %>%
+    add.cumulative.mut.layer(c.U.muts,my.color="green") %>%
+    add.cumulative.mut.layer(c.R.muts,my.color="yellow") %>%
+    add.cumulative.mut.layer(c.C.muts,my.color="orange")
+ggsave(Fig7, filename='../results/gene-modules/figures/Fig7.pdf')
+##########################################################################
+## look at accumulation of stars over time for genes in different eigengenes
+## inferred by Wytock and Motter (2018).
+
+## get eigengene sector assignments from Wytock and Motter (2018) Supplementary File 1.
+## I saved a reduced version of the data.
+
+eigengenes <- read.csv('../data/Wytock2018-eigengenes.csv',as.is=TRUE)
+REL606.eigengenes <- inner_join(REL606.genes,eigengenes)
+## add eigengene assignment to gene.mutation.data.
+eigengene.mut.data <- inner_join(gene.mutation.data, REL606.eigengenes)
+
+eigengene1.mut.data <- filter(eigengene.mut.data,Eigengene==1)
+eigengene2.mut.data <- filter(eigengene.mut.data,Eigengene==2)
+eigengene3.mut.data <- filter(eigengene.mut.data,Eigengene==3)
+eigengene4.mut.data <- filter(eigengene.mut.data,Eigengene==4)
+eigengene5.mut.data <- filter(eigengene.mut.data,Eigengene==5)
+eigengene6.mut.data <- filter(eigengene.mut.data,Eigengene==6)
+eigengene7.mut.data <- filter(eigengene.mut.data,Eigengene==7)
+eigengene8.mut.data <- filter(eigengene.mut.data,Eigengene==8)
+eigengene9.mut.data <- filter(eigengene.mut.data,Eigengene==9)
+
+eigen.subset.size <- min(length(unique(eigengene1.mut.data$Gene)),
+                         length(unique(eigengene2.mut.data$Gene)),
+                         length(unique(eigengene3.mut.data$Gene)),
+                         length(unique(eigengene4.mut.data$Gene)),
+                         length(unique(eigengene5.mut.data$Gene)),
+                         length(unique(eigengene6.mut.data$Gene)),
+                         length(unique(eigengene7.mut.data$Gene)),
+                         length(unique(eigengene8.mut.data$Gene)),
+                         length(unique(eigengene9.mut.data$Gene)))
+
+eigen.rando.layer <- plot.base.layer(gene.mutation.data,subset.size=eigen.subset.size)
+
+c.eigen1.muts <- calc.cumulative.muts(eigengene1.mut.data)
+c.eigen2.muts <- calc.cumulative.muts(eigengene2.mut.data)
+c.eigen3.muts <- calc.cumulative.muts(eigengene3.mut.data)
+c.eigen4.muts <- calc.cumulative.muts(eigengene4.mut.data)
+c.eigen5.muts <- calc.cumulative.muts(eigengene5.mut.data)
+c.eigen6.muts <- calc.cumulative.muts(eigengene6.mut.data)
+c.eigen7.muts <- calc.cumulative.muts(eigengene7.mut.data)
+c.eigen8.muts <- calc.cumulative.muts(eigengene8.mut.data)
+c.eigen9.muts <- calc.cumulative.muts(eigengene9.mut.data)
+
+Fig8 <- eigen.rando.layer %>%
+    add.cumulative.mut.layer(c.eigen1.muts, my.color="red") %>%
+    add.cumulative.mut.layer(c.eigen2.muts,my.color="orange") %>%
+    add.cumulative.mut.layer(c.eigen3.muts,my.color="yellow") %>%
+    add.cumulative.mut.layer(c.eigen4.muts,my.color="green") %>%
+    add.cumulative.mut.layer(c.eigen5.muts,my.color="cyan") %>%
+    add.cumulative.mut.layer(c.eigen6.muts,my.color="blue") %>%
+    add.cumulative.mut.layer(c.eigen7.muts,my.color="violet") %>%
+    add.cumulative.mut.layer(c.eigen8.muts,my.color="pink") %>%
+    add.cumulative.mut.layer(c.eigen9.muts,my.color="black")
+ggsave(Fig8, filename='../results/gene-modules/figures/Fig8.pdf')
+
+####################################
+## Now for real results.
 
 ## look at accumulation of stars over time for genes in different transcriptional
 ## modules inferred by Sastry et al. (2020) paper from Bernhard Palsson's group.
@@ -444,106 +553,91 @@ Imodulons.to.regulators %>% group_split(I.modulon) %>%
     map(.f=make.modulon.plots.helper)
 dev.off()
 
-##########################################################################
+#################################################
+## As an additional test, let's see if regulators are under selection in the
+## hypermutator populations of Pseudomonas aeruginosa
+## evolving in the lab under antibiotic selection.
 
-## look at accumulation of stars over time for genes in the different proteome
-## sectors.
-## in other words, look at the rates at which the mutations occur over time.
-## plot cumulative sum of anaerobic and aerobic dS and dN in each population.
+## Data comes from Mehta et al. (2018):
+## The Essential Role of Hypermutation in Rapid Adaptation to Antibiotic Stress.
 
-## get proteome sector assignments from Hui et al. 2015 Supplementary Table 2.
-## I saved a reduced version of the data.
-proteome.assignments <- read.csv('../data/Hui-2015-proteome-sector-assignments.csv',as.is=TRUE)
-REL606.proteome.assignments <- inner_join(REL606.genes,proteome.assignments)
-## add proteome assignment to gene mutation.data.
-sector.mut.data <- inner_join(gene.mutation.data,REL606.proteome.assignments)
-##six sectors:  "A" "S" "O" "U" "R" "C"
-A.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='A')
-S.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='S')
-O.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='O')
-U.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='U')
-R.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='R')
-C.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='C')
+OMA.K12.to.PAO11.df <- read.csv("../data/OMA-ECOLI-PSEAE-orthologs.tsv", sep='\t')
 
-proteome.subset.size <- min(length(unique(A.sector.mut.data$Gene)),
-                            length(unique(S.sector.mut.data$Gene)),
-                            length(unique(O.sector.mut.data$Gene)),
-                            length(unique(U.sector.mut.data$Gene)),
-                            length(unique(R.sector.mut.data$Gene)),
-                            length(unique(C.sector.mut.data$Gene)))
-proteome.rando.layer <- plot.base.layer(gene.mutation.data,subset.size=proteome.subset.size)
+PAO11.genes <- read.csv("../results/PAO11_IDS.csv") %>%
+    left_join(OMA.K12.to.PAO11.df)
 
-c.A.muts <- calc.cumulative.muts(A.sector.mut.data)
-c.S.muts <- calc.cumulative.muts(S.sector.mut.data)
-c.O.muts <- calc.cumulative.muts(O.sector.mut.data)
-c.U.muts <- calc.cumulative.muts(U.sector.mut.data)
-c.R.muts <- calc.cumulative.muts(R.sector.mut.data)
-c.C.muts <- calc.cumulative.muts(C.sector.mut.data)
+REL606.Imodulon.regulator.genes <- REL606.genes %>%
+    filter(Gene %in% Imodulon.regulators$regulator)
 
-## plot for proteome sectors.
-Fig7 <- proteome.rando.layer %>%
-    add.cumulative.mut.layer(c.A.muts, my.color="black") %>%
-    add.cumulative.mut.layer(c.S.muts,my.color="red") %>%
-    add.cumulative.mut.layer(c.O.muts,my.color="blue") %>%
-    add.cumulative.mut.layer(c.U.muts,my.color="green") %>%
-    add.cumulative.mut.layer(c.R.muts,my.color="yellow") %>%
-    add.cumulative.mut.layer(c.C.muts,my.color="orange")
-ggsave(Fig7, filename='../results/gene-modules/figures/Fig7.pdf')
-##########################################################################
-## look at accumulation of stars over time for genes in different eigengenes
-## inferred by Wytock and Motter (2018).
+PAO11.Imodulon.regulator.orthologs <- PAO11.genes %>%
+    filter(blattner %in% REL606.Imodulon.regulator.genes$blattner)
+## there are only 28 PAO11 Imodulon regulator orthologs...
 
-## get eigengene sector assignments from Wytock and Motter (2018) Supplementary File 1.
-## I saved a reduced version of the data.
+## instead, let's find all genes that match these keywords:
+## regulator, regulatory, regulation.
+PAO11.regulators <- PAO11.genes %>%
+    filter(str_detect(product, 'regulator|regulatory|regulation'))
+## OK. there are 448 such genes.
 
-eigengenes <- read.csv('../data/Wytock2018-eigengenes.csv',as.is=TRUE)
-REL606.eigengenes <- inner_join(REL606.genes,eigengenes)
-## add eigengene assignment to gene.mutation.data.
-eigengene.mut.data <- inner_join(gene.mutation.data, REL606.eigengenes)
+## Now, let's run STIMS on the Mehta data. Ignore control pop.
+Mehta.data <- read.csv("../results/Mehta2018-hypermutators.csv") %>%
+    ## remove intergenic mutations.
+    filter(!str_detect(Gene,'/')) %>%
+    left_join(PAO11.genes) %>%
+    select(-blattner, -orthology, -OMA_group) %>%
+    mutate(Day = t0) %>%
+    filter(Population != 'control') %>%
+    mutate(Population = factor(Population)) %>%
+    ## filter any rows with NAs.
+    drop_na()
+    
+## only 12 mutations occurring in I modulon regulator orthologs.
+Mehta.Imodulon.regulator.mut.data <- Mehta.data %>%
+    filter(Gene %in% PAO11.Imodulon.regulator.orthologs$Gene) %>%
+    filter(Population!='control')
 
-eigengene1.mut.data <- filter(eigengene.mut.data,Eigengene==1)
-eigengene2.mut.data <- filter(eigengene.mut.data,Eigengene==2)
-eigengene3.mut.data <- filter(eigengene.mut.data,Eigengene==3)
-eigengene4.mut.data <- filter(eigengene.mut.data,Eigengene==4)
-eigengene5.mut.data <- filter(eigengene.mut.data,Eigengene==5)
-eigengene6.mut.data <- filter(eigengene.mut.data,Eigengene==6)
-eigengene7.mut.data <- filter(eigengene.mut.data,Eigengene==7)
-eigengene8.mut.data <- filter(eigengene.mut.data,Eigengene==8)
-eigengene9.mut.data <- filter(eigengene.mut.data,Eigengene==9)
+Mehta.regulator.mut.data <- Mehta.data %>%
+    filter(Gene %in% PAO11.regulators$Gene)
+## 189 mutations occurring in annotated regulators.
 
-eigen.subset.size <- min(length(unique(eigengene1.mut.data$Gene)),
-                         length(unique(eigengene2.mut.data$Gene)),
-                         length(unique(eigengene3.mut.data$Gene)),
-                         length(unique(eigengene4.mut.data$Gene)),
-                         length(unique(eigengene5.mut.data$Gene)),
-                         length(unique(eigengene6.mut.data$Gene)),
-                         length(unique(eigengene7.mut.data$Gene)),
-                         length(unique(eigengene8.mut.data$Gene)),
-                         length(unique(eigengene9.mut.data$Gene)))
+## let's quickly use a binomial test to see if regulators show
+## positive selection in the two replicates.
 
-eigen.rando.layer <- plot.base.layer(gene.mutation.data,subset.size=eigen.subset.size)
+## 189 mutations in regulators in the two replicates.
+nrow(filter(Mehta.regulator.mut.data,Population!='control'))
+## 2326 mutations observed in the two replicates.
+nrow(filter(Mehta.data,Population!='control'))
 
-c.eigen1.muts <- calc.cumulative.muts(eigengene1.mut.data)
-c.eigen2.muts <- calc.cumulative.muts(eigengene2.mut.data)
-c.eigen3.muts <- calc.cumulative.muts(eigengene3.mut.data)
-c.eigen4.muts <- calc.cumulative.muts(eigengene4.mut.data)
-c.eigen5.muts <- calc.cumulative.muts(eigengene5.mut.data)
-c.eigen6.muts <- calc.cumulative.muts(eigengene6.mut.data)
-c.eigen7.muts <- calc.cumulative.muts(eigengene7.mut.data)
-c.eigen8.muts <- calc.cumulative.muts(eigengene8.mut.data)
-c.eigen9.muts <- calc.cumulative.muts(eigengene9.mut.data)
+## entire genome length
+sum(PAO11.genes$gene_length)
+## length of regulators
+sum(PAO11.regulators$gene_length)
+## length of I-modulon orthologs
+sum(PAO11.Imodulon.regulator.orthologs$gene_length)
 
-Fig8 <- eigen.rando.layer %>%
-    add.cumulative.mut.layer(c.eigen1.muts, my.color="red") %>%
-    add.cumulative.mut.layer(c.eigen2.muts,my.color="orange") %>%
-    add.cumulative.mut.layer(c.eigen3.muts,my.color="yellow") %>%
-    add.cumulative.mut.layer(c.eigen4.muts,my.color="green") %>%
-    add.cumulative.mut.layer(c.eigen5.muts,my.color="cyan") %>%
-    add.cumulative.mut.layer(c.eigen6.muts,my.color="blue") %>%
-    add.cumulative.mut.layer(c.eigen7.muts,my.color="violet") %>%
-    add.cumulative.mut.layer(c.eigen8.muts,my.color="pink") %>%
-    add.cumulative.mut.layer(c.eigen9.muts,my.color="black")
-ggsave(Fig8, filename='../results/gene-modules/figures/Fig8.pdf')
+## regulators are under significant positive selection:
+## binomial test p = 0.0079.
+binom.test(x=189,n=2326,p=381942/5688425)
+
+## check the two populations separately.
+nrow(filter(Mehta.regulator.mut.data,Population=='replicate1'))
+nrow(filter(Mehta.data,Population=='replicate1'))
+binom.test(x=104,n=1216,p=381942/5688425)
+
+nrow(filter(Mehta.regulator.mut.data,Population=='replicate2'))
+nrow(filter(Mehta.data,Population=='replicate2'))
+binom.test(x=85,n=1110,p=396519/5684524)
+
+## now, let's use STIMS.
+c.Mehta.regulators <- calc.Mehta.cumulative.muts(Mehta.regulator.mut.data)
+
+Mehta.base.layer <- plot.Mehta.base.layer(Mehta.data,
+                                          subset.size=nrow(PAO11.regulators))
+
+Mehta.plot <- Mehta.base.layer %>% 
+    add.Mehta.cumulative.mut.layer(c.Mehta.regulators, my.color="black")
+ggsave("../results/gene-modules/figures/Mehta.pdf", Mehta.plot)
+
 ######################################################################################
 ## CIS-REGULATORY EVOLUTION IN REGULATORS VERSUS EFFECTORS IN I-MODULONS.
 ## Let's examine cis-regulatory evolution by examining non-coding mutations.
