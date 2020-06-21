@@ -562,19 +562,8 @@ non.Imodulon.noncoding.hits2 <- non.Imodulon.noncoding.hits %>%
 ## Data comes from Mehta et al. (2018):
 ## The Essential Role of Hypermutation in Rapid Adaptation to Antibiotic Stress.
 
-OMA.K12.to.PAO11.df <- read.csv("../data/OMA-ECOLI-PSEAE-orthologs.tsv", sep='\t')
-
-PAO11.genes <- read.csv("../results/PAO11_IDS.csv") %>%
-    left_join(OMA.K12.to.PAO11.df)
-
-REL606.Imodulon.regulator.genes <- REL606.genes %>%
-    filter(Gene %in% Imodulon.regulators$regulator)
-
-PAO11.Imodulon.regulator.orthologs <- PAO11.genes %>%
-    filter(blattner %in% REL606.Imodulon.regulator.genes$blattner)
-## there are only 28 PAO11 Imodulon regulator orthologs...
-
-## instead, let's find all genes that match these keywords:
+PAO11.genes <- read.csv("../results/PAO11_IDS.csv")
+## let's find all genes that match these keywords:
 ## regulator, regulatory, regulation.
 PAO11.regulators <- PAO11.genes %>%
     filter(str_detect(product, 'regulator|regulatory|regulation'))
@@ -585,57 +574,24 @@ Mehta.data <- read.csv("../results/Mehta2018-hypermutators.csv") %>%
     ## remove intergenic mutations.
     filter(!str_detect(Gene,'/')) %>%
     left_join(PAO11.genes) %>%
-    select(-blattner, -orthology, -OMA_group) %>%
     mutate(Day = t0) %>%
     filter(Population != 'control') %>%
     mutate(Population = factor(Population)) %>%
+    mutate(Population = recode(Population, `replicate1` = "Replicate 1",
+                               `replicate2` = "Replicate 2"))
     ## filter any rows with NAs.
     drop_na()
     
-## only 12 mutations occurring in I modulon regulator orthologs.
-Mehta.Imodulon.regulator.mut.data <- Mehta.data %>%
-    filter(Gene %in% PAO11.Imodulon.regulator.orthologs$Gene) %>%
-    filter(Population!='control')
-
 Mehta.regulator.mut.data <- Mehta.data %>%
     filter(Gene %in% PAO11.regulators$Gene)
 ## 189 mutations occurring in annotated regulators.
-
-## let's quickly use a binomial test to see if regulators show
-## positive selection in the two replicates.
-
-## 189 mutations in regulators in the two replicates.
-nrow(filter(Mehta.regulator.mut.data,Population!='control'))
-## 2326 mutations observed in the two replicates.
-nrow(filter(Mehta.data,Population!='control'))
-
-## entire genome length
-sum(PAO11.genes$gene_length)
-## length of regulators
-sum(PAO11.regulators$gene_length)
-## length of I-modulon orthologs
-sum(PAO11.Imodulon.regulator.orthologs$gene_length)
-
-## regulators are under significant positive selection:
-## binomial test p = 0.0079.
-binom.test(x=189,n=2326,p=381942/5688425)
-
-## check the two populations separately.
-nrow(filter(Mehta.regulator.mut.data,Population=='replicate1'))
-nrow(filter(Mehta.data,Population=='replicate1'))
-binom.test(x=104,n=1216,p=381942/5688425)
-
-nrow(filter(Mehta.regulator.mut.data,Population=='replicate2'))
-nrow(filter(Mehta.data,Population=='replicate2'))
-binom.test(x=85,n=1110,p=396519/5684524)
 
 ## now, let's use STIMS.
 c.Mehta.regulators <- calc.Mehta.cumulative.muts(Mehta.regulator.mut.data)
 
 Mehta.base.layer <- plot.Mehta.base.layer(Mehta.data,
                                           subset.size=nrow(PAO11.regulators))
-
-Mehta.plot <- Mehta.base.layer %>% 
+Fig6 <- Mehta.base.layer %>%
     add.Mehta.cumulative.mut.layer(c.Mehta.regulators, my.color="black")
-ggsave("../results/gene-modules/figures/Mehta.pdf", Mehta.plot)
+ggsave("../results/gene-modules/figures/Fig6.pdf", Fig6)
 
