@@ -304,6 +304,7 @@ calc.traj.pvals <- function(data, gene.vec, N=10000, normalization.constant=NA, 
     return(uppertail.probs)
 }
 
+
 ## Calculate the derivative of the cumulative accumulation of mutation occurrence.
 ## This is simply the rate of mutation occurrence in a class of genes.
 calc.slope.of.cumulative.muts <- function(c.muts) {
@@ -558,6 +559,65 @@ calc.Mehta.cumulative.muts <- function(d, normalization.constant=NA, plot.to.end
     
     return(c.dat)
 }
+
+## calc.traj.pvals, adapted for Mehta dataset.
+calc.Mehta.traj.pvals <- function(data, gene.vec, N=10000, normalization.constant=NA) {
+
+    ## check type for gene.vec (e.g., if factor, change to vanilla vector of strings)
+    gene.vec <- as.character(gene.vec)
+    
+    ## each sample has the same cardinality as the gene.vec.
+    subset.size <- length(gene.vec)
+
+    ## This function takes the index for the current draw, and samples the data,
+    ## generating a random gene set for which to calculate cumulative mutations.
+    ## IMPORTANT: this function depends on variables defined in
+    ## calculate.trajectory.tail.probs.
+    generate.Mehta.cumulative.mut.subset <- function(idx) {
+        rando.genes <- base::sample(unique(data$Gene),subset.size)
+        mut.subset <- filter(data,Gene %in% rando.genes)
+        c.mut.subset <- calc.Mehta.cumulative.muts(mut.subset, normalization.constant) %>%
+            mutate(bootstrap_replicate=idx)
+        return(c.mut.subset)
+    }
+        
+    ## make a dataframe of bootstrapped trajectories.
+    ## look at accumulation of stars over time for random subsets of genes.
+    bootstrapped.trajectories <- map_dfr(.x=seq_len(N),
+                                         .f=generate.Mehta.cumulative.mut.subset)
+    
+    gene.vec.data <- data %>% filter(Gene %in% gene.vec)
+    data.trajectory <- calc.Mehta.cumulative.muts(gene.vec.data,normalization.constant)
+    data.trajectory.summary <- data.trajectory %>%
+        group_by(Population,.drop=FALSE) %>%
+        summarize(final.norm.cs=max(normalized.cs)) %>%
+        ungroup()
+    
+    trajectory.summary <- bootstrapped.trajectories %>%
+        ## important: don't drop empty groups.
+        group_by(bootstrap_replicate, Population,.drop=FALSE) %>%
+        summarize(final.norm.cs=max(normalized.cs)) %>%
+        ungroup()
+    
+    trajectory.filter.helper <- function(pop.trajectories) {
+        pop <- unique(pop.trajectories$Population)
+        data.traj <- filter(data.trajectory.summary,Population == pop)
+        final.data.norm.cs <- unique(data.traj$final.norm.cs)
+        tail.trajectories <- filter(pop.trajectories, final.norm.cs >= final.data.norm.cs)
+        return(tail.trajectories)
+    }
+    
+    ## split by Population, then filter for bootstraps > data trajectory.
+    uppertail.probs <- trajectory.summary %>%
+        split(.$Population) %>%
+        map_dfr(.f=trajectory.filter.helper) %>%
+        group_by(Population,.drop=FALSE) %>%
+        summarize(count=n()) %>%
+        mutate(p.val=count/N)
+    
+    return(uppertail.probs)
+}
+
 
 ########### Plotting code for Mehta hypermutator data.
 ## main difference is using Day instead of Generation,

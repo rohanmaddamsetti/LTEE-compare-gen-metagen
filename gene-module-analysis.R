@@ -567,7 +567,7 @@ PAO11.genes <- read.csv("../results/PAO11_IDS.csv")
 ## regulator, regulatory, regulation.
 PAO11.regulators <- PAO11.genes %>%
     filter(str_detect(product, 'regulator|regulatory|regulation'))
-## OK. there are 448 such genes.
+## OK. there are 424 such genes.
 
 ## Now, let's run STIMS on the Mehta data. Ignore control pop.
 Mehta.data <- read.csv("../results/Mehta2018-hypermutators.csv") %>%
@@ -578,20 +578,39 @@ Mehta.data <- read.csv("../results/Mehta2018-hypermutators.csv") %>%
     filter(Population != 'control') %>%
     mutate(Population = factor(Population)) %>%
     mutate(Population = recode(Population, `replicate1` = "Replicate 1",
-                               `replicate2` = "Replicate 2"))
+                               `replicate2` = "Replicate 2")) %>%
     ## filter any rows with NAs.
     drop_na()
-    
+
+## show both replicate populations in Supplementary Figure S4.
 Mehta.regulator.mut.data <- Mehta.data %>%
     filter(Gene %in% PAO11.regulators$Gene)
-## 189 mutations occurring in annotated regulators.
+## 188 mutations occurring in annotated regulators.
 
-## now, let's use STIMS.
 c.Mehta.regulators <- calc.Mehta.cumulative.muts(Mehta.regulator.mut.data)
-
 Mehta.base.layer <- plot.Mehta.base.layer(Mehta.data,
                                           subset.size=nrow(PAO11.regulators))
-Fig6 <- Mehta.base.layer %>%
+S4Fig <- Mehta.base.layer %>%
     add.Mehta.cumulative.mut.layer(c.Mehta.regulators, my.color="black")
-ggsave("../results/gene-modules/figures/Fig6.pdf", Fig6)
+ggsave("../results/gene-modules/figures/S4Fig.pdf", S4Fig, width=5, height=5)
 
+## combine both replicates for Figure 6.
+combined.Mehta.data <- Mehta.data %>%
+    mutate(Population = recode(Population,
+                               `Replicate 1` = "Replicate populations combined",
+                               `Replicate 2` = "Replicate populations combined"))
+
+combined.Mehta.regulator.mut.data <- combined.Mehta.data %>%
+    filter(Gene %in% PAO11.regulators$Gene)
+
+c.combined.Mehta.regulators <- calc.Mehta.cumulative.muts(
+    combined.Mehta.regulator.mut.data)
+
+combined.Mehta.base.layer <- plot.Mehta.base.layer(combined.Mehta.data,
+                                          subset.size=nrow(PAO11.regulators))
+Fig6 <- combined.Mehta.base.layer %>%
+    add.Mehta.cumulative.mut.layer(c.combined.Mehta.regulators, my.color="black")
+ggsave("../results/gene-modules/figures/Fig6.pdf", Fig6, width=5, height=5)
+
+## calculate rigorous statistics for Figure 6.
+Mehta.pvals <- calc.Mehta.traj.pvals(combined.Mehta.data, unique(PAO11.regulators$Gene))
