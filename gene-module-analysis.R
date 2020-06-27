@@ -230,13 +230,13 @@ write.csv(only.dS.genes.in.purifying.set,file="../results/gene-modules/Table2.cs
 ## 105 only.dS genes.
 
 ## 491 purifying.genes after filters.
-## 3956 total genes after filters.
+## 3948 total genes after filters.
 
 ## contingency table for association between genes in Couce data and no dS in LTEE.
-fisher.test(matrix(c(18,473,46,3419),2))
+fisher.test(matrix(c(18,473,46,3411),2))
 
 ## contingency table for association between genes in Couce data and only dS in LTEE.
-fisher.test(matrix(c(30,461,75,3390),2))
+fisher.test(matrix(c(30,461,75,3382),2))
 
 #################################################################################
 ## POSITIVE SELECTION CONTROL EXPERIMENT AND ANALYSIS.
