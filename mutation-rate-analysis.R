@@ -6,7 +6,7 @@ library(viridis)
 
 
 ##########################################################################
-## PLOTTING FUNCTIONS
+## FUNCTIONS
 ##########################################################################
 make.summed.plot <- function(df, number.of.bins = 46) {
     ggplot(df, aes(x=Mbp.coordinate, fill=Annotation)) +
@@ -19,6 +19,45 @@ make.summed.plot <- function(df, number.of.bins = 46) {
 
 make.facet.mut.plot <- function(df) {
     make.summed.plot(df) + facet_wrap(.~Population,scales="free",nrow=4) 
+}
+
+## helper to map Allele to class of point mutation.
+SNPToSpectrumMap <- function(SNP) {
+    if (SNP == 'A->G') {
+        return("A:T>G:C")
+    } else if (SNP == "T->C") {
+        return("A:T>G:C")
+    } else if (SNP == "G->A") {
+        return("G:C>A:T")
+    } else if (SNP == "C->T") {
+        return("G:C>A:T")
+    } else if (SNP == "A->T") {
+        return("A:T>T:A")
+    } else if (SNP == "T->A") {
+        return("A:T>T:A")
+    } else if (SNP == "G->T") {
+        return("G:C>T:A")
+    } else if (SNP == "C->A") {
+        return("G:C>T:A")
+    } else if (SNP == "A->C") {
+        return("A:T>C:G")
+    } else if (SNP == "T->G") {
+        return("A:T>C:G")
+    } else if (SNP == "G->C") {
+        return("G:C>C:G")
+    } else if (SNP == "C->G") {
+        return("G:C>C:G")
+    }
+}
+
+SNPSpectrumToClassMap <- function(Spec) {
+    if (Spec == 'A:T>G:C') {
+        return("Transition")
+    } else if (Spec == 'G:C>A:T') {
+        return("Transition")
+    } else {
+        return("Transversion")
+    }
 }
 
 ##########################################################################
@@ -94,7 +133,8 @@ mut.annotation.vec <- levels(mutation.data$Annotation)
 pal <- viridisLite::viridis(length(mut.annotation.vec))
 names(pal) <- mut.annotation.vec
 COL_SCALE <- scale_fill_manual(name = "Annotation", values = pal)
-###################################################################################
+
+################################################################################
 ## MUTATION RATE ANALYSIS
 
 ##  plot of the cumulative number of different classes of mutations
@@ -123,25 +163,28 @@ c.indel <- calc.cumulative.muts(indel.mutation.data,
                                 normalization.constant=1,
                                 plot.to.end=FALSE)
 
-point.mut.plot <- plot.cumulative.muts(c.point.muts) +
+point.mut.plot <- plot.cumulative.muts(c.point.muts,my.color = 'red') +
     ylab("Cumulative number of mutations") +
-    facet_wrap(.~Population,scales='fixed',nrow=4)
+    facet_wrap(.~Population,scales='fixed',nrow=4) +
+    ggtitle("Point mutations")
 
 indel.plot <- plot.cumulative.muts(c.indel, my.color = pal[['indel']]) +
     ylab("Cumulative number of mutations") +
-    facet_wrap(.~Population,scales='fixed',nrow=4)
+    facet_wrap(.~Population,scales='fixed',nrow=4) +
+    ggtitle("Indel mutations")
 
 sv.plot <- plot.cumulative.muts(c.sv, my.color = pal[['sv']]) +
     ylab("Cumulative number of mutations") +
-    facet_wrap(.~Population,scales='fixed',nrow=4)
+    facet_wrap(.~Population,scales='fixed',nrow=4) +
+    ggtitle("Structural variants")
 
 ## using golden ratio phi for height/width ratio
 Fig1 <- plot_grid(point.mut.plot,indel.plot, sv.plot,labels=c('A','B','C'),nrow=1,rel_heights=2/(1+sqrt(5)))
 ggsave(filename="../results/mutation-bias/figures/Fig1.pdf",Fig1,width=7)
-########################################################################################
+################################################################################
 ## Figures 2 and 3: time course trajectory plots for
 ## oxidative damage repair and mismatch repair genes.
-########################################################################################
+################################################################################
 ## EVIDENCE OF STRAND-SPECIFIC BIAS.
 
 ## There is evidence of a strand-specific mutation bias on genes
@@ -154,10 +197,27 @@ ggsave(filename="../results/mutation-bias/figures/Fig1.pdf",Fig1,width=7)
 ## the ratio of total mutations per strand on each side of the origin should give
 ## an estimate of the strength of this bias.
 
-Fig4 <- make.summed.plot(gene.mutation.data) +
+oldFig4 <- make.summed.plot(gene.mutation.data) +
     facet_grid(strand~.,scales="fixed") +
     COL_SCALE
-ggsave("../results/mutation-bias/figures/Fig4.pdf", Fig4, width=6, height=4)
+
+just.dS.and.noncoding.data <- gene.mutation.data %>%
+    filter(Annotation %in% c("synonymous","noncoding")) %>%
+    filter(Population %in% hypermutator.pops) %>%
+    mutate(SNPSpectrum = sapply(Allele, SNPToSpectrumMap)) %>%
+    mutate(SNPClass = sapply(SNPSpectrum, SNPSpectrumToClassMap))
+
+Fig4 <- ggplot(just.dS.and.noncoding.data, aes(x=Mbp.coordinate, fill=SNPSpectrum)) +
+    geom_histogram(bins = 46) + ## TODO: change to parameter 'number.of.bins'
+    theme_classic() +
+    ylab("Count") +
+    xlab("Genomic position (Mb)") +
+    theme(legend.position="bottom") +
+    facet_grid(strand~Population,scales="fixed") +
+    scale_fill_viridis_d(option = "plasma")
+
+
+ggsave("../results/mutation-bias/figures/Fig4.pdf", Fig4, width=8, height=5)
 
 ## Variable names assume that the lagging strand has more mutations--
 ## I can't tell based on arbitrary orientation labeling conventions for
@@ -222,7 +282,154 @@ strand.mut.vec <- c(nrow(laggingstrand.gene.mut.data),
 
 binom.test(x=strand.mut.vec,p=(lagging.gene.target/leading.gene.target))
 
-########################################################################################
+
+############## TRANSCRIPTION AND GENE ORIENTATION/STRAND ANALYSIS
+## let's see if there's any relationship between transcription and position
+## on leading or lagging strand.
+
+## Import RNA and protein abundance data from Caglar et al. (2017).
+## make sure to check abundances during BOTH exponential and stationary phase.
+Caglar.samples <- read.csv("../results/mutation-bias/glucose-Caglar2017-REL606-data/glucose-Caglar2017-S1.csv", as.is=TRUE, header=TRUE) %>%
+    ## turn growthTime_hr into a number from string.
+    mutate(growthTime_hr = as.numeric(growthTime_hr)) %>%
+    ## drop columns which are the same for all samples,
+    ## and ones I don't care about.
+    select(-sampleNum, -experiment, -harvestDate,
+           -carbonSource, -RNA_Data_Freq, -Protein_Data_Freq,
+           -Mg_mM, -Na_mM, -Mg_mM_Levels, -Na_mM_Levels,
+           -rSquared, -uniqueCondition, -uniqueCondition02,
+           -cellTotal, -cellsPerTube)
+
+Caglar.mRNA <- read.csv("../results/mutation-bias/glucose-Caglar2017-REL606-data/glucose-Caglar2017-S2.csv", as.is=TRUE, header=TRUE)
+Caglar.protein <- read.csv("../results/mutation-bias/glucose-Caglar2017-REL606-data/glucose-Caglar2017-S3.csv", as.is=TRUE, header=TRUE)
+## reshape and merge the mRNA and protein abundance datasets using tidyr.
+tidy.mRNA <- Caglar.mRNA %>%
+    gather(`MURI_016`,`MURI_017`,`MURI_018`,`MURI_019`,`MURI_020`,`MURI_021`,
+           `MURI_022`,`MURI_023`,`MURI_024`,`MURI_025`,`MURI_026`,`MURI_027`,
+           `MURI_028`,`MURI_029`,`MURI_030`,`MURI_031`,`MURI_032`,`MURI_033`,
+           `MURI_097`,`MURI_098`,`MURI_099`,`MURI_100`,`MURI_101`,`MURI_102`,
+           `MURI_103`,`MURI_104`,`MURI_105`,key="dataSet",value="mRNA")
+tidy.protein <- Caglar.protein %>%
+    gather(`MURI_016`,`MURI_017`,`MURI_018`,`MURI_019`,`MURI_020`,`MURI_021`,
+           `MURI_022`,`MURI_023`,`MURI_024`,`MURI_025`,`MURI_026`,`MURI_027`,
+           `MURI_028`,`MURI_029`,`MURI_030`,`MURI_031`,`MURI_032`,`MURI_033`,
+           `MURI_097`,`MURI_098`,`MURI_099`,`MURI_100`,`MURI_101`,`MURI_102`,
+           `MURI_103`,`MURI_104`,`MURI_105`,key="dataSet",value="Protein") %>%
+    select(-old_refseq)
+
+full.Caglar.data <- Caglar.samples %>%
+    inner_join(tidy.mRNA) %>%
+    inner_join(tidy.protein)
+
+Caglar.summary <- full.Caglar.data %>%
+    group_by(locus_tag,growthPhase,growthTime_hr) %>%
+    summarise(mRNA.mean=mean(mRNA), mRNA.sd=sd(mRNA),
+              Protein.mean=mean(Protein), Protein.sd=sd(Protein))
+
+exp.growth.phase.summary <- full.Caglar.data %>%
+    filter(growthPhase == 'exponential') %>%
+    group_by(locus_tag) %>%
+    summarise(mRNA.mean = mean(mRNA), mRNA.sd=sd(mRNA),
+              Protein.mean=mean(Protein), Protein.sd=sd(Protein))
+
+## analyze dS, making sure to keep genes with zero hits.
+dS.summary.df <- gene.mutation.data %>%
+    filter(Annotation=='synonymous') %>%
+    group_by(locus_tag, Gene, gene_length, oriC_start) %>%
+    summarize(hits=n()) %>%
+    ungroup()
+## have to do it this complicated way, so that zeros are included.
+dS.and.mRNA.df <- full_join(REL606.genes,dS.summary.df) %>%
+    replace_na(list(hits=0)) %>%
+    mutate(density=hits/gene_length) %>%
+    mutate(gene.orientation = ifelse(
+    ((oriC_start > 0) & (strand == 1)) | ((oriC_start < 0) & (strand == -1)),
+    TRUE,FALSE)) %>%
+    left_join(exp.growth.phase.summary)
+
+## analyze dN, making sure to keep genes with zero hits.
+dN.summary.df <- gene.mutation.data %>%
+    filter(Annotation=='missense') %>%
+    group_by(locus_tag, Gene, gene_length, oriC_start) %>%
+    summarize(hits=n()) %>%
+    ungroup()
+## have to do it this complicated way, so that zeros are included.
+dN.and.mRNA.df <- full_join(REL606.genes,dN.summary.df) %>%
+    replace_na(list(hits=0)) %>%
+    mutate(density=hits/gene_length) %>%
+    mutate(gene.orientation = ifelse(
+    ((oriC_start > 0) & (strand == 1)) | ((oriC_start < 0) & (strand == -1)),
+    TRUE,FALSE)) %>%
+    left_join(exp.growth.phase.summary)
+
+
+## let's use a Poisson GLM approach.
+dS.m1 <- glm(hits ~ 0 + gene_length + mRNA.mean + gene.orientation, family="poisson", data=dS.and.mRNA.df)
+summary(dS.m1)
+
+dN.m1 <- glm(hits ~ 0 + gene_length + mRNA.mean + gene.orientation, family="poisson", data=dN.and.mRNA.df)
+summary(dN.m1)
+
+cor.test(dS.and.mRNA.df$mRNA.mean,dS.and.mRNA.df$gene.orientation)
+cor.test(dS.and.mRNA.df$mRNA.mean,dS.and.mRNA.df$density)
+cor.test(dS.and.mRNA.df$gene.orientation,dS.and.mRNA.df$density)
+
+cor.test(dN.and.mRNA.df$mRNA.mean, dN.and.mRNA.df$gene.orientation)
+cor.test(dN.and.mRNA.df$mRNA.mean, dN.and.mRNA.df$density)
+cor.test(dN.and.mRNA.df$gene.orientation,dN.and.mRNA.df$density)
+
+
+A3dS.summary.df <- gene.mutation.data %>%
+    filter(Population=='Ara+3') %>%
+    filter(Annotation=='synonymous') %>%
+    group_by(locus_tag, Gene, gene_length, oriC_start) %>%
+    summarize(hits=n()) %>%
+    ungroup()
+## have to do it this complicated way, so that zeros are included.
+A3dS.and.mRNA.df <- full_join(REL606.genes,A3dS.summary.df) %>%
+    replace_na(list(hits=0)) %>%
+    mutate(density=hits/gene_length) %>%
+    mutate(gene.orientation = ifelse(
+    ((oriC_start > 0) & (strand == 1)) | ((oriC_start < 0) & (strand == -1)),
+    0,1)) %>%
+    left_join(exp.growth.phase.summary)
+
+## analyze dN, making sure to keep genes with zero hits.
+A3dN.summary.df <- gene.mutation.data %>%
+    filter(Population=='Ara+3') %>%
+    filter(Annotation=='missense') %>%
+    group_by(locus_tag, Gene, gene_length, oriC_start) %>%
+    summarize(hits=n()) %>%
+    ungroup()
+## have to do it this complicated way, so that zeros are included.
+A3dN.and.mRNA.df <- full_join(REL606.genes,A3dN.summary.df) %>%
+    replace_na(list(hits=0)) %>%
+    mutate(density=hits/gene_length) %>%
+    mutate(gene.orientation = ifelse(
+    ((oriC_start > 0) & (strand == 1)) | ((oriC_start < 0) & (strand == -1)),
+    0,1)) %>%
+    left_join(exp.growth.phase.summary)
+
+
+## let's use a Poisson GLM approach.
+A3dS.m1 <- glm(hits ~ 0 + gene_length + mRNA.mean + gene.orientation, family="poisson", data=A3dS.and.mRNA.df)
+summary(A3dS.m1)
+
+A3dN.m1 <- glm(hits ~ 0 + gene_length + mRNA.mean + gene.orientation, family="poisson", data=A3dN.and.mRNA.df)
+summary(A3dN.m1)
+
+cor.test(A3dS.and.mRNA.df$mRNA.mean,A3dS.and.mRNA.df$gene.orientation)
+cor.test(A3dS.and.mRNA.df$mRNA.mean,A3dS.and.mRNA.df$density)
+cor.test(A3dS.and.mRNA.df$gene.orientation,A3dS.and.mRNA.df$density)
+
+cor.test(A3dN.and.mRNA.df$mRNA.mean, A3dN.and.mRNA.df$gene.orientation)
+cor.test(A3dN.and.mRNA.df$mRNA.mean, A3dN.and.mRNA.df$density)
+cor.test(A3dN.and.mRNA.df$gene.orientation,A3dN.and.mRNA.df$density)
+
+
+
+
+##################################################################################
 ## EVIDENCE OF WAVE-PATTERN MUTATION BIAS.
 
 ## LOOKS LIKES GENOME-WIDE MUTATION BIAS IN ARA+3, but not others!
