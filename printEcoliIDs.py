@@ -101,7 +101,7 @@ def main():
 
     ## now parse the genome for CDS.
     genome = next(SeqIO.parse(args.input, "genbank"))
-    print(','.join(['Gene','locus_tag','blattner','gene_length','product', 'start', 'end', 'strand']))    
+    print(','.join(['Gene','locus_tag','blattner','gene_length','product', 'start', 'end', 'strand','G','C','A','T']))    
     for feat in genome.features:
         if feat.type != 'CDS': continue ## only consider protein-coding genes
         if 'pseudo' in feat.qualifiers: continue ## skip loci annotated as pseudogenes
@@ -110,7 +110,7 @@ def main():
         my_strand = feat.location.strand
         if overlaps_any_region(my_start, my_end, annotated_repeats): continue
         if is_in_any_masked_region(my_start, my_end, masked_regions): continue
-        length = my_end - my_start
+        my_length = my_end - my_start
         locus_tag = feat.qualifiers['locus_tag'].pop()
             
         try:
@@ -127,13 +127,31 @@ def main():
             blattner = re.sub('[,;()]', '', blattner)
         except:
             blattner = 'NA'
-
         ## strip all punctuation that could cause parsing problems.
         product = re.sub('[,;()]', '', product)
         ## I should not have to do this next-- fix these corner cases later.
         blattner = re.sub('[,;()]', '', blattner)
+
+        ## get nucleotide composition of the coding strand of the gene.
+        my_seq = feat.extract(genome)
+        my_Gs = 0
+        my_Cs = 0
+        my_As = 0
+        my_Ts = 0
+        for x in my_seq:
+            if x == 'G':
+                my_Gs += 1
+            elif x == 'C':
+                my_Cs += 1
+            elif x == 'A':
+                my_As += 1
+            elif x == 'T':
+                my_Ts += 1
+        ## except one gene with a programmed frameshift during translation.
+        assert (my_Gs + my_Cs + my_As + my_Ts == my_length) or locus_tag in ['ECB_02723']
+
         ## start+1 (but end+0) to be consistent with genbank format.
-        print(','.join([str(x) for x in (gene,locus_tag,blattner,length,product, my_start+1, my_end, my_strand)]))
+        print(','.join([str(x) for x in (gene,locus_tag,blattner,my_length,product, my_start+1, my_end, my_strand, my_Gs, my_Cs, my_As, my_Ts)]))
 
 
 main()
