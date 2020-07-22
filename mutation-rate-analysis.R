@@ -351,6 +351,24 @@ Fig6 <- make.summed.plot(no.Araplus3.data) + COL_SCALE +
 
 ggsave("../results/mutation-bias/figures/Fig6.pdf",Fig6,width=6,height=3.5)
 
+## Calculate statistical significance of the wave pattern,
+## as requested by Reviewer 1.
+## I use a Kolmogorov-Smirnov test to compare the mutation distribution in Ara+3
+## to the mutation distribution across the hypermutator LTEE pops.
+
+Araplus.3.data <- hypermut.mutation.data %>% filter(Population == 'Ara+3')
+ks.test(Araplus.3.data$Position, hypermut.mutation.data$Position)
+
+other.MMR.data <- no.Araplus3.data %>%
+    filter(MMR.deficient =="MMR hypermutators (excluding Ara+3)")
+
+MutT.data <- no.Araplus3.data %>%
+        filter(MMR.deficient =="MutT hypermutators")
+
+## MMR (excluding Ara+3) distribution is significantly different from the
+## distribution
+ks.test(other.MMR.data$Position, MutT.data$Position)
+
 ###################################################################################
 ### EPISTASIS AND HISTORICAL CONTINGENCY IN DNA TOPOLOGY GENES topA, fis, dusB.
 
