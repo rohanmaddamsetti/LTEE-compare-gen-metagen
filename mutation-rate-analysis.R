@@ -204,10 +204,10 @@ sv.plot <- plot.cumulative.muts(c.IS.sv, my.color = pal[['sv']]) %>%
 
 ## using golden ratio phi for height/width ratio
 Fig1 <- plot_grid(point.mut.plot,indel.plot, sv.plot,labels=c('A','B','C'),nrow=1,rel_heights=2/(1+sqrt(5)))
-ggsave(filename="../results/mutation-bias/figures/Fig1.pdf",Fig1,width=7)
+ggsave(filename="../results/mutation-bias/tables-and-figures/Fig1.pdf",Fig1,width=7)
 
 ################################################################################
-## Figures 2 and 3: time course trajectory plots for
+## Figures 3 and 4: time course trajectory plots for
 ## oxidative damage repair and mismatch repair genes.
 ################################################################################
 ## EVIDENCE OF STRAND-SPECIFIC BIAS.
@@ -223,7 +223,7 @@ nuc.composition.df <- REL606.genes %>%
     ## make a big df with a row for every nucleotide.
     uncount(NucleotideCount)
 
-Fig4A <- ggplot(nuc.composition.df, aes(x=Mbp.coordinate, fill=Nucleotide)) +
+Fig5A <- ggplot(nuc.composition.df, aes(x=Mbp.coordinate, fill=Nucleotide)) +
     geom_histogram(bins = 46) + ## TODO: change to parameter 'number.of.bins'
     theme_classic() +
     ggtitle("Null expectation based on\nnucleotide composition") +
@@ -259,7 +259,7 @@ hypermut.dS.data <- gene.mutation.data %>%
     mutate(Spectrum = sapply(Allele, SNPToSpectrumMap)) %>%
     mutate(SNPClass = sapply(Spectrum, SNPSpectrumToClassMap))
 
-Fig4B <- ggplot(hypermut.dS.data,
+Fig5B <- ggplot(hypermut.dS.data,
                aes(x=Mbp.coordinate, fill=Spectrum)) +
     geom_histogram(bins = 46) + ## TODO: change to parameter 'number.of.bins'
     theme_classic() +
@@ -271,8 +271,8 @@ Fig4B <- ggplot(hypermut.dS.data,
     scale_fill_viridis_d(option = "plasma") +
     geom_vline(xintercept=0,color='grey',linetype='dotted')
 
-Fig4 <- plot_grid(Fig4A, Fig4B, labels= c('A','B'),nrow=1)
-Fig4 ## I save this image using quartz() because it renders the arrows properly.
+Fig5 <- plot_grid(Fig4A, Fig4B, labels= c('A','B'),nrow=1)
+Fig5 ## I save this image using quartz() because it renders the arrows properly.
 ## I am not sure how to set up the proper device backend for cowplot/ggsave
 ## to render the arrows properly.
 
@@ -334,9 +334,10 @@ binom.test(x=MutT.strand.mut.vec,p=R.gene.target/(R.gene.target+L.gene.target))
 ## of dS over LTEE genomes reflect unwinding/loosening of chromosomal
 ## proteins packing up the DNA.
 
-## Figure 5: mutations over the genome in hypermutator populations.
-hypermut.plot <- make.facet.mut.plot(hypermut.mutation.data) + COL_SCALE
-ggsave("../results/mutation-bias/figures/Fig5.pdf", hypermut.plot,width=7,height=7)
+## Figure 6: mutations over the genome in hypermutator populations.
+Fig6 <- make.facet.mut.plot(hypermut.mutation.data) + COL_SCALE
+ggsave("../results/mutation-bias/tables-and-figures/Fig6.pdf",
+       Fig6, width=7, height=7)
 
 no.Araplus3.data <- hypermut.mutation.data %>%
     filter(Population != "Ara+3") %>%
@@ -344,12 +345,12 @@ no.Araplus3.data <- hypermut.mutation.data %>%
                                   "MMR hypermutators (excluding Ara+3)",
                                   "MutT hypermutators"))
 
-## Fig 6. When excluding Ara+3, the MMR mutators show a weaker wave.
+## Fig 7. When excluding Ara+3, the MMR mutators show a weaker wave.
 ## the mutT mutators, on the other hand, don't show the wave.
-Fig6 <- make.summed.plot(no.Araplus3.data) + COL_SCALE +
+Fig7 <- make.summed.plot(no.Araplus3.data) + COL_SCALE +
     facet_wrap(.~MMR.deficient)
 
-ggsave("../results/mutation-bias/figures/Fig6.pdf",Fig6,width=6,height=3.5)
+ggsave("../results/mutation-bias/tables-and-figures/Fig7.pdf",Fig7,width=6,height=3.5)
 
 ## Calculate statistical significance of the wave pattern,
 ## as requested by Reviewer 1.
@@ -535,8 +536,8 @@ araplus3.m3 <- glm(hits ~ 0 + thetaS, family="poisson", data=araplus3.hit.genes.
 summary(araplus3.m3) ## worse than araplus3.m1
 
 #################################################################################
-## TODO: Use this Supplementary Figure as a main figure. !!!!!!!!!!!!!!!!!
-## Supplementary Figure 1: break down Figure 1A by mutation spectrum.
+## Figure 2: break down Figure 1A by mutation spectrum.
+## I use the legend from Figure 5, which is why this code is down here.
 
 hypermut.SNPs <- mutation.data %>%
     filter(Population %in% hypermutator.pops) %>%
@@ -576,7 +577,7 @@ c.SNP6 <- calc.cumulative.muts(SNPclass6.data,
                                      normalization.constant=1,
                                      plot.to.end=FALSE)
 
-S1FigA <- plot.cumulative.muts(c.SNP1, my.color = SNP.pal[['A:T→C:G']]) %>%
+Fig2A <- plot.cumulative.muts(c.SNP1, my.color = SNP.pal[['A:T→C:G']]) %>%
     add.cumulative.mut.layer(c.SNP2, my.color = SNP.pal[['A:T→G:C']]) %>%
     add.cumulative.mut.layer(c.SNP3, my.color = SNP.pal[['A:T→T:A']]) %>%
     add.cumulative.mut.layer(c.SNP4, my.color = SNP.pal[['G:C→A:T']]) %>%
@@ -587,7 +588,7 @@ S1FigA <- plot.cumulative.muts(c.SNP1, my.color = SNP.pal[['A:T→C:G']]) %>%
     facet_wrap(.~Population,scales='free',nrow=1) +
     theme(axis.title.y = element_text(size = 10))
 
-S1FigB <- plot.cumulative.muts(c.SNP1, my.color = SNP.pal[['A:T→C:G']]) %>%
+Fig2B <- plot.cumulative.muts(c.SNP1, my.color = SNP.pal[['A:T→C:G']]) %>%
     add.cumulative.mut.layer(c.SNP2, my.color = SNP.pal[['A:T→G:C']]) %>%
     add.cumulative.mut.layer(c.SNP3, my.color = SNP.pal[['A:T→T:A']]) %>%
     add.cumulative.mut.layer(c.SNP4, my.color = SNP.pal[['G:C→A:T']]) %>%
@@ -600,23 +601,21 @@ S1FigB <- plot.cumulative.muts(c.SNP1, my.color = SNP.pal[['A:T→C:G']]) %>%
     theme(axis.title.y = element_text(size = 10))
 
 ## grab and use the figure legend from Figure 4B.
-S1_legend <- cowplot::get_legend(Fig4B)
+Fig2_legend <- cowplot::get_legend(Fig5B)
 grid::grid.newpage()
 grid::grid.draw(S1_legend)
 
-S1Fig <- plot_grid(plot_grid(S1FigA,S1FigB, labels=c('A','B'),ncol=1),
-                   plot_grid(S1_legend),ncol=1,rel_heights=c(5,0.5))
+Fig2 <- plot_grid(plot_grid(Fig2A,Fig2B, labels=c('A','B'),ncol=1),
+                   plot_grid(Fig2_legend),ncol=1,rel_heights=c(5,0.5))
 ## plot.
-S1Fig
+Fig2
 
 #################################################################################
 ## Table 1: putative mutator and anti-mutator alleles.
+## I made this by hand in Excel, using both these data as well as the
+## R Shiny interface to the LTEE genomics data that Jeff Barrick made at:
+## barricklab.org/shiny/LTEE-Ecoli
 
 Table1.data <- gene.mutation.data %>%
     select(Population, Position, Gene, Allele, Annotation, t0, tf,
            transit_time, fixation, final_frequency, product)
-
-Ara.minus.1.data <- Table1.data %>%
-    filter(Population=='Ara-1') %>%
-    filter(Gene %in% c('uvrC','mutT','mutY')) %>%
-    arrange(t0)
