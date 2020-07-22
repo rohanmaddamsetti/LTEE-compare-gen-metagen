@@ -158,24 +158,33 @@ COL_SCALE <- scale_fill_manual(name = "Annotation", values = pal)
 
 ## set normalization constant to 1, since we're looking over the whole genome.
 point.mutation.data <- mutation.data %>%
-    filter(Annotation %in% c("missense", "synonymous", "noncoding", "nonsense"))
-sv.mutation.data <- mutation.data %>%
-    filter(Annotation=='sv')
+    filter(Annotation %in% c("missense", "synonymous", "noncoding", "nonsense")) %>%
+    mutate(Spectrum = sapply(Allele, SNPToSpectrumMap))
+
 indel.mutation.data <- mutation.data %>%
     filter(Annotation=='indel')
+sv.mutation.data <- mutation.data %>%
+    filter(Annotation=='sv')
+IS.sv.data <- sv.mutation.data %>%
+    filter(str_detect(Allele, 'IS'))
+sv.noIS.data <- sv.mutation.data %>%
+    filter(str_detect(Allele, 'IS',negate = TRUE))
 
 ## IMPORTANT: set plot.to.end parameter to FALSE.
 c.point.muts <- calc.cumulative.muts(point.mutation.data,
                                      normalization.constant=1,
                                      plot.to.end=FALSE)
 
-c.sv <- calc.cumulative.muts(sv.mutation.data,
-                             normalization.constant=1,
-                             plot.to.end=FALSE)
-
 c.indel <- calc.cumulative.muts(indel.mutation.data,                                       
                                 normalization.constant=1,
                                 plot.to.end=FALSE)
+
+c.IS.sv <- calc.cumulative.muts(IS.sv.data,
+                             normalization.constant=1,
+                             plot.to.end=FALSE)
+c.sv.noIS <- calc.cumulative.muts(sv.noIS.data,
+                                  normalization.constant=1,                                  
+                                  plot.to.end=FALSE) 
 
 point.mut.plot <- plot.cumulative.muts(c.point.muts,my.color = 'red') +
     ylab("Cumulative number of mutations") +
@@ -187,7 +196,8 @@ indel.plot <- plot.cumulative.muts(c.indel, my.color = pal[['indel']]) +
     facet_wrap(.~Population,scales='fixed',nrow=4) +
     ggtitle("Indel mutations")
 
-sv.plot <- plot.cumulative.muts(c.sv, my.color = pal[['sv']]) +
+sv.plot <- plot.cumulative.muts(c.IS.sv, my.color = pal[['sv']]) %>%
+    add.cumulative.mut.layer(c.sv.noIS, my.color = "gray") +
     ylab("Cumulative number of mutations") +
     facet_wrap(.~Population,scales='fixed',nrow=4) +
     ggtitle("Structural variants")
@@ -195,6 +205,7 @@ sv.plot <- plot.cumulative.muts(c.sv, my.color = pal[['sv']]) +
 ## using golden ratio phi for height/width ratio
 Fig1 <- plot_grid(point.mut.plot,indel.plot, sv.plot,labels=c('A','B','C'),nrow=1,rel_heights=2/(1+sqrt(5)))
 ggsave(filename="../results/mutation-bias/figures/Fig1.pdf",Fig1,width=7)
+
 ################################################################################
 ## Figures 2 and 3: time course trajectory plots for
 ## oxidative damage repair and mismatch repair genes.
@@ -215,7 +226,7 @@ nuc.composition.df <- REL606.genes %>%
 Fig4A <- ggplot(nuc.composition.df, aes(x=Mbp.coordinate, fill=Nucleotide)) +
     geom_histogram(bins = 46) + ## TODO: change to parameter 'number.of.bins'
     theme_classic() +
-    ggtitle("Null expectation") +
+    ggtitle("Null expectation based on\nnucleotide composition") +
     ylab("Count") +
     xlab("Genomic position (Mb)") +
     theme(legend.position="bottom") +
@@ -255,6 +266,7 @@ Fig4B <- ggplot(hypermut.dS.data,
     ylab("Count") +
     xlab("Genomic position (Mb)") +
     theme(legend.position="bottom") +
+    ggtitle("Observed mutation distribution\nper strand") +
     facet_grid(strand~MMR.deficient, scales="fixed") +
     scale_fill_viridis_d(option = "plasma") +
     geom_vline(xintercept=0,color='grey',linetype='dotted')
@@ -503,3 +515,90 @@ summary(araplus3.m2) ## worse than araplus3.m1
 
 araplus3.m3 <- glm(hits ~ 0 + thetaS, family="poisson", data=araplus3.hit.genes.df)
 summary(araplus3.m3) ## worse than araplus3.m1
+
+#################################################################################
+## TODO: Use this Supplementary Figure as a main figure. !!!!!!!!!!!!!!!!!
+## Supplementary Figure 1: break down Figure 1A by mutation spectrum.
+
+hypermut.SNPs <- mutation.data %>%
+    filter(Population %in% hypermutator.pops) %>%
+    ## relevel for plotting.
+    mutate(Population = factor(Population)) %>%
+    filter(Annotation %in% c("synonymous","missense","nonsense","noncoding")) %>%
+    mutate(Spectrum = sapply(Allele, SNPToSpectrumMap))
+
+SNPclass1.data <- hypermut.SNPs %>% filter(Spectrum == "A:T→C:G")
+SNPclass2.data <-  hypermut.SNPs %>% filter(Spectrum == "A:T→G:C")
+SNPclass3.data <- hypermut.SNPs %>% filter(Spectrum == "A:T→T:A")
+SNPclass4.data <- hypermut.SNPs %>% filter(Spectrum == "G:C→A:T")
+SNPclass5.data <- hypermut.SNPs %>% filter(Spectrum == "G:C→C:G")
+SNPclass6.data <- hypermut.SNPs %>% filter(Spectrum == "G:C→T:A")
+
+SNP.annotation.vec <- sort(unique(hypermut.SNPs$Spectrum))
+SNP.pal <- viridisLite::viridis(length(SNP.annotation.vec),option="plasma")
+names(SNP.pal) <- SNP.annotation.vec
+SNP_COL_SCALE <- scale_fill_manual(name = "Spectrum", values = SNP.pal)
+
+c.SNP1 <- calc.cumulative.muts(SNPclass1.data,
+                                     normalization.constant=1,
+                                     plot.to.end=FALSE)
+c.SNP2 <- calc.cumulative.muts(SNPclass2.data,
+                                     normalization.constant=1,
+                                     plot.to.end=FALSE)
+c.SNP3 <- calc.cumulative.muts(SNPclass3.data,
+                                     normalization.constant=1,
+                                     plot.to.end=FALSE)
+c.SNP4 <- calc.cumulative.muts(SNPclass4.data,
+                                     normalization.constant=1,
+                                     plot.to.end=FALSE)
+c.SNP5 <- calc.cumulative.muts(SNPclass5.data,
+                                     normalization.constant=1,
+                                     plot.to.end=FALSE)
+c.SNP6 <- calc.cumulative.muts(SNPclass6.data,
+                                     normalization.constant=1,
+                                     plot.to.end=FALSE)
+
+S1FigA <- plot.cumulative.muts(c.SNP1, my.color = SNP.pal[['A:T→C:G']]) %>%
+    add.cumulative.mut.layer(c.SNP2, my.color = SNP.pal[['A:T→G:C']]) %>%
+    add.cumulative.mut.layer(c.SNP3, my.color = SNP.pal[['A:T→T:A']]) %>%
+    add.cumulative.mut.layer(c.SNP4, my.color = SNP.pal[['G:C→A:T']]) %>%
+    add.cumulative.mut.layer(c.SNP5, my.color = SNP.pal[['G:C→C:G']]) %>%
+    add.cumulative.mut.layer(c.SNP6, my.color = SNP.pal[['G:C→T:A']]) + 
+    ylab("Cumulative number of mutations") +
+    ggtitle("Spectrum of point mutations over time in hypermutator populations") +
+    facet_wrap(.~Population,scales='free',nrow=1) +
+    theme(axis.title.y = element_text(size = 10))
+
+S1FigB <- plot.cumulative.muts(c.SNP1, my.color = SNP.pal[['A:T→C:G']]) %>%
+    add.cumulative.mut.layer(c.SNP2, my.color = SNP.pal[['A:T→G:C']]) %>%
+    add.cumulative.mut.layer(c.SNP3, my.color = SNP.pal[['A:T→T:A']]) %>%
+    add.cumulative.mut.layer(c.SNP4, my.color = SNP.pal[['G:C→A:T']]) %>%
+    add.cumulative.mut.layer(c.SNP5, my.color = SNP.pal[['G:C→C:G']]) %>%
+    add.cumulative.mut.layer(c.SNP6, my.color = SNP.pal[['G:C→T:A']]) + 
+    ylab("Cumulative number of mutations") +
+    ggtitle("Inset showing non-dominant point mutation spectra over time") +
+    facet_wrap(.~Population,scales='free',nrow=1) +
+    ylim(0,750) +
+    theme(axis.title.y = element_text(size = 10))
+
+## grab and use the figure legend from Figure 4B.
+S1_legend <- cowplot::get_legend(Fig4B)
+grid::grid.newpage()
+grid::grid.draw(S1_legend)
+
+S1Fig <- plot_grid(plot_grid(S1FigA,S1FigB, labels=c('A','B'),ncol=1),
+                   plot_grid(S1_legend),ncol=1,rel_heights=c(5,0.5))
+## plot.
+S1Fig
+
+#################################################################################
+## Table 1: putative mutator and anti-mutator alleles.
+
+Table1.data <- gene.mutation.data %>%
+    select(Population, Position, Gene, Allele, Annotation, t0, tf,
+           transit_time, fixation, final_frequency, product)
+
+Ara.minus.1.data <- Table1.data %>%
+    filter(Population=='Ara-1') %>%
+    filter(Gene %in% c('uvrC','mutT','mutY')) %>%
+    arrange(t0)
