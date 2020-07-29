@@ -271,7 +271,7 @@ Fig5B <- ggplot(hypermut.dS.data,
     scale_fill_viridis_d(option = "plasma") +
     geom_vline(xintercept=0,color='grey',linetype='dotted')
 
-Fig5 <- plot_grid(Fig4A, Fig4B, labels= c('A','B'),nrow=1)
+Fig5 <- plot_grid(Fig5A, Fig5B, labels= c('A','B'),nrow=1)
 Fig5 ## I save this image using quartz() because it renders the arrows properly.
 ## I am not sure how to set up the proper device backend for cowplot/ggsave
 ## to render the arrows properly.
@@ -603,7 +603,7 @@ Fig2B <- plot.cumulative.muts(c.SNP1, my.color = SNP.pal[['A:T→C:G']]) %>%
 ## grab and use the figure legend from Figure 4B.
 Fig2_legend <- cowplot::get_legend(Fig5B)
 grid::grid.newpage()
-grid::grid.draw(S1_legend)
+grid::grid.draw(Fig2_legend)
 
 Fig2 <- plot_grid(plot_grid(Fig2A,Fig2B, labels=c('A','B'),ncol=1),
                    plot_grid(Fig2_legend),ncol=1,rel_heights=c(5,0.5))
