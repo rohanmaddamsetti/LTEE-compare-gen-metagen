@@ -223,6 +223,21 @@ nuc.composition.df <- REL606.genes %>%
     ## make a big df with a row for every nucleotide.
     uncount(NucleotideCount)
 
+## let's check out GC content on the sense strand for each gene too.
+GC.content.df <- nuc.composition.df %>%
+    mutate(GC = ifelse(Nucleotide %in% c('G','C'),TRUE,FALSE))
+
+GC.plot <- ggplot(GC.content.df, aes(x=Mbp.coordinate, fill=GC)) +
+    geom_histogram(bins = 46) + ## TODO: change to parameter 'number.of.bins'
+    theme_classic() +
+    ggtitle("Null expectation based on\nGC content") +
+    ylab("Count") +
+    xlab("Genomic position (Mb)") +
+    theme(legend.position="bottom") +
+    facet_grid(strand~., scales="fixed") +
+    scale_fill_viridis_d(option = "inferno") +
+    geom_vline(xintercept=0,color='grey',linetype='dotted')
+
 Fig5A <- ggplot(nuc.composition.df, aes(x=Mbp.coordinate, fill=Nucleotide)) +
     geom_histogram(bins = 46) + ## TODO: change to parameter 'number.of.bins'
     theme_classic() +
