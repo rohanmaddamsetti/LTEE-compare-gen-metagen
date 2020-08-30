@@ -1,4 +1,4 @@
-## mutation-rate-analysis.R by Rohan Maddamsetti
+## mutation-rate-analysis.R by Rohan Maddamsetti.
 
 ## load library functions.
 source("metagenomics-library.R")
