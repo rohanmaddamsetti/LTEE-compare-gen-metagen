@@ -521,7 +521,7 @@ Imodulon.regulator.noncoding.data <- noncoding.mutation.data %>%
 Imodulon.regulated.noncoding.data <- noncoding.mutation.data %>%
     filter(Gene %in% Imodulon.regulated$Gene)
 ## so seems like I-modulon regulators have more noncoding hits than expected.
-binom.test(x=48, n=(48+542),p=(70/1394))
+binom.test(x=48, n=(48+542),p=(70/(70+1394)))
 
 ## 415 with greater than 1 hit.
 noncoding.by.gene <- noncoding.mutation.data %>%
