@@ -77,7 +77,7 @@ calc.cumulative.muts <- function(d, normalization.constant=NA, plot.to.end=TRUE)
             summary.df <- df %>%
                 arrange(t0) %>%
                 group_by(Population,Generation) %>%
-                summarize(count=n(), .groups="keep") %>%
+                summarize(count=n(), .groups = "drop_last") %>%
                 mutate(cs=cumsum(count)) %>%
                 ungroup()
             ## if the final generation is not in ret.df,
