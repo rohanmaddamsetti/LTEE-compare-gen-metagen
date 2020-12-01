@@ -74,10 +74,11 @@ neutral.genes <- read.csv("../data/neutral_compilation.csv", header=TRUE,as.is=T
 neutral.mut.data <- gene.mutation.data %>%
     filter(Gene %in% neutral.genes$Gene)
 
-c.neutral.genes <- calc.cumulative.muts(neutral.mut.data)
+c.neutral.genes <- calc.cumulative.muts(neutral.mut.data, neutral.genes)
 
 neutral.base.layer <- plot.base.layer(
     gene.mutation.data,
+    REL606.genes,
     subset.size=length(unique(neutral.genes$Gene)))
 
 ## Figure 2: plot of "gold standard" neutral genes.
@@ -86,10 +87,10 @@ Fig2 <- neutral.base.layer %>%
 ggsave("../results/gene-modules/figures/Fig2.pdf", Fig2)
 
 ## calculate more rigorous statistics than the figures.
-neutral.pvals <- calc.traj.pvals(gene.mutation.data, unique(neutral.genes$Gene))
+neutral.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes, unique(neutral.genes$Gene))
 ## recalculate, sampling from the same genomic regions (bins).
 ## results should be unchanged.
-neutral.pvals.loc <- calc.traj.pvals(gene.mutation.data, unique(neutral.genes$Gene),sample.genes.by.location=TRUE)
+neutral.pvals.loc <- calc.traj.pvals(gene.mutation.data, REL606.genes, unique(neutral.genes$Gene),sample.genes.by.location=TRUE)
 
 #########################################################################
 ## PURIFYING SELECTION CONTROL EXPERIMENT AND ANALYSIS.
@@ -119,10 +120,11 @@ purifying.genes <- essential.genes %>%
 
 purifying.mut.data <- gene.mutation.data %>%
     filter(Gene %in% purifying.genes$Gene)
-c.purifying.genes <- calc.cumulative.muts(purifying.mut.data)
+c.purifying.genes <- calc.cumulative.muts(purifying.mut.data, purifying.genes)
 
 purifying.base.layer <- plot.base.layer(
     gene.mutation.data,
+    REL606.genes,
     subset.size=length(unique(purifying.genes$Gene)))
 
 ##  Yes. evidence of purifying selection in these genes based on my test.
@@ -131,10 +133,10 @@ Fig3 <- purifying.base.layer %>%
 ggsave("../results/gene-modules/figures/Fig3.pdf", Fig3)
 
 ## calculate more rigorous statistics than the figures.
-purifying.pvals <- calc.traj.pvals(gene.mutation.data, unique(purifying.genes$Gene))
+purifying.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes, unique(purifying.genes$Gene))
 ## recalculate, sampling from the same genomic regions (bins).
 ## results should be unchanged.
-purifying.pvals.loc <- calc.traj.pvals(gene.mutation.data,
+purifying.pvals.loc <- calc.traj.pvals(gene.mutation.data, REL606.genes,
                                                        unique(purifying.genes$Gene),
                                                        sample.genes.by.location=TRUE)
 
@@ -245,13 +247,13 @@ fisher.test(matrix(c(30,461,75,3382),2))
 ## Tenaillon et al. (2016) genomics data.
 
 ## base plots of null distribution for comparison.
-rando.plot <- plot.base.layer(gene.mutation.data)
+rando.plot <- plot.base.layer(gene.mutation.data, REL606.genes)
     
 ## 1) plot top genes in non-mutators.
 top.nonmut.mutation.data <- gene.mutation.data %>%
     filter(Gene %in% top.nonmut.genomics$Gene.name)
 
-c.top.nonmuts <- calc.cumulative.muts(top.nonmut.mutation.data)
+c.top.nonmuts <- calc.cumulative.muts(top.nonmut.mutation.data, top.nonmut.genomics)
 
 Fig4 <- rando.plot %>%
     add.cumulative.mut.layer(c.top.nonmuts,my.color="black")
@@ -259,10 +261,12 @@ ggsave("../results/gene-modules/figures/Fig4.pdf",Fig4)
 
 ## calculate more rigorous statistics than the figures.
 top.nonmut.pvals <- calc.traj.pvals(gene.mutation.data,
+                                    REL606.genes,
                                     unique(top.nonmut.genomics$Gene.name))
 ## recalculate, sampling from the same genomic regions (bins).
 ## results should be unchanged.
 top.nonmut.pvals.loc <- calc.traj.pvals(gene.mutation.data,
+                                        REL606.genes,
                                         unique(top.nonmut.genomics$Gene.name),
                                         sample.genes.by.location=TRUE)
 
@@ -270,18 +274,18 @@ top.nonmut.pvals.loc <- calc.traj.pvals(gene.mutation.data,
 top.hypermut.data <- gene.mutation.data %>%
     filter(Gene %in% top.hypermut.genomics$Gene.name)
 
-c.top.hypermut <- calc.cumulative.muts(top.hypermut.data)
+c.top.hypermut <- calc.cumulative.muts(top.hypermut.data, top.hypermut.genomics)
 
 S1Fig <- rando.plot %>%
     add.cumulative.mut.layer(c.top.hypermut, my.color="black")
 ggsave("../results/gene-modules/figures/S1Fig.pdf",S1Fig)
 
 ## calculate more rigorous statistics than the figures.
-top.hypermut.pvals <- calc.traj.pvals(gene.mutation.data,
+top.hypermut.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
                                       unique(top.hypermut.genomics$Gene.name))
 ## recalculate, sampling from the same genomic regions (bins).
 ## results should be unchanged.
-top.hypermut.pvals.loc <- calc.traj.pvals(gene.mutation.data,
+top.hypermut.pvals.loc <- calc.traj.pvals(gene.mutation.data, REL606.genes,
                                           unique(top.hypermut.genomics$Gene.name),
                                           sample.genes.by.location=TRUE)
 
@@ -300,10 +304,11 @@ top.hypermut.pvals.loc <- calc.traj.pvals(gene.mutation.data,
 
 ## get proteome sector assignments from Hui et al. 2015 Supplementary Table 2.
 ## I saved a reduced version of the data.
-proteome.assignments <- read.csv('../data/Hui-2015-proteome-sector-assignments.csv',as.is=TRUE)
-REL606.proteome.assignments <- inner_join(REL606.genes,proteome.assignments)
+proteome.assignments <- read.csv('../data/Hui-2015-proteome-sector-assignments.csv',
+                                 as.is=TRUE) %>%
+    inner_join(REL606.genes)
 ## add proteome assignment to gene mutation.data.
-sector.mut.data <- inner_join(gene.mutation.data,REL606.proteome.assignments)
+sector.mut.data <- inner_join(gene.mutation.data, proteome.assignments)
 ##six sectors:  "A" "S" "O" "U" "R" "C"
 A.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='A')
 S.sector.mut.data <- filter(sector.mut.data,Sector.assigned=='S')
@@ -318,14 +323,16 @@ proteome.subset.size <- min(length(unique(A.sector.mut.data$Gene)),
                             length(unique(U.sector.mut.data$Gene)),
                             length(unique(R.sector.mut.data$Gene)),
                             length(unique(C.sector.mut.data$Gene)))
-proteome.rando.layer <- plot.base.layer(gene.mutation.data,subset.size=proteome.subset.size)
 
-c.A.muts <- calc.cumulative.muts(A.sector.mut.data)
-c.S.muts <- calc.cumulative.muts(S.sector.mut.data)
-c.O.muts <- calc.cumulative.muts(O.sector.mut.data)
-c.U.muts <- calc.cumulative.muts(U.sector.mut.data)
-c.R.muts <- calc.cumulative.muts(R.sector.mut.data)
-c.C.muts <- calc.cumulative.muts(C.sector.mut.data)
+proteome.rando.layer <- plot.base.layer(gene.mutation.data, REL606.genes,
+                                        subset.size=proteome.subset.size)
+
+c.A.muts <- calc.cumulative.muts(A.sector.mut.data, filter(proteome.assignments,Sector.assigned=='A'))
+c.S.muts <- calc.cumulative.muts(S.sector.mut.data, filter(proteome.assignments,Sector.assigned=='S'))
+c.O.muts <- calc.cumulative.muts(O.sector.mut.data, filter(proteome.assignments,Sector.assigned=='O'))
+c.U.muts <- calc.cumulative.muts(U.sector.mut.data,filter(proteome.assignments,Sector.assigned=='U'))
+c.R.muts <- calc.cumulative.muts(R.sector.mut.data,filter(proteome.assignments,Sector.assigned=='R'))
+c.C.muts <- calc.cumulative.muts(C.sector.mut.data,filter(proteome.assignments,Sector.assigned=='C'))
 
 ## plot for proteome sectors.
 S2Fig <- proteome.rando.layer %>%
@@ -343,10 +350,10 @@ ggsave(S2Fig, filename='../results/gene-modules/figures/S2Fig.pdf')
 ## get eigengene sector assignments from Wytock and Motter (2018) Supplementary File 1.
 ## I saved a reduced version of the data.
 
-eigengenes <- read.csv('../data/Wytock2018-eigengenes.csv',as.is=TRUE)
-REL606.eigengenes <- inner_join(REL606.genes,eigengenes)
+eigengenes <- read.csv('../data/Wytock2018-eigengenes.csv',as.is=TRUE) %>%
+    inner_join(REL606.genes,eigengenes)
 ## add eigengene assignment to gene.mutation.data.
-eigengene.mut.data <- inner_join(gene.mutation.data, REL606.eigengenes)
+eigengene.mut.data <- inner_join(gene.mutation.data, eigengenes)
 
 eigengene1.mut.data <- filter(eigengene.mut.data,Eigengene==1)
 eigengene2.mut.data <- filter(eigengene.mut.data,Eigengene==2)
@@ -368,17 +375,18 @@ eigen.subset.size <- min(length(unique(eigengene1.mut.data$Gene)),
                          length(unique(eigengene8.mut.data$Gene)),
                          length(unique(eigengene9.mut.data$Gene)))
 
-eigen.rando.layer <- plot.base.layer(gene.mutation.data,subset.size=eigen.subset.size)
+eigen.rando.layer <- plot.base.layer(gene.mutation.data,REL606.genes,
+                                     subset.size=eigen.subset.size)
 
-c.eigen1.muts <- calc.cumulative.muts(eigengene1.mut.data)
-c.eigen2.muts <- calc.cumulative.muts(eigengene2.mut.data)
-c.eigen3.muts <- calc.cumulative.muts(eigengene3.mut.data)
-c.eigen4.muts <- calc.cumulative.muts(eigengene4.mut.data)
-c.eigen5.muts <- calc.cumulative.muts(eigengene5.mut.data)
-c.eigen6.muts <- calc.cumulative.muts(eigengene6.mut.data)
-c.eigen7.muts <- calc.cumulative.muts(eigengene7.mut.data)
-c.eigen8.muts <- calc.cumulative.muts(eigengene8.mut.data)
-c.eigen9.muts <- calc.cumulative.muts(eigengene9.mut.data)
+c.eigen1.muts <- calc.cumulative.muts(eigengene1.mut.data, filter(eigengenes,Eigengene==1))
+c.eigen2.muts <- calc.cumulative.muts(eigengene2.mut.data, filter(eigengenes,Eigengene==2))
+c.eigen3.muts <- calc.cumulative.muts(eigengene3.mut.data, filter(eigengenes,Eigengene==3))
+c.eigen4.muts <- calc.cumulative.muts(eigengene4.mut.data, filter(eigengenes,Eigengene==4))
+c.eigen5.muts <- calc.cumulative.muts(eigengene5.mut.data, filter(eigengenes,Eigengene==5))
+c.eigen6.muts <- calc.cumulative.muts(eigengene6.mut.data, filter(eigengenes,Eigengene==6))
+c.eigen7.muts <- calc.cumulative.muts(eigengene7.mut.data, filter(eigengenes,Eigengene==7))
+c.eigen8.muts <- calc.cumulative.muts(eigengene8.mut.data, filter(eigengenes,Eigengene==8))
+c.eigen9.muts <- calc.cumulative.muts(eigengene9.mut.data, filter(eigengenes,Eigengene==9))
 
 S3Fig <- eigen.rando.layer %>%
     add.cumulative.mut.layer(c.eigen1.muts, my.color="red") %>%
@@ -412,13 +420,17 @@ Imodulon.regulators <-Imodulons.to.regulators %>%
     filter(!(is.na(regulator)))
 Imodulon.regulator.mut.data <- gene.mutation.data %>%
     filter(Gene %in% Imodulon.regulators$regulator)
-c.Imodulon.regulators <- calc.cumulative.muts(Imodulon.regulator.mut.data)
+c.Imodulon.regulators <- calc.cumulative.muts(Imodulon.regulator.mut.data,
+                                              Imodulon.regulators)
 
 ## calculate more rigorous statistics than the figures.
-Imodulon.regulator.pvals <- calc.traj.pvals(gene.mutation.data, unique(Imodulon.regulators$regulator))
+Imodulon.regulator.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
+                                            unique(Imodulon.regulators$regulator))
 ## recalculate, sampling from the same genomic regions (bins).
 ## results should be unchanged.
-Imodulon.regulator.pvals.loc <- calc.traj.pvals(gene.mutation.data, unique(Imodulon.regulators$regulator),sample.genes.by.location=TRUE)
+Imodulon.regulator.pvals.loc <- calc.traj.pvals(gene.mutation.data, REL606.genes,
+                                                unique(Imodulon.regulators$regulator),
+                                                sample.genes.by.location=TRUE)
 
 ## Now look at genes that are regulated within Imodulons.
 ## I expect relaxed or purifying selection overall.
@@ -431,15 +443,17 @@ Imodulon.regulated <- genes.to.Imodulons %>% filter(!(is.na(Gene))) %>%
     filter(!(Gene %in% Imodulon.regulators$regulator))
 Imodulon.regulated.mut.data <- gene.mutation.data %>%
     filter(Gene %in% Imodulon.regulated$Gene)
-c.Imodulon.regulated <- calc.cumulative.muts(Imodulon.regulated.mut.data)
+c.Imodulon.regulated <- calc.cumulative.muts(Imodulon.regulated.mut.data,Imodulon.regulated)
 
 Imodulon.regulators.base.layer <- plot.base.layer(
     gene.mutation.data,
+    REL606.genes,
     subset.size=length(unique(Imodulon.regulators$regulator)))
 
 ## Figure for paper:  compare I-modulon regulators to the genes they regulate.
 Fig5 <- Imodulon.regulators.base.layer %>% ## null for regulators
     add.base.layer(gene.mutation.data, ## add null for regulated genes
+                   REL606.genes,
                    subset.size=length(unique(Imodulon.regulated$Gene)),
                    my.color="pink") %>%
     add.cumulative.mut.layer(c.Imodulon.regulators, my.color="black") %>%
@@ -470,10 +484,11 @@ make.modulon.plots.helper <- function(my.I.modulon,plot.regulators=FALSE) {
     my.modulon.mut.data <- gene.mutation.data %>%
         filter(Gene %in% my.modulon.genes$Gene)
 
-    c.my.modulon.muts <- calc.cumulative.muts(my.modulon.mut.data)
+    c.my.modulon.muts <- calc.cumulative.muts(my.modulon.mut.data, my.modulon.genes)
     ## for the plots, subsample based on the cardinality of the I-modulon.
     modulon.size <- length(unique(my.modulon.genes$Gene))
     modulon.base.layer <- plot.base.layer(gene.mutation.data,
+                                          REL606.genes,
                                           subset.size=modulon.size,
                                           my.color="pink")
     p <- modulon.base.layer %>%
@@ -484,10 +499,10 @@ make.modulon.plots.helper <- function(my.I.modulon,plot.regulators=FALSE) {
     if ((regulator.size > 0) & plot.regulators) {
         my.regulator.mut.data <- gene.mutation.data %>%
             filter(Gene %in% my.regulators$regulator)
-        c.my.regulators <- calc.cumulative.muts(my.regulator.mut.data)
+        c.my.regulators <- calc.cumulative.muts(my.regulator.mut.data, my.regulators)
 
         p <- p %>% 
-            add.base.layer(gene.mutation.data,my.color="grey",
+            add.base.layer(gene.mutation.data, REL606.genes, my.color="grey",
                            subset.size=regulator.size) %>%
             add.cumulative.mut.layer(c.my.regulators,my.color='black')
     }
@@ -587,8 +602,8 @@ Mehta.regulator.mut.data <- Mehta.data %>%
     filter(Gene %in% PAO11.regulators$Gene)
 ## 188 mutations occurring in annotated regulators.
 
-c.Mehta.regulators <- calc.Mehta.cumulative.muts(Mehta.regulator.mut.data)
-Mehta.base.layer <- plot.Mehta.base.layer(Mehta.data,
+c.Mehta.regulators <- calc.Mehta.cumulative.muts(Mehta.regulator.mut.data, PAO11.regulators)
+Mehta.base.layer <- plot.Mehta.base.layer(Mehta.data, PAO11.genes,
                                           subset.size=nrow(PAO11.regulators))
 S4Fig <- Mehta.base.layer %>%
     add.Mehta.cumulative.mut.layer(c.Mehta.regulators, my.color="black")
@@ -604,13 +619,15 @@ combined.Mehta.regulator.mut.data <- combined.Mehta.data %>%
     filter(Gene %in% PAO11.regulators$Gene)
 
 c.combined.Mehta.regulators <- calc.Mehta.cumulative.muts(
-    combined.Mehta.regulator.mut.data)
+    combined.Mehta.regulator.mut.data, PAO11.regulators)
 
 combined.Mehta.base.layer <- plot.Mehta.base.layer(combined.Mehta.data,
-                                          subset.size=nrow(PAO11.regulators))
+                                                   PAO11.genes,
+                                                   subset.size=nrow(PAO11.regulators))
 Fig6 <- combined.Mehta.base.layer %>%
     add.Mehta.cumulative.mut.layer(c.combined.Mehta.regulators, my.color="black")
 ggsave("../results/gene-modules/figures/Fig6.pdf", Fig6, width=5, height=5)
 
 ## calculate rigorous statistics for Figure 6.
-Mehta.pvals <- calc.Mehta.traj.pvals(combined.Mehta.data, unique(PAO11.regulators$Gene))
+Mehta.pvals <- calc.Mehta.traj.pvals(combined.Mehta.data, PAO11.genes,
+                                     unique(PAO11.regulators$Gene))

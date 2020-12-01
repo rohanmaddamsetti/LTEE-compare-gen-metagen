@@ -55,7 +55,7 @@ rotate.REL606.chr <- function(my.position, c) {
 ## To normalize, we need to supply the number of sites at risk
 ## (such as sum of gene length).
 ## If plot.to.end is TRUE, then add one final row.
-calc.cumulative.muts <- function(d, normalization.constant=NA, plot.to.end=TRUE) {
+calc.cumulative.muts <- function(d, d.metadata, plot.to.end=TRUE) {
 
     cumsum.per.pop.helper.func <- function(pop) {
         finalgen <- 6.3 ## this is outside of the data collection
@@ -102,13 +102,11 @@ calc.cumulative.muts <- function(d, normalization.constant=NA, plot.to.end=TRUE)
         ret.df <- bind_rows(init.row.df,almost.done.df)
         return(ret.df)
     }
-    
-    ## if normalization.constant is not provided, then
-    ## calculate based on gene length by default.
-    if (is.na(normalization.constant)) {
-        my.genes <- d %>% dplyr::select(Gene,gene_length) %>% distinct()
-        normalization.constant <- sum(my.genes$gene_length)
-    }
+
+    ## normalize by the total length of genes
+    ## in the given module (in d.metadata).
+    my.genes <- d.metadata %>% dplyr::select(Gene,gene_length) %>% distinct()
+    normalization.constant <- sum(my.genes$gene_length)
     
     c.dat <- map_dfr(.x=levels(d$Population),
                      .f=cumsum.per.pop.helper.func) %>%
@@ -183,7 +181,7 @@ find.bin <- function(locus.row, z) {
 ## random sets of genes. Returns the upper tail of null distribution,
 ## or P(random trajectory >= the actual trajectory).
 ## Output: a dataframe with three columns: Population, count, p.val
-calc.traj.pvals <- function(data, gene.vec, N=10000, normalization.constant=NA, sample.genes.by.location=FALSE) {
+calc.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, sample.genes.by.location=FALSE) {
 
     ## check type for gene.vec (e.g., if factor, change to vanilla vector of strings)
     gene.vec <- as.character(gene.vec)
@@ -198,7 +196,7 @@ calc.traj.pvals <- function(data, gene.vec, N=10000, normalization.constant=NA, 
         ## for efficiency, pre-calculate gene bin assignments.
         ## use 46 bins so that each bin is ~10000 bp. 
         find.bin.46 <- partial(find.bin,z=46)
-        gene.info <- data %>%
+        gene.info <- REL606.genes %>%
             select(Gene, locus_tag, blattner, gene_length,
                    product, start, end, strand) %>%
             distinct() ## remove duplicate rows,
@@ -244,7 +242,9 @@ calc.traj.pvals <- function(data, gene.vec, N=10000, normalization.constant=NA, 
         generate.cumulative.mut.subset.by.loc <- function(idx) {
             rando.genes <- sample.genes.by.genomebin()
             mut.subset <- filter(data,Gene %in% rando.genes)
-            c.mut.subset <- calc.cumulative.muts(mut.subset, normalization.constant) %>%
+            mut.subset.metadata <- filter(REL606.genes, Gene %in% rando.genes)
+            c.mut.subset <- calc.cumulative.muts(mut.subset,
+                                                 mut.subset.metadata) %>%
                 mutate(bootstrap_replicate=idx)
             return(c.mut.subset)
         }
@@ -261,7 +261,8 @@ calc.traj.pvals <- function(data, gene.vec, N=10000, normalization.constant=NA, 
         generate.cumulative.mut.subset <- function(idx) {
             rando.genes <- base::sample(unique(data$Gene),subset.size)
             mut.subset <- filter(data,Gene %in% rando.genes)
-            c.mut.subset <- calc.cumulative.muts(mut.subset, normalization.constant) %>%
+            mut.subset.metadata <- filter(REL606.genes, Gene %in% rando.genes)
+            c.mut.subset <- calc.cumulative.muts(mut.subset, mut.subset.metadata) %>%
                 mutate(bootstrap_replicate=idx)
             return(c.mut.subset)
         }
@@ -273,7 +274,7 @@ calc.traj.pvals <- function(data, gene.vec, N=10000, normalization.constant=NA, 
     }
     
     gene.vec.data <- data %>% filter(Gene %in% gene.vec)
-    data.trajectory <- calc.cumulative.muts(gene.vec.data,normalization.constant)
+    data.trajectory <- calc.cumulative.muts(gene.vec.data, gene.vec.metadata)
     data.trajectory.summary <- data.trajectory %>%
         group_by(Population,.drop=FALSE) %>%
         summarize(final.norm.cs=max(normalized.cs)) %>%
@@ -328,15 +329,16 @@ calc.slope.of.cumulative.muts <- function(c.muts) {
 ## against a bootstrapped null distribution.
 ## Throughout, plots use the minimum subsample size to subsample the null distribution,
 ## to increase the variance in order to make a conservative comparison.
-plot.base.layer <- function(data, subset.size=50, N=1000, alphaval = 0.05, normalization.constant=NA, my.color="gray") {
+plot.base.layer <- function(data, REL606.genes, subset.size=50, N=1000, alphaval = 0.05, my.color="gray") {
     
     ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations.
     ## IMPORTANT: this function depends on variables defined in plot.base.layer.
     generate.cumulative.mut.subset <- function(idx) {
-        rando.genes <- base::sample(unique(data$Gene),subset.size)
+        rando.genes <- base::sample(unique(REL606.genes$Gene),subset.size)
         mut.subset <- filter(data,Gene %in% rando.genes)
-        c.mut.subset <- calc.cumulative.muts(mut.subset, normalization.constant) %>%
+        mut.subset.metadata <- filter(REL606.genes, Gene %in% rando.genes)
+        c.mut.subset <- calc.cumulative.muts(mut.subset, mut.subset.metadata) %>%
             mutate(bootstrap_replicate=idx)
         return(c.mut.subset)
     }
@@ -394,14 +396,15 @@ plot.base.layer <- function(data, subset.size=50, N=1000, alphaval = 0.05, norma
 }
 
 ## add a base layer to a plot. used in Imodulon code.
-add.base.layer <- function(p, data, my.color, subset.size=50, N=1000, alphaval = 0.05, normalization.constant=NA) {
+add.base.layer <- function(p, data, REL606.genes, my.color, subset.size=50, N=1000, alphaval = 0.05, normalization.constant=NA) {
     
         ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations.
     generate.cumulative.mut.subset <- function(idx) {
-        rando.genes <- base::sample(unique(data$Gene),subset.size)
+        rando.genes <- base::sample(unique(REL606.genes$Gene),subset.size)
         mut.subset <- filter(data,Gene %in% rando.genes)
-        c.mut.subset <- calc.cumulative.muts(mut.subset, normalization.constant) %>%
+        mut.subset.metadata <- filter(REL606.genes, Gene %in% rando.genes)
+        c.mut.subset <- calc.cumulative.muts(mut.subset, mut.subset.metadata) %>%
             mutate(bootstrap_replicate=idx)
         return(c.mut.subset)
     }
@@ -502,7 +505,7 @@ add.slope.of.cumulative.mut.layer <- function(p, layer.df, my.color) {
 ## To normalize, we need to supply the number of sites at risk
 ## (such as sum of gene length).
 ## If plot.to.end is TRUE, then add one final row.
-calc.Mehta.cumulative.muts <- function(d, normalization.constant=NA, plot.to.end=TRUE) {
+calc.Mehta.cumulative.muts <- function(d, d.metadata, plot.to.end=TRUE) {
 
     cumsum.per.pop.helper.func <- function(pop) {
 
@@ -544,12 +547,10 @@ calc.Mehta.cumulative.muts <- function(d, normalization.constant=NA, plot.to.end
         return(ret.df)
     }
     
-    ## if normalization.constant is not provided, then
-    ## calculate based on gene length by default.
-    if (is.na(normalization.constant)) {
-        my.genes <- d %>% dplyr::select(Gene, gene_length) %>% distinct()
-        normalization.constant <- sum(my.genes$gene_length)
-    }
+    ## normalize by the total length of genes
+    ## in the given module (in d.metadata).
+    my.genes <- d.metadata %>% dplyr::select(Gene, gene_length) %>% distinct()
+    normalization.constant <- sum(my.genes$gene_length)
     
     c.dat <- map_dfr(.x=levels(d$Population),
                      .f=cumsum.per.pop.helper.func) %>%
@@ -561,7 +562,7 @@ calc.Mehta.cumulative.muts <- function(d, normalization.constant=NA, plot.to.end
 }
 
 ## calc.traj.pvals, adapted for Mehta dataset.
-calc.Mehta.traj.pvals <- function(data, gene.vec, N=10000, normalization.constant=NA) {
+calc.Mehta.traj.pvals <- function(data, PAO11.genes, gene.vec, N=10000, normalization.constant=NA) {
 
     ## check type for gene.vec (e.g., if factor, change to vanilla vector of strings)
     gene.vec <- as.character(gene.vec)
@@ -574,9 +575,11 @@ calc.Mehta.traj.pvals <- function(data, gene.vec, N=10000, normalization.constan
     ## IMPORTANT: this function depends on variables defined in
     ## calculate.trajectory.tail.probs.
     generate.Mehta.cumulative.mut.subset <- function(idx) {
-        rando.genes <- base::sample(unique(data$Gene),subset.size)
+        rando.genes <- base::sample(unique(PAO11.genes$Gene),subset.size)
         mut.subset <- filter(data,Gene %in% rando.genes)
-        c.mut.subset <- calc.Mehta.cumulative.muts(mut.subset, normalization.constant) %>%
+        mut.subset.metadata <- filter(PAO11.genes, Gene %in% rando.genes)
+        c.mut.subset <- calc.Mehta.cumulative.muts(mut.subset, mut.subset.metadata,
+                                                   normalization.constant) %>%
             mutate(bootstrap_replicate=idx)
         return(c.mut.subset)
     }
@@ -622,15 +625,17 @@ calc.Mehta.traj.pvals <- function(data, gene.vec, N=10000, normalization.constan
 ########### Plotting code for Mehta hypermutator data.
 ## main difference is using Day instead of Generation,
 ## and calling calc.Mehta.cumulative.muts().
-plot.Mehta.base.layer <- function(data, subset.size=50, N=1000, alphaval = 0.05, normalization.constant=NA, my.color="gray") {
+plot.Mehta.base.layer <- function(data, PAO11.genes, subset.size=50, N=1000, alphaval = 0.05, normalization.constant=NA, my.color="gray") {
     
     ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations.
     ## IMPORTANT: this function depends on variables defined in plot.base.layer.
     generate.Mehta.cumulative.mut.subset <- function(idx) {
-        rando.genes <- base::sample(unique(data$Gene),subset.size)
+        rando.genes <- base::sample(unique(PAO11.genes$Gene),subset.size)
         mut.subset <- filter(data,Gene %in% rando.genes)
-        c.mut.subset <- calc.Mehta.cumulative.muts(mut.subset, normalization.constant) %>%
+        mut.subset.metadata <- filter(PAO11.genes, Gene %in% rando.genes)
+        c.mut.subset <- calc.Mehta.cumulative.muts(mut.subset, mut.subset.metadata,
+                                                   normalization.constant) %>%
             mutate(bootstrap_replicate=idx)
         return(c.mut.subset)
     }
@@ -640,10 +645,11 @@ plot.Mehta.base.layer <- function(data, subset.size=50, N=1000, alphaval = 0.05,
     ## I want to plot the distribution of cumulative mutations over time for
     ## say, 1000 or 10000 random subsets of genes.
 
-    bootstrapped.trajectories <- map_dfr(.x=seq_len(N),.f=generate.Mehta.cumulative.mut.subset)
+    bootstrapped.trajectories <- map_dfr(.x=seq_len(N),
+                                         .f=generate.Mehta.cumulative.mut.subset)
 
-    ## filter out the top alphaval/2 and bottom alphaval/2 trajectories from each population,
-    ## for a two-sided test. default is alphaval == 0.05.
+    ## filter out the top alphaval/2 and bottom alphaval/2 trajectories
+    ## from each population, for a two-sided test. default is alphaval == 0.05.
     
     trajectory.summary <- bootstrapped.trajectories %>%
         ## important: don't drop empty groups.
@@ -718,7 +724,6 @@ calc.gene.mutation.density <- function(gene.mutation.data, mut_type_vec) {
     density.df[is.na(density.df)] <- 0
     density.df <- tbl_df(density.df)
 
-    
     return(density.df)
 }
 
