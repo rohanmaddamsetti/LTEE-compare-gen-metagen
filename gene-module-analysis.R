@@ -49,14 +49,16 @@ gene.mutation.data <- read.csv(
 ## This is used for filtering essential genes
 ## in the purifying selection control analysis,
 ## and is used in the positive selection control analysis.
-nonmut.genomics <- read.csv('../data/tenaillon2016-nonmutator-parallelism.csv')
-hypermut.genomics <- read.csv('../data/tenaillon2016-mutator-parallelism.csv')
-## make sure these top genes passed the filters on REL606.genes.
-top.nonmut.genomics <- top_n(nonmut.genomics, 50, wt=G.score) %>%
-    filter(Gene.name %in% REL606.genes$Gene)
-## one gene fails! So take one more to get to 50.
-top.hypermut.genomics <- top_n(hypermut.genomics, 51, wt=G.score) %>%
-    filter(Gene.name %in% REL606.genes$Gene)
+nonmut.genomics <- read.csv('../data/tenaillon2016-nonmutator-parallelism.csv') %>%
+    ## make sure these genes passed the filters on REL606.genes.
+    filter(Gene.name %in% REL606.genes$Gene)    
+
+hypermut.genomics <- read.csv('../data/tenaillon2016-mutator-parallelism.csv') %>%
+    ## make sure these genes passed the filters on REL606.genes.
+    filter(Gene.name %in% REL606.genes$Gene)    
+
+top.nonmut.genomics <- top_n(nonmut.genomics, 50, wt=G.score)
+top.hypermut.genomics <- top_n(hypermut.genomics, 50, wt=G.score)
 
 #########################################################################
 ## RELAXED SELECTION CONTROL EXPERIMENT.
@@ -288,6 +290,52 @@ top.hypermut.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
 top.hypermut.pvals.loc <- calc.traj.pvals(gene.mutation.data, REL606.genes,
                                           unique(top.hypermut.genomics$Gene.name),
                                           sample.genes.by.location=TRUE)
+
+##########################################################################
+## CORE GENES ANALYSIS.
+##########################################################################
+core.gene.assignments <- read.csv("../data/Maddamsetti2017-core-summary.csv")
+
+core.genes <- core.gene.assignments %>% filter(panortholog == TRUE)
+noncore.genes <- core.gene.assignments %>% filter(panortholog == FALSE)
+
+core.genes.metadata.df <- filter(REL606.genes, locus_tag %in%core.genes$locus_tag)
+noncore.genes.metadata.df <- filter(REL606.genes, locus_tag %in%noncore.genes$locus_tag)
+
+core.mut.data <- filter(gene.mutation.data, locus_tag %in% core.genes$locus_tag)
+noncore.mut.data <- filter(gene.mutation.data, locus_tag %in% noncore.genes$locus_tag)
+
+core.subset.size <- length(unique(core.genes$locus_tag))
+noncore.subset.size <- length(unique(noncore.genes$locus_tag))
+
+core.rando.layer <- plot.base.layer(gene.mutation.data, REL606.genes,
+                                        subset.size=core.subset.size)
+
+c.core.muts <- calc.cumulative.muts(core.mut.data, core.genes.metadata.df)
+c.noncore.muts <- calc.cumulative.muts(noncore.mut.data, core.genes.metadata.df)
+
+coreFig <- core.rando.layer %>%
+    add.cumulative.mut.layer(c.core.muts, my.color="black") %>%
+    add.cumulative.mut.layer(c.noncore.muts,my.color="red")
+
+##########################################################################
+## ADHESIN GENES ANALYSIS.
+##########################################################################
+
+adhesin.genes <- REL606.genes %>%
+    filter(str_detect(product, "adhesin"))
+
+adhesin.mut.data <- filter(gene.mutation.data, locus_tag %in% adhesin.genes$locus_tag)
+
+adhesin.subset.size <- length(unique(adhesin.genes$locus_tag))
+
+adhesin.rando.layer <- plot.base.layer(gene.mutation.data, REL606.genes,
+                                        subset.size=adhesin.subset.size)
+
+c.adhesin.muts <- calc.cumulative.muts(adhesin.mut.data, adhesin.genes)
+
+adhesinFig <- adhesin.rando.layer %>%
+    add.cumulative.mut.layer(c.adhesin.muts, my.color="black")
 
 ##########################################################################
 ## GENE MODULE ANALYSIS.
