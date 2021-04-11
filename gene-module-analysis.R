@@ -707,15 +707,17 @@ m1.pop.gene.mutation.data <- filter(gene.mutation.data, Population == "Ara-1") %
     ## change levels of the population factor so that only Ara-1 is represented.
     mutate(Population = factor(
                Population,
-               levels = unique(m1.pop.gene.mutation.data$Population)))
+               levels = unique(Population)))
 
 m1.ribosome.associated.prot.mut.data <- filter(
     m1.pop.gene.mutation.data,
     locus_tag %in% ribosome.associated.prot.genes$locus_tag)
 
-## This works-- write to file.
+## plot this panel to add to the figure.
 m1.rando.layer <- plot.base.layer(m1.pop.gene.mutation.data, REL606.genes,
                                   subset.size=ribosome.associated.prot.subset.size)
+ggsave("../results/gene-modules/figures/Fig0-panels/Fig0-STIMS-4.pdf",
+       m1.rando.layer,height=4.5, width=4.5)
 
 c.m1.ribosome.associated.prot.muts <- calc.cumulative.muts(
     m1.ribosome.associated.prot.mut.data,
@@ -723,9 +725,14 @@ c.m1.ribosome.associated.prot.muts <- calc.cumulative.muts(
     reset.pop.levels = FALSE)
 
 m1.ribosome.associated.prot.Fig <- plot.cumulative.muts(c.m1.ribosome.associated.prot.muts)
+ggsave("../results/gene-modules/figures/Fig0-panels/Fig0-STIMS-1.pdf",
+       m1.ribosome.associated.prot.Fig,height=4.5, width=4.5)
+
 
 exampleFig <- m1.rando.layer %>%
     add.cumulative.mut.layer(c.m1.ribosome.associated.prot.muts, my.color="black")
+ggsave("../results/gene-modules/figures/Fig0-panels/Fig0-STIMS-5.pdf",
+       exampleFig,height=4.5, width=4.5)
 
 ## draw a pseudo-random set of 71 genes, using a fixed random seed.
 ## IMPORTANT: This should be the very LAST code in this file, since we are
@@ -746,4 +753,11 @@ c.m1.pseudorandom.muts <- calc.cumulative.muts(
     reset.pop.levels = FALSE)
 
 m1.pseudorandom.Fig <- plot.cumulative.muts(c.m1.pseudorandom.muts, my.color="gray")
+ggsave("../results/gene-modules/figures/Fig0-panels/Fig0-STIMS-2.pdf",
+       m1.pseudorandom.Fig,height=4.5, width=4.5)
+
+m1.pseudorandom.plus.data.Fig <- m1.pseudorandom.Fig %>%
+    add.cumulative.mut.layer(c.m1.ribosome.associated.prot.muts, my.color="black")
+ggsave("../results/gene-modules/figures/Fig0-panels/Fig0-STIMS-3.pdf",
+       m1.pseudorandom.plus.data.Fig,height=4.5, width=4.5)
 
