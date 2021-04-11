@@ -55,18 +55,22 @@ rotate.REL606.chr <- function(my.position, c) {
 ## To normalize, we need to supply the number of sites at risk
 ## (such as sum of gene length).
 ## If plot.to.end is TRUE, then add one final row.
-calc.cumulative.muts <- function(d, d.metadata, plot.to.end=TRUE) {
+calc.cumulative.muts <- function(d, d.metadata, plot.to.end=TRUE, reset.pop.levels=TRUE) {
 
     cumsum.per.pop.helper.func <- function(pop) {
         finalgen <- 6.3 ## this is outside of the data collection
         ## for nice plotting (final generation in mutation.data is 6.275).
 
-        ## This constant is to make sure that all pops are in the levels
-        ## of the Population factor after mergers, etc.
-        pop.levels <- c("Ara-5","Ara-6", "Ara+1", "Ara+2",
-                        "Ara+4", "Ara+5", "Ara-1", "Ara-2",
-                        "Ara-3", "Ara-4", "Ara+3", "Ara+6")
-        
+        if (reset.pop.levels) {
+            ## This constant is to make sure that all pops are in the levels
+            ## of the Population factor after mergers, etc.
+            pop.levels <- c("Ara-5","Ara-6", "Ara+1", "Ara+2",
+                            "Ara+4", "Ara+5", "Ara-1", "Ara-2",
+                            "Ara-3", "Ara-4", "Ara+3", "Ara+6")
+        } else { ## This is basically for the cases where
+            ## only one population is being examined, or we don't want to reorder.
+            pop.levels <- levels(d$Population)
+        }
         df <- d %>% filter(Population==pop)
         if (nrow(df) == 0) { ## if no mutations in this pop.
             almost.done.df <- tibble(Population = factor(pop, levels = pop.levels),

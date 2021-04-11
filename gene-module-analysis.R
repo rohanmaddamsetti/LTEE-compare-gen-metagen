@@ -6,7 +6,7 @@ source("metagenomics-library.R")
 ## GENE MODULE DATA ANALYSIS
 ##########################################################################
 
-## get the lengths of all genes in REL606.
+## get the lengths of all protein-coding genes in REL606.
 ## This excludes genes in repetitive regions of the genome.
 ## See Section 4.3.1 "Removing mutations in repetitive regions of the genome"
 ## in Ben Good's LTEE metagenomics paper for more details.
@@ -73,10 +73,12 @@ neutral.genes <- read.csv("../data/neutral_compilation.csv", header=TRUE,as.is=T
     ## make sure that only loci that pass filters are included in the analysis.
     filter(Gene %in% REL606.genes$Gene)
 
+neutral.genes.metadata <- REL606.genes %>% filter(Gene %in% neutral.genes$Gene)
+
 neutral.mut.data <- gene.mutation.data %>%
     filter(Gene %in% neutral.genes$Gene)
 
-c.neutral.genes <- calc.cumulative.muts(neutral.mut.data, neutral.genes)
+c.neutral.genes <- calc.cumulative.muts(neutral.mut.data, neutral.genes.metadata)
 
 neutral.base.layer <- plot.base.layer(
     gene.mutation.data,
@@ -679,3 +681,69 @@ ggsave("../results/gene-modules/figures/Fig6.pdf", Fig6, width=5, height=5)
 ## calculate rigorous statistics for Figure 6.
 Mehta.pvals <- calc.Mehta.traj.pvals(combined.Mehta.data, PAO11.genes,
                                      unique(PAO11.regulators$Gene))
+
+##########################################################################
+## Examples plots for the new Figure 1.
+## The new figure 1 shows:
+## 1) the nature of the input data,
+## 2) the test statistic
+## 3) what comparisons are being performed.
+## It does so by showing:
+## A) the STIMS pipeline,
+## B) the difference between black lines and gray area,
+## C) the probability under the null statistical model.
+
+## 71 ribosome-associated proteins. I found these by searching the REL606 genbank file
+## using the keyword "ribosom" to match "ribosomal" and "ribosome".
+## There's 72 by manual search, but 71 in REL606.genes.
+
+ribosome.associated.prot.genes <- REL606.genes %>%
+    filter(str_detect(product, "ribosom"))
+
+ribosome.associated.prot.subset.size <- length(ribosome.associated.prot.genes$locus_tag)
+
+## for simplicity, just plot data for Ara-1.
+m1.pop.gene.mutation.data <- filter(gene.mutation.data, Population == "Ara-1") %>%
+    ## change levels of the population factor so that only Ara-1 is represented.
+    mutate(Population = factor(
+               Population,
+               levels = unique(m1.pop.gene.mutation.data$Population)))
+
+m1.ribosome.associated.prot.mut.data <- filter(
+    m1.pop.gene.mutation.data,
+    locus_tag %in% ribosome.associated.prot.genes$locus_tag)
+
+## This works-- write to file.
+m1.rando.layer <- plot.base.layer(m1.pop.gene.mutation.data, REL606.genes,
+                                  subset.size=ribosome.associated.prot.subset.size)
+
+c.m1.ribosome.associated.prot.muts <- calc.cumulative.muts(
+    m1.ribosome.associated.prot.mut.data,
+    ribosome.associated.prot.genes,
+    reset.pop.levels = FALSE)
+
+m1.ribosome.associated.prot.Fig <- plot.cumulative.muts(c.m1.ribosome.associated.prot.muts)
+
+exampleFig <- m1.rando.layer %>%
+    add.cumulative.mut.layer(c.m1.ribosome.associated.prot.muts, my.color="black")
+
+## draw a pseudo-random set of 71 genes, using a fixed random seed.
+## IMPORTANT: This should be the very LAST code in this file, since we are
+## explicitly setting the seed for the RNG to a fixed value!!
+set.seed(1)
+pseudorandom.set <- sample(REL606.genes$Gene, size=ribosome.associated.prot.subset.size)
+
+pseudorandom.genes <- REL606.genes %>%
+    filter(Gene %in% pseudorandom.set)
+
+m1.pseudorandom.genes.mut.data <- filter(
+    m1.pop.gene.mutation.data,
+    Gene %in% pseudorandom.set)
+
+c.m1.pseudorandom.muts <- calc.cumulative.muts(
+    m1.pseudorandom.genes.mut.data,
+    pseudorandom.genes,
+    reset.pop.levels = FALSE)
+
+m1.pseudorandom.Fig <- plot.cumulative.muts(c.m1.pseudorandom.muts, my.color="gray")
+
