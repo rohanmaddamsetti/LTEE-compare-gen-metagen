@@ -713,51 +713,30 @@ m1.ribosome.associated.prot.mut.data <- filter(
     m1.pop.gene.mutation.data,
     locus_tag %in% ribosome.associated.prot.genes$locus_tag)
 
-## plot this panel to add to the figure.
-m1.rando.layer <- plot.base.layer(m1.pop.gene.mutation.data, REL606.genes,
-                                  subset.size=ribosome.associated.prot.subset.size)
-ggsave("../results/gene-modules/figures/Fig0-panels/Fig0-STIMS-4.pdf",
-       m1.rando.layer,height=4.5, width=4.5)
-
 c.m1.ribosome.associated.prot.muts <- calc.cumulative.muts(
     m1.ribosome.associated.prot.mut.data,
     ribosome.associated.prot.genes,
     reset.pop.levels = FALSE)
 
-m1.ribosome.associated.prot.Fig <- plot.cumulative.muts(c.m1.ribosome.associated.prot.muts)
+## to make the plots uniform, plot the rando layer as the invisible background.
+m1.blank.rando.layer <- plot.base.layer(m1.pop.gene.mutation.data, REL606.genes,
+                                        subset.size=ribosome.associated.prot.subset.size,
+                                        my.color="white")
+
+m1.ribosome.associated.prot.Fig <- m1.blank.rando.layer %>%
+    add.cumulative.mut.layer(c.m1.ribosome.associated.prot.muts, my.color="black")
 ggsave("../results/gene-modules/figures/Fig0-panels/Fig0-STIMS-1.pdf",
-       m1.ribosome.associated.prot.Fig,height=4.5, width=4.5)
+       m1.ribosome.associated.prot.Fig,height=4.2, width=4.2)
+
+## plot this panel to add to the figure.
+m1.rando.layer <- plot.base.layer(m1.pop.gene.mutation.data, REL606.genes,
+                                  subset.size=ribosome.associated.prot.subset.size)
+ggsave("../results/gene-modules/figures/Fig0-panels/Fig0-STIMS-2.pdf",
+       m1.rando.layer,height=4.2, width=4.2)
 
 
 exampleFig <- m1.rando.layer %>%
     add.cumulative.mut.layer(c.m1.ribosome.associated.prot.muts, my.color="black")
-ggsave("../results/gene-modules/figures/Fig0-panels/Fig0-STIMS-5.pdf",
-       exampleFig,height=4.5, width=4.5)
-
-## draw a pseudo-random set of 71 genes, using a fixed random seed.
-## IMPORTANT: This should be the very LAST code in this file, since we are
-## explicitly setting the seed for the RNG to a fixed value!!
-set.seed(1)
-pseudorandom.set <- sample(REL606.genes$Gene, size=ribosome.associated.prot.subset.size)
-
-pseudorandom.genes <- REL606.genes %>%
-    filter(Gene %in% pseudorandom.set)
-
-m1.pseudorandom.genes.mut.data <- filter(
-    m1.pop.gene.mutation.data,
-    Gene %in% pseudorandom.set)
-
-c.m1.pseudorandom.muts <- calc.cumulative.muts(
-    m1.pseudorandom.genes.mut.data,
-    pseudorandom.genes,
-    reset.pop.levels = FALSE)
-
-m1.pseudorandom.Fig <- plot.cumulative.muts(c.m1.pseudorandom.muts, my.color="gray")
-ggsave("../results/gene-modules/figures/Fig0-panels/Fig0-STIMS-2.pdf",
-       m1.pseudorandom.Fig,height=4.5, width=4.5)
-
-m1.pseudorandom.plus.data.Fig <- m1.pseudorandom.Fig %>%
-    add.cumulative.mut.layer(c.m1.ribosome.associated.prot.muts, my.color="black")
 ggsave("../results/gene-modules/figures/Fig0-panels/Fig0-STIMS-3.pdf",
-       m1.pseudorandom.plus.data.Fig,height=4.5, width=4.5)
+       exampleFig,height=4.2, width=4.2)
 
