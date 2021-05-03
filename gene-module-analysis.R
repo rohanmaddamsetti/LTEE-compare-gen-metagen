@@ -2,6 +2,9 @@
 
 source("metagenomics-library.R")
 
+## CRITICAL TODO: RE-RUN ANALYSES, ignoring synonymous mutations.
+
+
 ##########################################################################
 ## GENE MODULE DATA ANALYSIS
 ##########################################################################
@@ -17,15 +20,6 @@ REL606.genes <- read.csv('../results/REL606_IDs.csv',as.is=TRUE) %>%
     mutate(gene_length=strtoi(gene_length)) %>%
     mutate(oriC_start=rotate.REL606.chr(start,"oriC")) %>%
     mutate(oriC_end=rotate.REL606.chr(end,"oriC"))
-## Some gene names map to multiple genes! Filter these out.
-duplicate.genes <- REL606.genes %>%
-    group_by(Gene) %>%
-    summarize(copies=length(unique(gene_length))) %>%
-    filter(copies>1)
-## There are four such cases: alr, bioD, ddl, maf (2 each for 8 loci total).
-## filter them from this analysis.
-REL606.genes <- REL606.genes %>%
-    filter(!(Gene %in% duplicate.genes$Gene))
 
 ## Order nonmutator pops, then hypermutator pops by converting Population to
 ## factor type and setting the levels.
@@ -401,7 +395,7 @@ ggsave(S2Fig, filename='../results/gene-modules/figures/S2Fig.pdf')
 ## I saved a reduced version of the data.
 
 eigengenes <- read.csv('../data/Wytock2018-eigengenes.csv',as.is=TRUE) %>%
-    inner_join(REL606.genes,eigengenes)
+    inner_join(REL606.genes)
 ## add eigengene assignment to gene.mutation.data.
 eigengene.mut.data <- inner_join(gene.mutation.data, eigengenes)
 
