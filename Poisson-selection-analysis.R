@@ -1,10 +1,6 @@
 ## Poisson-selection-analysis.R by 
 ## Nkrumah Grant and Rohan Maddamsetti.
 
-## TODO: make Q-Q plots to compared observed and expected distributions
-## under the Poisson model. This will tell us whether or not the Poisson
-## background model is a good approximation for each population.
-
 source("metagenomics-library.R")
 
 ## get the lengths of all protein-coding genes in REL606.
@@ -40,19 +36,19 @@ gene.mutation.data <- read.csv(
     inner_join(REL606.genes) %>%
     filter(Gene!='intergenic')
 
-
 #########################################################################
-#### Kinnersley-style analysis, using background density.
+## Kinnersley et al. (2021) style analysis, using background density.
 
 ## count number of mutated genes in each of the populations
 ## and then calculate the overall density of mutations
-## since some regions are masked in the metagenomic data, use the total length of genes
-## in REL606.genes as the normalizing factor.
+## since some regions are masked in the metagenomic data,
+## use the total length of genes in REL606.genes as the normalizing factor.
 TOTAL_GENE_BP <- sum(REL606.genes$gene_length)
 
 pop.sum.mutations <- gene.mutation.data %>%
   group_by(Population) %>%
-  summarise(pop.mutation.total = n(), background.mut.density = pop.mutation.total/TOTAL_GENE_BP)             
+    summarise(pop.mutation.total = n(),
+              background.mut.density = pop.mutation.total/TOTAL_GENE_BP)
 
 pop.poisson.data.analysis <- gene.mutation.data %>%
     group_by(Population,Gene,locus_tag,gene_length) %>%
@@ -70,21 +66,25 @@ pop.poisson.data.analysis <- gene.mutation.data %>%
     mutate(upper.pois.prob = ppois(q = mut.count,lambda = pois.lambda,
                                    lower.tail=FALSE)) %>%
     ## control for the number of statistical comparisons being made:
-    mutate(fdr.corrected.lower.pois.prob = p.adjust(lower.pois.prob, method = "fdr")) %>%
-    mutate(fdr.corrected.upper.pois.prob = p.adjust(upper.pois.prob, method = "fdr")) %>%
-    mutate(min.tail.fdr.corrected.pois.prob = pmin(fdr.corrected.lower.pois.prob,
-                                                   fdr.corrected.upper.pois.prob)) %>%
+    mutate(fdr.corrected.lower.pois.prob = p.adjust(
+               lower.pois.prob, method = "fdr")) %>%
+    mutate(fdr.corrected.upper.pois.prob = p.adjust(
+               upper.pois.prob, method = "fdr")) %>%
+    mutate(min.tail.fdr.corrected.pois.prob = pmin(
+               fdr.corrected.lower.pois.prob,
+               fdr.corrected.upper.pois.prob)) %>%
     filter(min.tail.fdr.corrected.pois.prob < 0.01) %>%
     select(Population, Gene, locus_tag, gene_length, mut.count, product,
            background.mut.density,pois.lambda,fdr.corrected.lower.pois.prob,
            fdr.corrected.upper.pois.prob,min.tail.fdr.corrected.pois.prob) %>%
     arrange(Population, min.tail.fdr.corrected.pois.prob)
 
+################################################################################
 ## summary over all LTEE.
 gene.mutation.data.total <- gene.mutation.data %>%
-    mutate(mutation.total = nrow(.)) %>%
-    mutate(background.mut.density = mutation.total/TOTAL_GENE_BP) %>%
-    select(mutation.total,background.mut.density) %>% distinct()
+        mutate(mutation.total = nrow(.)) %>%
+        mutate(background.mut.density = mutation.total/TOTAL_GENE_BP) %>%
+        select(mutation.total,background.mut.density) %>% distinct()
 
 all.ltee.poisson.data.analysis <- gene.mutation.data %>%
     group_by(Gene,locus_tag,gene_length) %>%
@@ -103,10 +103,13 @@ all.ltee.poisson.data.analysis <- gene.mutation.data %>%
     mutate(upper.pois.prob = ppois(q = mut.count,lambda = pois.lambda,
                                    lower.tail=FALSE)) %>%
     ## control for the number of statistical comparisons being made:
-    mutate(fdr.corrected.lower.pois.prob = p.adjust(lower.pois.prob, method = "fdr")) %>%
-    mutate(fdr.corrected.upper.pois.prob = p.adjust(upper.pois.prob, method = "fdr")) %>%
-    mutate(min.tail.fdr.corrected.pois.prob = pmin(fdr.corrected.lower.pois.prob,
-                                                   fdr.corrected.upper.pois.prob)) %>%
+    mutate(fdr.corrected.lower.pois.prob = p.adjust(
+               lower.pois.prob, method = "fdr")) %>%
+    mutate(fdr.corrected.upper.pois.prob = p.adjust(
+               upper.pois.prob, method = "fdr")) %>%
+    mutate(min.tail.fdr.corrected.pois.prob = pmin(
+               fdr.corrected.lower.pois.prob,
+               fdr.corrected.upper.pois.prob)) %>%
     arrange(min.tail.fdr.corrected.pois.prob) %>%
     filter(min.tail.fdr.corrected.pois.prob < 0.01) %>%
     select(Gene, locus_tag, gene_length, mut.count, product,
@@ -114,19 +117,15 @@ all.ltee.poisson.data.analysis <- gene.mutation.data %>%
            fdr.corrected.upper.pois.prob,min.tail.fdr.corrected.pois.prob) %>%
     arrange(fdr.corrected.upper.pois.prob)
 
-
-#####################
-
-## do the Poisson analysis of modules in STIMS here.
-## synonymous mutations are included in the background mutation calculation,
-## but are excluded from 
+################################################################################
 
 All.LTEE.Poisson.module.analysis <- function(gene.vec, gene.mutation.data,
                                              REL606.genes) {
-    
+    ## do the Poisson analysis of modules in STIMS here.
+    ## all mutations, including synonymous mutations, are included.
+
     TOTAL_GENE_BP <- sum(REL606.genes$gene_length)
     
-    ## summary over all LTEE.
     gene.mutation.data.total <- gene.mutation.data %>%
         mutate(mutation.total = nrow(.)) %>%
         mutate(background.mut.density = mutation.total/TOTAL_GENE_BP) %>%
@@ -152,8 +151,10 @@ All.LTEE.Poisson.module.analysis <- function(gene.vec, gene.mutation.data,
         mutate(upper.pois.prob = ppois(q = mut.count,lambda = pois.lambda,
                                        lower.tail=FALSE)) %>%
         ## control for the number of statistical comparisons being made:
-        mutate(fdr.corrected.lower.pois.prob = p.adjust(lower.pois.prob, method = "fdr")) %>%
-        mutate(fdr.corrected.upper.pois.prob = p.adjust(upper.pois.prob, method = "fdr")) %>%
+        mutate(fdr.corrected.lower.pois.prob = p.adjust(
+                   lower.pois.prob, method = "fdr")) %>%
+        mutate(fdr.corrected.upper.pois.prob = p.adjust(
+                   upper.pois.prob, method = "fdr")) %>%
         mutate(min.tail.fdr.corrected.pois.prob = pmin(
                    fdr.corrected.lower.pois.prob,
                    fdr.corrected.upper.pois.prob)) %>%
@@ -176,13 +177,11 @@ neutral.genes <- read.csv("../data/neutral_compilation.csv",
 
 neutral.gene.result <- Run.All.LTEE.Poisson.module.analysis(neutral.genes$Gene)
 
-
 ## Note: this is a dataframe with one column, called regulator.
 Imodulon.regulators <- read.csv(
     "../data/rohans-I-modulons-to-regulators.csv", as.is =T) %>%
     select(regulator) %>% drop_na() %>% distinct()
     
-
 Imodulon.regulator.result <- Run.All.LTEE.Poisson.module.analysis(
     Imodulon.regulators$regulator)
 
@@ -190,7 +189,6 @@ couce.essential.genes <- read.csv("../data/Couce2017-LTEE-essential.csv")
 
 couce.essential.result <- Run.All.LTEE.Poisson.module.analysis(
     couce.essential.genes$Gene)
-
 
 ## get mutation parallelism in the LTEE genomes published in
 ## Tenaillon et al. (2016).
@@ -254,8 +252,8 @@ proteome.sector.poisson.analysis.helper <- function(split.df) {
 
 proteome.sector.results <- proteome.assignments %>%
     split(list(.$Sector.assigned)) %>%
-    map_dfr(.f = proteome.sector.poisson.analysis.helper)
-
+    map_dfr(.f = proteome.sector.poisson.analysis.helper) %>%
+    arrange(min.tail.fdr.corrected.pois.prob)
 
 ## Get eigengene sector assignments from Wytock and Motter (2018)
 ## Supplementary File 1.
@@ -273,8 +271,8 @@ eigengene.poisson.analysis.helper <- function(split.df) {
 
 eigengene.results <- eigengenes %>%
     split(list(.$Eigengene)) %>%
-    map_dfr(.f = eigengene.poisson.analysis.helper)
-
+    map_dfr(.f = eigengene.poisson.analysis.helper) %>%
+    arrange(min.tail.fdr.corrected.pois.prob)
 
 ## Now look at genes that are regulated within Imodulons.
 ## I expect relaxed or purifying selection overall.
@@ -293,7 +291,8 @@ Imodulon.regulated.poisson.analysis.helper <- function(split.df) {
 
 Imodulon.regulated.result <- Imodulon.regulated %>%
     split(list(.$I.modulon)) %>%
-    map_dfr(.f = Imodulon.regulated.poisson.analysis.helper)
+    map_dfr(.f = Imodulon.regulated.poisson.analysis.helper) %>%
+    arrange(min.tail.fdr.corrected.pois.prob)
 
 significant.Imodulon.regulated <- Imodulon.regulated.result %>%
     filter(min.tail.fdr.corrected.pois.prob < 0.01)
