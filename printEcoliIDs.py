@@ -89,7 +89,7 @@ def main():
     parser = argparse.ArgumentParser(description='print csv file of CDS IDs in Genbank file, as long as they do not overlap a repetitive region or prophage.')
 
     parser.add_argument("-i", "--input", help='Input genbank file',required=True)
-    parser.add_argument("-m", "--mask", help="genomediff mask file", required=False)
+    parser.add_argument("-m", "--mask", help="genomediff mask file", required=True)
     
     args = parser.parse_args()
 

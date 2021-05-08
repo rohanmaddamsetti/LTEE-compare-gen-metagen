@@ -15,7 +15,7 @@ source("metagenomics-library.R")
 ## in Ben Good's LTEE metagenomics paper for more details.
 ## This filtering is done in my python script printEcoliIDs.py.
 ##Do by running:
-##python printEcoliIDs.py -i ../data/REL606.7.gbk > ../results/REL606_IDs.csv.
+## python printEcoliIDs.py -i ../data/REL606.7.gbk --mask ../data/REL606.L20.G15.P0.M35.RM-edited.mask.gd > ../results/REL606_IDs.csv
 REL606.genes <- read.csv('../results/REL606_IDs.csv',as.is=TRUE) %>%
     mutate(gene_length=strtoi(gene_length)) %>%
     mutate(oriC_start=rotate.REL606.chr(start,"oriC")) %>%
@@ -36,6 +36,10 @@ gene.mutation.data <- read.csv(
     mutate(Generation=t0/10000) %>%
     ## This for changing the ordering of populations in plots.
     mutate(Population=factor(Population,levels=c(nonmutator.pops,hypermutator.pops))) %>%
+    ## important: inner_join only includes genes that pass REL606 annotation
+    ## filters. In particular, genes that overlap with masked regions are
+    ## excluded, even if the metagenomic data included mutations that
+    ## are called in non-repetitive regions of those genes.
     inner_join(REL606.genes) %>%
     filter(Gene!='intergenic')
 
