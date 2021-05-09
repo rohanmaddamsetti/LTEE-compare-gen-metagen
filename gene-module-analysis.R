@@ -2,9 +2,6 @@
 
 source("metagenomics-library.R")
 
-## CRITICAL TODO: RE-RUN ANALYSES, ignoring synonymous mutations.
-
-
 ##########################################################################
 ## GENE MODULE DATA ANALYSIS
 ##########################################################################
@@ -89,10 +86,28 @@ Fig2 <- neutral.base.layer %>%
 ggsave("../results/gene-modules/figures/Fig2.pdf", Fig2)
 
 ## calculate more rigorous statistics than the figures.
-neutral.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes, unique(neutral.genes$Gene))
+neutral.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
+                                 unique(neutral.genes$Gene))
 ## recalculate, sampling from the same genomic regions (bins).
 ## results should be unchanged.
-neutral.pvals.loc <- calc.traj.pvals(gene.mutation.data, REL606.genes, unique(neutral.genes$Gene),sample.genes.by.location=TRUE)
+neutral.pvals.loc <- calc.traj.pvals(gene.mutation.data, REL606.genes,
+                                     unique(neutral.genes$Gene),
+                                     sample.genes.by.location=TRUE)
+################
+## re-run STIMS, summing mutations over all LTEE populations.
+
+c.all.pops.neutral.genes <- calc.cumulative.muts.over.all.pops(
+    neutral.mut.data, neutral.genes.metadata)
+
+neutral.base.layer.over.all.pops <- plot.base.layer.over.all.pops(
+    gene.mutation.data,
+    REL606.genes,
+    subset.size=length(unique(neutral.genes$Gene)))
+
+allpop.Fig2 <- neutral.base.layer.over.all.pops %>% 
+    add.cumulative.mut.layer(c.all.pops.neutral.genes, my.color="black")
+ggsave("../results/gene-modules/figures/allpop-Fig2.pdf", allpop.Fig2)
+
 
 #########################################################################
 ## PURIFYING SELECTION CONTROL EXPERIMENT AND ANALYSIS.
@@ -122,7 +137,10 @@ purifying.genes <- essential.genes %>%
 
 purifying.mut.data <- gene.mutation.data %>%
     filter(Gene %in% purifying.genes$Gene)
-c.purifying.genes <- calc.cumulative.muts(purifying.mut.data, purifying.genes)
+
+purifying.genes.metadata <- REL606.genes %>% filter(Gene %in% purifying.genes$Gene)
+
+c.purifying.genes <- calc.cumulative.muts(purifying.mut.data, purifying.genes.metadata)
 
 purifying.base.layer <- plot.base.layer(
     gene.mutation.data,
@@ -135,12 +153,30 @@ Fig3 <- purifying.base.layer %>%
 ggsave("../results/gene-modules/figures/Fig3.pdf", Fig3)
 
 ## calculate more rigorous statistics than the figures.
-purifying.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes, unique(purifying.genes$Gene))
+purifying.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
+                                   unique(purifying.genes$Gene))
 ## recalculate, sampling from the same genomic regions (bins).
 ## results should be unchanged.
 purifying.pvals.loc <- calc.traj.pvals(gene.mutation.data, REL606.genes,
-                                                       unique(purifying.genes$Gene),
-                                                       sample.genes.by.location=TRUE)
+                                       unique(purifying.genes$Gene),
+                                       sample.genes.by.location=TRUE)
+
+################
+## re-run STIMS, summing mutations over all LTEE populations.
+
+c.all.pops.purifying.genes <- calc.cumulative.muts.over.all.pops(
+    purifying.mut.data, purifying.genes.metadata)
+
+purifying.base.layer.over.all.pops <- plot.base.layer.over.all.pops(
+    gene.mutation.data,
+    REL606.genes,
+    subset.size=length(unique(purifying.genes$Gene)))
+
+allpop.Fig3 <- purifying.base.layer.over.all.pops %>% 
+    add.cumulative.mut.layer(c.all.pops.purifying.genes, my.color="black")
+ggsave("../results/gene-modules/figures/allpop-Fig3.pdf", allpop.Fig3)
+
+################
 
 ## What is the association between genes that are essential by transposon
 ## mutagenesis, and genes that are completely depleted in mutations?
@@ -149,7 +185,8 @@ purifying.pvals.loc <- calc.traj.pvals(gene.mutation.data, REL606.genes,
 ## depleted by chance, and are not significant after FDR-correction.
 ## nonetheless, some of them are probably under purifying selection.
 
-## Cross-check with the LTEE Genomics data-- synonymous, intergenic (not in coding region)
+## Cross-check with the LTEE Genomics data-- synonymous, intergenic
+## (not in coding region)
 ## and amplifications are allowed, but no other kinds of mutations.
 ## I downloaded mutations from https://barricklab.org/shiny/LTEE-Ecoli/,
 ## skipping SNP synonymous, SNP intergenic, and large amplication mutations.
@@ -162,7 +199,8 @@ LTEE.genomics.muts <- read.csv("../data/LTEE-Ecoli-data 2020-02-24 14_35_41.csv"
 ## remove genes from 'no.mutation.genes' that have mutations in LTEE.genomics.muts.
 ## make a big string of all mutated genes in the LTEE-genomics data, and search this for
 ## matches.
-LTEE.genomics.mutated.genestr <- str_c(unique(LTEE.genomics.muts$gene_list),collapse = ",")
+LTEE.genomics.mutated.genestr <- str_c(unique(LTEE.genomics.muts$gene_list),
+                                       collapse = ",")
 
 no.mutation.genes <- REL606.genes %>%
     ## no hits allowed in the metagenomics.
@@ -171,7 +209,8 @@ no.mutation.genes <- REL606.genes %>%
     filter(!(str_detect(LTEE.genomics.mutated.genestr,Gene))) %>%
     arrange(desc(gene_length)) %>%
     ## estimate the probability that these genes were not hit by chance.
-    mutate(pval = uniform.probability.that.not.hit(gene_length, nrow(gene.mutation.data))) %>%
+    mutate(pval = uniform.probability.that.not.hit(gene_length,
+                                                   nrow(gene.mutation.data))) %>%
     mutate(fdr.qval = p.adjust(pval,"fdr"))
 
 ## Look at genes that only have dS.
@@ -255,7 +294,9 @@ rando.plot <- plot.base.layer(gene.mutation.data, REL606.genes)
 top.nonmut.mutation.data <- gene.mutation.data %>%
     filter(Gene %in% top.nonmut.genomics$Gene.name)
 
-c.top.nonmuts <- calc.cumulative.muts(top.nonmut.mutation.data, top.nonmut.genomics)
+top.nonmut.metadata <- REL606.genes %>% filter(Gene %in% top.nonmut.genomics$Gene.name)
+
+c.top.nonmuts <- calc.cumulative.muts(top.nonmut.mutation.data, top.nonmut.metadata)
 
 Fig4 <- rando.plot %>%
     add.cumulative.mut.layer(c.top.nonmuts,my.color="black")
@@ -273,10 +314,14 @@ top.nonmut.pvals.loc <- calc.traj.pvals(gene.mutation.data,
                                         sample.genes.by.location=TRUE)
 
 ## 2) plot top genes in hypermutators.
-top.hypermut.data <- gene.mutation.data %>%
+top.hypermut.mutation.data <- gene.mutation.data %>%
     filter(Gene %in% top.hypermut.genomics$Gene.name)
 
-c.top.hypermut <- calc.cumulative.muts(top.hypermut.data, top.hypermut.genomics)
+top.hypermut.metadata <- REL606.genes %>%
+    filter(Gene %in% top.hypermut.genomics$Gene.name)
+
+c.top.hypermut <- calc.cumulative.muts(top.hypermut.mutation.data,
+                                       top.hypermut.metadata)
 
 S1Fig <- rando.plot %>%
     add.cumulative.mut.layer(c.top.hypermut, my.color="black")
@@ -290,17 +335,40 @@ top.hypermut.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
 top.hypermut.pvals.loc <- calc.traj.pvals(gene.mutation.data, REL606.genes,
                                           unique(top.hypermut.genomics$Gene.name),
                                           sample.genes.by.location=TRUE)
+################
+## re-run STIMS, summing mutations over all LTEE populations.
+
+rando.over.all.pops.plot <- plot.base.layer.over.all.pops(
+    gene.mutation.data, REL606.genes)
+
+c.all.pops.top.nonmuts <- calc.cumulative.muts.over.all.pops(
+    top.nonmut.mutation.data, top.nonmut.metadata)
+
+allpop.Fig4 <- rando.over.all.pops.plot %>% 
+    add.cumulative.mut.layer(c.all.pops.top.nonmuts, my.color="black")
+ggsave("../results/gene-modules/figures/allpop-Fig4.pdf", allpop.Fig4)
+
+c.all.pops.top.hypermuts <- calc.cumulative.muts.over.all.pops(
+    top.hypermut.mutation.data, top.hypermut.metadata)
+
+allpop.S1Fig <- rando.over.all.pops.plot %>% 
+    add.cumulative.mut.layer(c.all.pops.top.hypermuts, my.color="black")
+ggsave("../results/gene-modules/figures/allpop-S1Fig.pdf", allpop.S1Fig)
+
 
 ##########################################################################
 ## CORE GENES ANALYSIS.
 ##########################################################################
+
+### IMPORTANT BUG! need to have a red rando layer for non-core genes.
+
 core.gene.assignments <- read.csv("../data/Maddamsetti2017-core-summary.csv")
 
 core.genes <- core.gene.assignments %>% filter(panortholog == TRUE)
 noncore.genes <- core.gene.assignments %>% filter(panortholog == FALSE)
 
-core.genes.metadata.df <- filter(REL606.genes, locus_tag %in%core.genes$locus_tag)
-noncore.genes.metadata.df <- filter(REL606.genes, locus_tag %in%noncore.genes$locus_tag)
+core.genes.metadata <- filter(REL606.genes, locus_tag %in%core.genes$locus_tag)
+noncore.genes.metadata <- filter(REL606.genes, locus_tag %in%noncore.genes$locus_tag)
 
 core.mut.data <- filter(gene.mutation.data, locus_tag %in% core.genes$locus_tag)
 noncore.mut.data <- filter(gene.mutation.data, locus_tag %in% noncore.genes$locus_tag)
@@ -311,31 +379,67 @@ noncore.subset.size <- length(unique(noncore.genes$locus_tag))
 core.rando.layer <- plot.base.layer(gene.mutation.data, REL606.genes,
                                         subset.size=core.subset.size)
 
-c.core.muts <- calc.cumulative.muts(core.mut.data, core.genes.metadata.df)
-c.noncore.muts <- calc.cumulative.muts(noncore.mut.data, core.genes.metadata.df)
+c.core.muts <- calc.cumulative.muts(core.mut.data, core.genes.metadata)
+c.noncore.muts <- calc.cumulative.muts(noncore.mut.data, noncore.genes.metadata)
 
 coreFig <- core.rando.layer %>%
+    ##add.base.layer(gene.mutation.data, ## add null for noncore genes.
+    ##               REL606.genes,
+    ##               subset.size=length(unique(noncore.genes.metadata$Gene)),
+    ##               my.color="pink") %>%
     add.cumulative.mut.layer(c.core.muts, my.color="black") %>%
     add.cumulative.mut.layer(c.noncore.muts,my.color="red")
+
+################
+## re-run STIMS, summing mutations over all LTEE populations.
+
+core.rando.over.all.pops.layer <- plot.base.layer.over.all.pops(
+    gene.mutation.data, REL606.genes,
+    subset.size=core.subset.size)
+
+c.all.pops.core.muts <- calc.cumulative.muts.over.all.pops(
+    core.mut.data, core.genes.metadata)
+
+c.all.pops.noncore.muts <- calc.cumulative.muts.over.all.pops(
+    noncore.mut.data, noncore.genes.metadata)
+
+all.pops.coreFig <- core.rando.over.all.pops.layer %>% 
+    add.cumulative.mut.layer(c.all.pops.core.muts, my.color="black") %>%
+    add.cumulative.mut.layer(c.all.pops.noncore.muts, my.color="red")
+ggsave("../results/gene-modules/figures/allpop-core-genes.pdf", all.pops.coreFig)
 
 ##########################################################################
 ## ADHESIN GENES ANALYSIS.
 ##########################################################################
 
-adhesin.genes <- REL606.genes %>%
+adhesin.metadata <- REL606.genes %>%
     filter(str_detect(product, "adhesin"))
 
-adhesin.mut.data <- filter(gene.mutation.data, locus_tag %in% adhesin.genes$locus_tag)
+adhesin.mut.data <- filter(gene.mutation.data, locus_tag %in% adhesin.metadata$locus_tag)
 
-adhesin.subset.size <- length(unique(adhesin.genes$locus_tag))
+adhesin.subset.size <- length(unique(adhesin.metadata$locus_tag))
 
 adhesin.rando.layer <- plot.base.layer(gene.mutation.data, REL606.genes,
                                         subset.size=adhesin.subset.size)
 
-c.adhesin.muts <- calc.cumulative.muts(adhesin.mut.data, adhesin.genes)
+c.adhesin.muts <- calc.cumulative.muts(adhesin.mut.data, adhesin.metadata)
 
 adhesinFig <- adhesin.rando.layer %>%
     add.cumulative.mut.layer(c.adhesin.muts, my.color="black")
+
+################
+## re-run STIMS, summing mutations over all LTEE populations.
+
+adhesin.over.all.pops.rando.layer <- plot.base.layer.over.all.pops(
+    gene.mutation.data, REL606.genes,
+    subset.size=adhesin.subset.size)
+
+c.all.pops.adhesin.muts <- calc.cumulative.muts.over.all.pops(
+    adhesin.mut.data, adhesin.metadata)
+
+all.pops.adhesinFig <- adhesin.over.all.pops.rando.layer %>% 
+    add.cumulative.mut.layer(c.all.pops.adhesin.muts, my.color="black")
+ggsave("../results/gene-modules/figures/allpop-adhesin.pdf", all.pops.adhesinFig)
 
 ##########################################################################
 ## GENE MODULE ANALYSIS.
@@ -375,12 +479,18 @@ proteome.subset.size <- min(length(unique(A.sector.mut.data$Gene)),
 proteome.rando.layer <- plot.base.layer(gene.mutation.data, REL606.genes,
                                         subset.size=proteome.subset.size)
 
-c.A.muts <- calc.cumulative.muts(A.sector.mut.data, filter(proteome.assignments,Sector.assigned=='A'))
-c.S.muts <- calc.cumulative.muts(S.sector.mut.data, filter(proteome.assignments,Sector.assigned=='S'))
-c.O.muts <- calc.cumulative.muts(O.sector.mut.data, filter(proteome.assignments,Sector.assigned=='O'))
-c.U.muts <- calc.cumulative.muts(U.sector.mut.data,filter(proteome.assignments,Sector.assigned=='U'))
-c.R.muts <- calc.cumulative.muts(R.sector.mut.data,filter(proteome.assignments,Sector.assigned=='R'))
-c.C.muts <- calc.cumulative.muts(C.sector.mut.data,filter(proteome.assignments,Sector.assigned=='C'))
+c.A.muts <- calc.cumulative.muts(A.sector.mut.data,
+                                 filter(proteome.assignments,Sector.assigned=='A'))
+c.S.muts <- calc.cumulative.muts(S.sector.mut.data,
+                                 filter(proteome.assignments,Sector.assigned=='S'))
+c.O.muts <- calc.cumulative.muts(O.sector.mut.data,
+                                 filter(proteome.assignments,Sector.assigned=='O'))
+c.U.muts <- calc.cumulative.muts(U.sector.mut.data,
+                                 filter(proteome.assignments,Sector.assigned=='U'))
+c.R.muts <- calc.cumulative.muts(R.sector.mut.data,
+                                 filter(proteome.assignments,Sector.assigned=='R'))
+c.C.muts <- calc.cumulative.muts(C.sector.mut.data,
+                                 filter(proteome.assignments,Sector.assigned=='C'))
 
 ## plot for proteome sectors.
 S2Fig <- proteome.rando.layer %>%
@@ -391,6 +501,47 @@ S2Fig <- proteome.rando.layer %>%
     add.cumulative.mut.layer(c.R.muts,my.color="yellow") %>%
     add.cumulative.mut.layer(c.C.muts,my.color="orange")
 ggsave(S2Fig, filename='../results/gene-modules/figures/S2Fig.pdf')
+
+################
+## re-run STIMS, summing mutations over all LTEE populations.
+
+proteome.over.all.pops.rando.layer <- plot.base.layer.over.all.pops(
+    gene.mutation.data, REL606.genes,
+    subset.size=proteome.subset.size)
+
+c.all.pops.A.muts <- calc.cumulative.muts.over.all.pops(
+    A.sector.mut.data,
+    filter(proteome.assignments,Sector.assigned=='A'))
+
+c.all.pops.S.muts <- calc.cumulative.muts.over.all.pops(
+    S.sector.mut.data,
+    filter(proteome.assignments,Sector.assigned=='S'))
+
+c.all.pops.O.muts <- calc.cumulative.muts.over.all.pops(
+    O.sector.mut.data,
+    filter(proteome.assignments,Sector.assigned=='O'))
+
+c.all.pops.U.muts <- calc.cumulative.muts.over.all.pops(
+    U.sector.mut.data,
+    filter(proteome.assignments,Sector.assigned=='U'))
+
+c.all.pops.R.muts <- calc.cumulative.muts.over.all.pops(
+    R.sector.mut.data,
+    filter(proteome.assignments,Sector.assigned=='R'))
+
+c.all.pops.C.muts <- calc.cumulative.muts.over.all.pops(
+    C.sector.mut.data,
+    filter(proteome.assignments,Sector.assigned=='C'))
+
+all.pops.S2Fig <- proteome.over.all.pops.rando.layer %>%
+    add.cumulative.mut.layer(c.all.pops.A.muts, my.color="black") %>%
+    add.cumulative.mut.layer(c.all.pops.S.muts,my.color="red") %>%
+    add.cumulative.mut.layer(c.all.pops.O.muts,my.color="blue") %>%
+    add.cumulative.mut.layer(c.all.pops.U.muts,my.color="green") %>%
+    add.cumulative.mut.layer(c.all.pops.R.muts,my.color="yellow") %>%
+    add.cumulative.mut.layer(c.all.pops.C.muts,my.color="orange")
+ggsave(all.pops.S2Fig, filename='../results/gene-modules/figures/all-pops-S2Fig.pdf')
+
 ##########################################################################
 ## look at accumulation of stars over time for genes in different eigengenes
 ## inferred by Wytock and Motter (2018).
@@ -426,15 +577,24 @@ eigen.subset.size <- min(length(unique(eigengene1.mut.data$Gene)),
 eigen.rando.layer <- plot.base.layer(gene.mutation.data,REL606.genes,
                                      subset.size=eigen.subset.size)
 
-c.eigen1.muts <- calc.cumulative.muts(eigengene1.mut.data, filter(eigengenes,Eigengene==1))
-c.eigen2.muts <- calc.cumulative.muts(eigengene2.mut.data, filter(eigengenes,Eigengene==2))
-c.eigen3.muts <- calc.cumulative.muts(eigengene3.mut.data, filter(eigengenes,Eigengene==3))
-c.eigen4.muts <- calc.cumulative.muts(eigengene4.mut.data, filter(eigengenes,Eigengene==4))
-c.eigen5.muts <- calc.cumulative.muts(eigengene5.mut.data, filter(eigengenes,Eigengene==5))
-c.eigen6.muts <- calc.cumulative.muts(eigengene6.mut.data, filter(eigengenes,Eigengene==6))
-c.eigen7.muts <- calc.cumulative.muts(eigengene7.mut.data, filter(eigengenes,Eigengene==7))
-c.eigen8.muts <- calc.cumulative.muts(eigengene8.mut.data, filter(eigengenes,Eigengene==8))
-c.eigen9.muts <- calc.cumulative.muts(eigengene9.mut.data, filter(eigengenes,Eigengene==9))
+c.eigen1.muts <- calc.cumulative.muts(eigengene1.mut.data,
+                                      filter(eigengenes,Eigengene==1))
+c.eigen2.muts <- calc.cumulative.muts(eigengene2.mut.data,
+                                      filter(eigengenes,Eigengene==2))
+c.eigen3.muts <- calc.cumulative.muts(eigengene3.mut.data,
+                                      filter(eigengenes,Eigengene==3))
+c.eigen4.muts <- calc.cumulative.muts(eigengene4.mut.data,
+                                      filter(eigengenes,Eigengene==4))
+c.eigen5.muts <- calc.cumulative.muts(eigengene5.mut.data,
+                                      filter(eigengenes,Eigengene==5))
+c.eigen6.muts <- calc.cumulative.muts(eigengene6.mut.data,
+                                      filter(eigengenes,Eigengene==6))
+c.eigen7.muts <- calc.cumulative.muts(eigengene7.mut.data,
+                                      filter(eigengenes,Eigengene==7))
+c.eigen8.muts <- calc.cumulative.muts(eigengene8.mut.data,
+                                      filter(eigengenes,Eigengene==8))
+c.eigen9.muts <- calc.cumulative.muts(eigengene9.mut.data,
+                                      filter(eigengenes,Eigengene==9))
 
 S3Fig <- eigen.rando.layer %>%
     add.cumulative.mut.layer(c.eigen1.muts, my.color="red") %>%
@@ -447,6 +607,45 @@ S3Fig <- eigen.rando.layer %>%
     add.cumulative.mut.layer(c.eigen8.muts,my.color="pink") %>%
     add.cumulative.mut.layer(c.eigen9.muts,my.color="black")
 ggsave(S3Fig, filename='../results/gene-modules/figures/S3Fig.pdf')
+
+################
+## re-run STIMS, summing mutations over all LTEE populations.
+
+eigen.over.all.pops.rando.layer <- plot.base.layer.over.all.pops(
+    gene.mutation.data, REL606.genes,
+    subset.size=eigen.subset.size)
+
+c.all.pops.eigen1.muts <- calc.cumulative.muts.over.all.pops(eigengene1.mut.data,
+                                      filter(eigengenes,Eigengene==1))
+c.all.pops.eigen2.muts <- calc.cumulative.muts.over.all.pops(eigengene2.mut.data,
+                                      filter(eigengenes,Eigengene==2))
+c.all.pops.eigen3.muts <- calc.cumulative.muts.over.all.pops(eigengene3.mut.data,
+                                      filter(eigengenes,Eigengene==3))
+c.all.pops.eigen4.muts <- calc.cumulative.muts.over.all.pops(eigengene4.mut.data,
+                                      filter(eigengenes,Eigengene==4))
+c.all.pops.eigen5.muts <- calc.cumulative.muts.over.all.pops(eigengene5.mut.data,
+                                      filter(eigengenes,Eigengene==5))
+c.all.pops.eigen6.muts <- calc.cumulative.muts.over.all.pops(eigengene6.mut.data,
+                                      filter(eigengenes,Eigengene==6))
+c.all.pops.eigen7.muts <- calc.cumulative.muts.over.all.pops(eigengene7.mut.data,
+                                      filter(eigengenes,Eigengene==7))
+c.all.pops.eigen8.muts <- calc.cumulative.muts.over.all.pops(eigengene8.mut.data,
+                                      filter(eigengenes,Eigengene==8))
+c.all.pops.eigen9.muts <- calc.cumulative.muts.over.all.pops(eigengene9.mut.data,
+                                      filter(eigengenes,Eigengene==9))
+
+all.pops.S3Fig <- eigen.over.all.pops.rando.layer %>%
+    add.cumulative.mut.layer(c.all.pops.eigen1.muts, my.color="red") %>%
+    add.cumulative.mut.layer(c.all.pops.eigen2.muts,my.color="orange") %>%
+    add.cumulative.mut.layer(c.all.pops.eigen3.muts,my.color="yellow") %>%
+    add.cumulative.mut.layer(c.all.pops.eigen4.muts,my.color="green") %>%
+    add.cumulative.mut.layer(c.all.pops.eigen5.muts,my.color="cyan") %>%
+    add.cumulative.mut.layer(c.all.pops.eigen6.muts,my.color="blue") %>%
+    add.cumulative.mut.layer(c.all.pops.eigen7.muts,my.color="violet") %>%
+    add.cumulative.mut.layer(c.all.pops.eigen8.muts,my.color="pink") %>%
+    add.cumulative.mut.layer(c.all.pops.eigen9.muts,my.color="black")
+
+ggsave(all.pops.S3Fig, filename='../results/gene-modules/figures/all-pops-S3Fig.pdf')
 
 ####################################
 ## Now for real results.
@@ -464,12 +663,18 @@ ggsave(S3Fig, filename='../results/gene-modules/figures/S3Fig.pdf')
 ## I made this file by hand, by going through the I-modulons in imodulon_gene_names.txt,
 ## and the regulator annotations in modulon.pdf, both in precise-db-repo.
 Imodulons.to.regulators <- read.csv("../data/rohans-I-modulons-to-regulators.csv")
+
 Imodulon.regulators <-Imodulons.to.regulators %>%
     filter(!(is.na(regulator)))
+
 Imodulon.regulator.mut.data <- gene.mutation.data %>%
     filter(Gene %in% Imodulon.regulators$regulator)
+
+Imodulon.regulator.metadata <- REL606.genes %>%
+    filter(Gene %in% Imodulon.regulators$regulator)
+
 c.Imodulon.regulators <- calc.cumulative.muts(Imodulon.regulator.mut.data,
-                                              Imodulon.regulators)
+                                              Imodulon.regulator.metadata)
 
 ## calculate more rigorous statistics than the figures.
 Imodulon.regulator.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
@@ -485,13 +690,20 @@ Imodulon.regulator.pvals.loc <- calc.traj.pvals(gene.mutation.data, REL606.genes
 
 ## this file was generated by reformat-I-modulons.py
 genes.to.Imodulons <- read.csv("../results/gene-modules/genes-to-I-modulons.csv")
+
 Imodulon.regulated <- genes.to.Imodulons %>% filter(!(is.na(Gene))) %>%
     ## remove any I-modulon regulators from the I-modulon genes to
     ## make an orthogonal comparison.
     filter(!(Gene %in% Imodulon.regulators$regulator))
+
 Imodulon.regulated.mut.data <- gene.mutation.data %>%
     filter(Gene %in% Imodulon.regulated$Gene)
-c.Imodulon.regulated <- calc.cumulative.muts(Imodulon.regulated.mut.data,Imodulon.regulated)
+
+Imodulon.regulated.metadata <- REL606.genes %>%
+    filter(Gene %in% Imodulon.regulated$Gene)
+
+c.Imodulon.regulated <- calc.cumulative.muts(Imodulon.regulated.mut.data,
+                                             Imodulon.regulated.metadata)
 
 Imodulon.regulators.base.layer <- plot.base.layer(
     gene.mutation.data,
@@ -507,6 +719,33 @@ Fig5 <- Imodulon.regulators.base.layer %>% ## null for regulators
     add.cumulative.mut.layer(c.Imodulon.regulators, my.color="black") %>%
     add.cumulative.mut.layer(c.Imodulon.regulated, my.color="red")
 ggsave("../results/gene-modules/figures/Fig5.pdf", Fig5)
+
+
+################
+## re-run STIMS, summing mutations over all LTEE populations.
+
+Imodulon.regulators.over.all.pops.rando.layer <- plot.base.layer.over.all.pops(
+    gene.mutation.data, REL606.genes,
+    subset.size=length(unique(Imodulon.regulators$regulator)))
+
+c.all.pops.Imodulon.regulators <- calc.cumulative.muts.over.all.pops(
+    Imodulon.regulator.mut.data,
+    Imodulon.regulator.metadata)
+
+c.all.pops.Imodulon.regulated <- calc.cumulative.muts.over.all.pops(
+    Imodulon.regulated.mut.data,
+    Imodulon.regulated.metadata)
+
+all.pops.Fig5 <- Imodulon.regulators.over.all.pops.rando.layer %>%
+    add.base.layer.over.all.pops(gene.mutation.data,
+                   REL606.genes,
+                   subset.size=length(unique(Imodulon.regulated$Gene)),
+                   my.color="pink") %>%
+    add.cumulative.mut.layer(c.all.pops.Imodulon.regulators, my.color="black") %>%
+    add.cumulative.mut.layer(c.all.pops.Imodulon.regulated, my.color="red")
+    
+ggsave("../results/gene-modules/figures/allpop-Fig5.pdf", all.pops.Fig5)
+################
 
 ## Make plots for each I-modulon.
 
@@ -650,7 +889,8 @@ Mehta.regulator.mut.data <- Mehta.data %>%
     filter(Gene %in% PAO11.regulators$Gene)
 ## 188 mutations occurring in annotated regulators.
 
-c.Mehta.regulators <- calc.Mehta.cumulative.muts(Mehta.regulator.mut.data, PAO11.regulators)
+c.Mehta.regulators <- calc.Mehta.cumulative.muts(Mehta.regulator.mut.data,
+                                                 PAO11.regulators)
 Mehta.base.layer <- plot.Mehta.base.layer(Mehta.data, PAO11.genes,
                                           subset.size=nrow(PAO11.regulators))
 S4Fig <- Mehta.base.layer %>%

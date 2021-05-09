@@ -8,25 +8,27 @@ library(cowplot)
 ## FUNCTIONS FOR DATA ANALYSIS
 ##########################################################################
 
-## function for plotting better y-axis labels.
-## see solution here for nice scientific notation on axes.
-## https://stackoverflow.com/questions/10762287/how-can-i-format-axis-labels-with-exponents-with-ggplot2-and-scales
 fancy_scientific <- function(x) {
+    ## function for plotting better y-axis labels.
+    ## see solution here for nice scientific notation on axes.
+    ## https://stackoverflow.com/questions/10762287/how-can-i-format-axis-labels-with-exponents-with-ggplot2-and-scales
     ifelse(x==0, "0", parse(text=gsub("[+]", "", gsub("e", " %*% 10^", scales::scientific_format()(x)))))
 }
 
-## calculate the probability that a locus (or set of loci) is not hit by mutations,
-## assuming uniform mutation rate.
-## l is locus length, and n is the number of mutations in the dataset.
 uniform.probability.that.not.hit <- function(l,n) {
+    ## calculate the probability that a locus (or set of loci) is not hit by mutations,
+    ## assuming uniform mutation rate.
+    ## l is locus length, and n is the number of mutations in the dataset.
+
     GENOME.LENGTH <- 4629812
     p <- (1 - (l/GENOME.LENGTH))^n
     return(p)
 }
 
-#' function to rotate REL606 genome coordinates, setting oriC/terB at the center of plots
-#' that examine mutation bias over the chromosome.
 rotate.REL606.chr <- function(my.position, c) {
+    #' function to rotate REL606 genome coordinates,
+    #' setting oriC/terB at the center of plots
+    #' that examine mutation bias over the chromosome.
     ## we want to change coordinates so that c is the new origin.
     GENOME.LENGTH <- 4629812
     midpoint <- GENOME.LENGTH/2
@@ -50,12 +52,12 @@ rotate.REL606.chr <- function(my.position, c) {
     }
 }
 
-## look at accumulation of stars over time
-## in other words, look at the rates at which the mutations occur over time.
-## To normalize, we need to supply the number of sites at risk
-## (such as sum of gene length).
-## If plot.to.end is TRUE, then add one final row.
 calc.cumulative.muts <- function(d, d.metadata, plot.to.end=TRUE, reset.pop.levels=TRUE) {
+    ## look at accumulation of stars over time
+    ## in other words, look at the rates at which the mutations occur over time.
+    ## To normalize, we need to supply the number of sites at risk
+    ## (such as sum of gene length).
+    ## If plot.to.end is TRUE, then add one final row.
 
     cumsum.per.pop.helper.func <- function(pop) {
         finalgen <- 6.3 ## this is outside of the data collection
@@ -180,12 +182,12 @@ find.bin <- function(locus.row, z) {
 
 ###############################
 
-## calculate the tail probabilities of the true cumulative mutation trajectory
-## of a given vector of genes (a 'module'), based on resampling
-## random sets of genes. Returns the upper tail of null distribution,
-## or P(random trajectory >= the actual trajectory).
-## Output: a dataframe with three columns: Population, count, p.val
 calc.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, sample.genes.by.location=FALSE) {
+    ## calculate the tail probabilities of the true cumulative mutation trajectory
+    ## of a given vector of genes (a 'module'), based on resampling
+    ## random sets of genes. Returns the upper tail of null distribution,
+    ## or P(random trajectory >= the actual trajectory).
+    ## Output: a dataframe with three columns: Population, count, p.val
 
     ## check type for gene.vec (e.g., if factor, change to vanilla vector of strings)
     gene.vec <- as.character(gene.vec)
@@ -310,9 +312,10 @@ calc.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, sample.genes.
 }
 
 
-## Calculate the derivative of the cumulative accumulation of mutation occurrence.
-## This is simply the rate of mutation occurrence in a class of genes.
+
 calc.slope.of.cumulative.muts <- function(c.muts) {
+    ## Calculate the derivative of the cumulative accumulation of mutation occurrence.
+    ## This is simply the rate of mutation occurrence in a class of genes.
 
     calc.slope.per.pop.helper.func <- function(df) {
         df %>%
@@ -329,11 +332,12 @@ calc.slope.of.cumulative.muts <- function(c.muts) {
     return(D.of.c.muts)
 }
 
-## This plot visualizes a two-tailed test (alphaval = 0.05)
-## against a bootstrapped null distribution.
-## Throughout, plots use the minimum subsample size to subsample the null distribution,
-## to increase the variance in order to make a conservative comparison.
 plot.base.layer <- function(data, REL606.genes, subset.size=50, N=1000, alphaval = 0.05, my.color="gray") {
+    ## This plot visualizes a two-tailed test (alphaval = 0.05)
+    ## against a bootstrapped null distribution.
+    ## Throughout, plots use the minimum subsample size to subsample
+    ## the null distribution, to increase the variance in order to
+    ## make a conservative comparison.
     
     ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations.
@@ -399,10 +403,10 @@ plot.base.layer <- function(data, REL606.genes, subset.size=50, N=1000, alphaval
     return(p)
 }
 
-## add a base layer to a plot. used in Imodulon code.
 add.base.layer <- function(p, data, REL606.genes, my.color, subset.size=50, N=1000, alphaval = 0.05, normalization.constant=NA) {
+    ## add a base layer to a plot. used in Imodulon code.
     
-        ## This function takes the index for the current draw, and samples the data,
+    ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations.
     generate.cumulative.mut.subset <- function(idx) {
         rando.genes <- base::sample(unique(REL606.genes$Gene),subset.size)
@@ -453,8 +457,8 @@ add.base.layer <- function(p, data, REL606.genes, my.color, subset.size=50, N=10
     return(p)                
 }
 
-## take a ggplot object output by plot.cumulative.muts, and add an extra layer.
 add.cumulative.mut.layer <- function(p, layer.df, my.color) {
+    ## take a ggplot object output by plot.cumulative.muts, and add an extra layer.
     p <- p +
         geom_point(data=layer.df,
                    aes(x=Generation,y=normalized.cs),
@@ -464,10 +468,10 @@ add.cumulative.mut.layer <- function(p, layer.df, my.color) {
     return(p)
 }
 
-## calculate cumulative numbers of mutations in each category.
-## for vanilla plotting, without null distributions, as plotted by
-## plot.base.layer.
 plot.cumulative.muts <- function(mut.data, my.color="black") {
+    ## calculate cumulative numbers of mutations in each category.
+    ## for vanilla plotting, without null distributions, as plotted by
+    ## plot.base.layer.
     p <- ggplot(mut.data,aes(x=Generation,y=normalized.cs)) +
         ylab('Cumulative number of mutations (normalized)') +
         theme_classic() +
@@ -479,8 +483,8 @@ plot.cumulative.muts <- function(mut.data, my.color="black") {
     return(p)
 }
 
-## calculate derivative of cumulative numbers of mutations in each category.
 plot.slope.of.cumulative.muts <- function(mut.data, my.color="black") {
+    ## calculate derivative of cumulative numbers of mutations in each category.
     p <- ggplot(mut.data,aes(x=Generation,y=D.normalized.cs)) +
         ylab('Slope of Cumulative number of mutations (normalized)') +
         theme_classic() +
@@ -493,8 +497,8 @@ plot.slope.of.cumulative.muts <- function(mut.data, my.color="black") {
     return(p)
 }
 
-## take a ggplot object output by plot.cumulative.muts, and add an extra layer.
 add.slope.of.cumulative.mut.layer <- function(p, layer.df, my.color) {
+    ## take a ggplot object output by plot.cumulative.muts, and add an extra layer.
     p <- p +
         geom_point(data=layer.df, aes(x=Generation,y=D.normalized.cs), color=my.color, size=0.2) +
         geom_step(data=layer.df, aes(x=Generation,y=D.normalized.cs), color=my.color, size=0.2) +
@@ -503,13 +507,185 @@ add.slope.of.cumulative.mut.layer <- function(p, layer.df, my.color) {
 }
 
 ######################################################################
+## versions of STIMS plotting code, summing over all populations.
+
+calc.cumulative.muts.over.all.pops <- function(d, d.metadata, plot.to.end=TRUE) {
+    ## look at accumulation of stars over time
+    ## in other words, look at the rates at which the mutations occur over time.
+    ## To normalize, we need to supply the number of sites at risk
+    ## (such as sum of gene length).
+    ## If plot.to.end is TRUE, then add one final row.
+    ## This function sums mutations over ALL populations.
+
+    finalgen <- 6.3 ## this is outside of the data collection
+    ## for nice plotting (final generation in mutation.data is 6.275).
+    
+    ## normalize by the total length of genes
+    ## in the given module (in d.metadata).
+    my.genes <- d.metadata %>% dplyr::select(Gene,gene_length) %>% distinct()
+    normalization.constant <- sum(my.genes$gene_length)
+    
+    summary.df <- d %>%
+        arrange(t0) %>%
+        group_by(Generation) %>%
+        summarize(count=n(), .groups = "drop_last") %>%
+        mutate(cs=cumsum(count)) %>%
+        ungroup()
+    ## if the final generation is not in ret.df,
+    ## then add one final row (for nicer plots).
+    final.row.df <- tibble(Generation=finalgen,
+                           count=max(summary.df$count),
+                           cs=max(summary.df$cs))
+    if (plot.to.end) {
+        almost.done.df <- bind_rows(summary.df, final.row.df)
+    } else {
+        almost.done.df <- summary.df
+    }
+    
+    ## add an row for Generation == 0 (for nicer plots).
+    init.row.df <- tibble(Generation = 0,
+                          count = 0,
+                          cs = 0)
+    
+    c.dat <- bind_rows(init.row.df,almost.done.df) %>%
+        mutate(normalized.cs=cs/normalization.constant) %>%
+        ## remove any NA values.
+        na.omit()
+    
+    return(c.dat)
+}
+
+plot.base.layer.over.all.pops <- function(data, REL606.genes, subset.size=50, N=1000, alphaval = 0.05, my.color="gray") {
+    ## This plot visualizes a two-tailed test (alphaval = 0.05)
+    ## against a bootstrapped null distribution.
+    ## Throughout, plots use the minimum subsample size to subsample
+    ## the null distribution, to increase the variance in order to
+    ## make a conservative comparison.
+    
+    ## This function takes the index for the current draw, and samples the data,
+    ## generating a random gene set for which to calculate cumulative mutations.
+    ## IMPORTANT: this function depends on variables defined in plot.base.layer.
+    generate.cumulative.mut.subset <- function(idx) {
+        rando.genes <- base::sample(unique(REL606.genes$Gene),subset.size)
+        mut.subset <- filter(data,Gene %in% rando.genes)
+        mut.subset.metadata <- filter(REL606.genes, Gene %in% rando.genes)
+        c.mut.subset <- calc.cumulative.muts.over.all.pops(
+            mut.subset, mut.subset.metadata) %>%
+            mutate(bootstrap_replicate=idx)
+        return(c.mut.subset)
+    }
+
+    ## make a dataframe of bootstrapped trajectories.
+    ## look at accumulation of stars over time for random subsets of genes.
+    ## I want to plot the distribution of cumulative mutations over time for
+    ## say, 1000 or 10000 random subsets of genes.
+
+    bootstrapped.trajectories <- map_dfr(.x=seq_len(N),.f=generate.cumulative.mut.subset)
+
+    ## filter out the top alphaval/2 and bottom alphaval/2 trajectories from each population,
+    ## for a two-sided test. default is alphaval == 0.05.
+    
+    trajectory.summary <- bootstrapped.trajectories %>%
+        ## important: don't drop empty groups.
+        group_by(bootstrap_replicate, .drop=FALSE) %>%
+        summarize(final.norm.cs=max(normalized.cs)) %>%
+        ungroup() 
+    
+    top.trajectories <- trajectory.summary %>%
+        slice_max(prop=alphaval/2, order_by=final.norm.cs) %>%
+        dplyr::select(-final.norm.cs) %>%
+        mutate(in.top=TRUE)
+    
+    bottom.trajectories <- trajectory.summary %>%
+        slice_min(prop=alphaval/2, order_by=final.norm.cs) %>%
+        dplyr::select(-final.norm.cs) %>%
+        mutate(in.bottom=TRUE)
+    
+    filtered.trajectories <- bootstrapped.trajectories %>%
+        left_join(top.trajectories) %>%
+        left_join(bottom.trajectories) %>%
+        filter(is.na(in.top)) %>%
+        filter(is.na(in.bottom)) %>%
+        dplyr::select(-in.top,-in.bottom)
+
+    p <- ggplot(filtered.trajectories,aes(x=Generation,y=normalized.cs)) +
+        ylab('Cumulative number of mutations (normalized)') +
+        theme_classic() +
+        geom_point(size=0.2, color=my.color) +
+        xlab('Generations (x 10,000)') +
+        xlim(0,6.3) +
+        theme(axis.title.x = element_text(size=14),
+              axis.title.y = element_text(size=14),
+              axis.text.x  = element_text(size=14),
+              axis.text.y  = element_text(size=14)) +
+        scale_y_continuous(labels=fancy_scientific,
+                           breaks = scales::extended_breaks(n = 6),
+                           limits = c(0, NA))
+    return(p)
+}
+
+add.base.layer.over.all.pops <- function(p, data, REL606.genes, my.color, subset.size=50, N=1000, alphaval = 0.05, normalization.constant=NA) {
+    ## add a base layer to a plot. used in Imodulon code.
+    
+    ## This function takes the index for the current draw, and samples the data,
+    ## generating a random gene set for which to calculate cumulative mutations.
+    generate.cumulative.mut.subset <- function(idx) {
+        rando.genes <- base::sample(unique(REL606.genes$Gene),subset.size)
+        mut.subset <- filter(data,Gene %in% rando.genes)
+        mut.subset.metadata <- filter(REL606.genes, Gene %in% rando.genes)
+        c.mut.subset <- calc.cumulative.muts.over.all.pops(
+            mut.subset, mut.subset.metadata) %>%
+            mutate(bootstrap_replicate=idx)
+        return(c.mut.subset)
+    }
+
+    ## make a dataframe of bootstrapped trajectories.
+    ## look at accumulation of stars over time for random subsets of genes.
+    ## I want to plot the distribution of cumulative mutations over time for
+    ## say, 1000 or 10000 random subsets of genes.
+    bootstrapped.trajectories <- map_dfr(.x=seq_len(N),.f=generate.cumulative.mut.subset)
+
+    ## filter out the top alphaval/2 and bottom alphaval/2 trajectories
+    ## from each population, for a two-sided test. default is alphaval == 0.05.
+    
+    trajectory.summary <- bootstrapped.trajectories %>%
+        ## important: don't drop empty groups.
+        group_by(bootstrap_replicate,.drop=FALSE) %>%
+        summarize(final.norm.cs=max(normalized.cs)) %>%
+        ungroup() 
+    
+    top.trajectories <- trajectory.summary %>%
+        slice_max(prop=alphaval/2, order_by=final.norm.cs) %>%
+        dplyr::select(-final.norm.cs) %>%
+        mutate(in.top=TRUE)
+    
+    bottom.trajectories <- trajectory.summary %>%
+        slice_min(prop=alphaval/2, order_by=final.norm.cs) %>%
+        dplyr::select(-final.norm.cs) %>%
+        mutate(in.bottom=TRUE)
+    
+    filtered.trajectories <- bootstrapped.trajectories %>%
+        left_join(top.trajectories) %>%
+        left_join(bottom.trajectories) %>%
+        filter(is.na(in.top)) %>%
+        filter(is.na(in.bottom)) %>%
+        dplyr::select(-in.top,-in.bottom)
+
+    p <- p + geom_point(data=filtered.trajectories,
+                        aes(x=Generation, y=normalized.cs),
+                        size=0.2, color=my.color)
+    return(p)                
+}
+
+######################################################################
 ## code for Mehta hypermutator data.
-## modification of calc.cumulative.muts; that function specifically
-## works on the LTEE metagenomics data.
-## To normalize, we need to supply the number of sites at risk
-## (such as sum of gene length).
-## If plot.to.end is TRUE, then add one final row.
+
 calc.Mehta.cumulative.muts <- function(d, d.metadata, plot.to.end=TRUE) {
+    ## modification of calc.cumulative.muts; that function specifically
+    ## works on the LTEE metagenomics data.
+    ## To normalize, we need to supply the number of sites at risk
+    ## (such as sum of gene length).
+    ## If plot.to.end is TRUE, then add one final row.
 
     cumsum.per.pop.helper.func <- function(pop) {
 
@@ -565,8 +741,8 @@ calc.Mehta.cumulative.muts <- function(d, d.metadata, plot.to.end=TRUE) {
     return(c.dat)
 }
 
-## calc.traj.pvals, adapted for Mehta dataset.
 calc.Mehta.traj.pvals <- function(data, PAO11.genes, gene.vec, N=10000, normalization.constant=NA) {
+    ## calc.traj.pvals, adapted for Mehta dataset.
 
     ## check type for gene.vec (e.g., if factor, change to vanilla vector of strings)
     gene.vec <- as.character(gene.vec)
@@ -629,6 +805,7 @@ calc.Mehta.traj.pvals <- function(data, PAO11.genes, gene.vec, N=10000, normaliz
 ########### Plotting code for Mehta hypermutator data.
 ## main difference is using Day instead of Generation,
 ## and calling calc.Mehta.cumulative.muts().
+
 plot.Mehta.base.layer <- function(data, PAO11.genes, subset.size=50, N=1000, alphaval = 0.05, normalization.constant=NA, my.color="gray") {
     
     ## This function takes the index for the current draw, and samples the data,
@@ -709,10 +886,11 @@ add.Mehta.cumulative.mut.layer <- function(p, layer.df, my.color) {
 }
 
 ################################################################################
-## Examine the distribution of various classes of mutations across genes in the
-## genomics or metagenomics data. Which genes are enriched? Which genes are depleted?
-## Then, can look at the annotation of these genes in STRING.
+
 calc.gene.mutation.density <- function(gene.mutation.data, mut_type_vec) {
+    ## Examine the distribution of various classes of mutations across genes in the
+    ## genomics or metagenomics data. Which genes are enriched? Which genes are depleted?
+    ## Then, can look at the annotation of these genes in STRING.
     density.df <- gene.mutation.data %>%
         filter(Annotation %in% mut_type_vec) %>%
         filter(Gene!= "intergenic") %>%
@@ -731,8 +909,8 @@ calc.gene.mutation.density <- function(gene.mutation.data, mut_type_vec) {
     return(density.df)
 }
 
-## Examine the gene mutation density by population.
 pop.calc.gene.mutation.density <- function(gene.mutation.data, mut_type_vec) {
+    ## Examine the gene mutation density by population.
     density.df <- gene.mutation.data %>%
         filter(Annotation %in% mut_type_vec) %>%
         filter(Gene!= "intergenic") %>%
@@ -751,10 +929,11 @@ pop.calc.gene.mutation.density <- function(gene.mutation.data, mut_type_vec) {
     return(density.df)
 }
 
-## This plot visualizes a two-tailed test (alphaval = 0.05)
-## against a bootstrapped null distribution for the derivative of cumulative mutations.
-## This is what we want to use for publication.
+
 plot.slope.of.base.layer <- function(data, subset.size=300, N=1000, alphaval = 0.05, normalization.constant=NA) {
+    ## This plot visualizes a two-tailed test (alphaval = 0.05)
+    ## against a bootstrapped null distribution for the derivative
+    ## of cumulative mutations. This is what we want to use for publication.
 
     ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations,
