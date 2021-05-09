@@ -108,7 +108,6 @@ allpop.Fig2 <- neutral.base.layer.over.all.pops %>%
     add.cumulative.mut.layer(c.all.pops.neutral.genes, my.color="black")
 ggsave("../results/gene-modules/figures/allpop-Fig2.pdf", allpop.Fig2)
 
-
 #########################################################################
 ## PURIFYING SELECTION CONTROL EXPERIMENT AND ANALYSIS.
 
@@ -160,7 +159,6 @@ purifying.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
 purifying.pvals.loc <- calc.traj.pvals(gene.mutation.data, REL606.genes,
                                        unique(purifying.genes$Gene),
                                        sample.genes.by.location=TRUE)
-
 ################
 ## re-run STIMS, summing mutations over all LTEE populations.
 
@@ -747,64 +745,152 @@ all.pops.Fig5 <- Imodulon.regulators.over.all.pops.rando.layer %>%
 ggsave("../results/gene-modules/figures/allpop-Fig5.pdf", all.pops.Fig5)
 ################
 
-## Make plots for each I-modulon.
+make.modulon.plots <- function(gene.mutation.data,
+                               REL606.genes,
+                               Imodulons.to.regulators) {
+    ## Make plots for each I-modulon.
 
-## This helper function refers to several global variables.
-## TODO: Best to wrap this into the context of a larger function later,
-## to maintain modularity.
-make.modulon.plots.helper <- function(my.I.modulon,plot.regulators=FALSE) {
-    
-    my.modulon.name <- unique(my.I.modulon$I.modulon)
-    modulon.text <- paste(my.modulon.name,"I-modulon")
-    print(modulon.text) ## to help with debugging.
+    make.modulon.plots.helper <- function(my.I.modulon,plot.regulators=FALSE) {
+        
+        my.modulon.name <- unique(my.I.modulon$I.modulon)
+        modulon.text <- paste(my.modulon.name,"I-modulon")
+        print(modulon.text) ## to help with debugging.
+        
+        my.regulators <- my.I.modulon %>% filter(!(is.na(regulator)))
+        regulator.size <- length(unique(my.regulators$regulator))
+        
+        my.modulon.genes <- genes.to.Imodulons %>%
+            filter(I.modulon == my.modulon.name) %>%
+            filter(!(is.na(Gene))) %>%
+            ## remove any regulators of this I-modulon (if they exist)
+            ## to make an orthogonal comparison.
+            filter(!(Gene %in% my.regulators$regulator))
+        
+        my.modulon.mut.data <- gene.mutation.data %>%
+            filter(Gene %in% my.modulon.genes$Gene)
 
-    my.regulators <- my.I.modulon %>% filter(!(is.na(regulator)))
-    regulator.size <- length(unique(my.regulators$regulator))
-    
-    my.modulon.genes <- genes.to.Imodulons %>%
-        filter(I.modulon == my.modulon.name) %>%
-        filter(!(is.na(Gene))) %>%
-        ## remove any regulators of this I-modulon (if they exist)
-        ## to make an orthogonal comparison.
-        filter(!(Gene %in% my.regulators$regulator))
-    
-    my.modulon.mut.data <- gene.mutation.data %>%
-        filter(Gene %in% my.modulon.genes$Gene)
-
-    c.my.modulon.muts <- calc.cumulative.muts(my.modulon.mut.data, my.modulon.genes)
-    ## for the plots, subsample based on the cardinality of the I-modulon.
-    modulon.size <- length(unique(my.modulon.genes$Gene))
-    modulon.base.layer <- plot.base.layer(gene.mutation.data,
-                                          REL606.genes,
-                                          subset.size=modulon.size,
-                                          my.color="pink")
-    p <- modulon.base.layer %>%
-        add.cumulative.mut.layer(c.my.modulon.muts,my.color="red")
-
-    ## if any regulators exist and flag set, then
-    ## add layers for mutations in those genes.
-    if ((regulator.size > 0) & plot.regulators) {
-        my.regulator.mut.data <- gene.mutation.data %>%
-            filter(Gene %in% my.regulators$regulator)
-        c.my.regulators <- calc.cumulative.muts(my.regulator.mut.data, my.regulators)
-
-        p <- p %>% 
-            add.base.layer(gene.mutation.data, REL606.genes, my.color="grey",
-                           subset.size=regulator.size) %>%
-            add.cumulative.mut.layer(c.my.regulators,my.color='black')
+        my.modulon.metadata <- REL606.genes %>%
+            filter(Gene %in% my.modulon.genes$Gene)
+        
+        c.my.modulon.muts <- calc.cumulative.muts(
+            my.modulon.mut.data, my.modulon.metadata)
+        ## for the plots, subsample based on the cardinality of the I-modulon.
+        modulon.size <- length(unique(my.modulon.genes$Gene))
+        modulon.base.layer <- plot.base.layer(gene.mutation.data,
+                                              REL606.genes,
+                                              subset.size=modulon.size,
+                                              my.color="pink")
+        p <- modulon.base.layer %>%
+            add.cumulative.mut.layer(c.my.modulon.muts,my.color="red")
+        
+        ## if any regulators exist and flag set, then
+        ## add layers for mutations in those genes.
+        if ((regulator.size > 0) & plot.regulators) {
+            my.regulator.mut.data <- gene.mutation.data %>%
+                filter(Gene %in% my.regulators$regulator)
+            my.regulator.metadata <- REL606.genes %>%
+                filter(Gene %in% my.regulators$regulator)
+            c.my.regulators <- calc.cumulative.muts(
+                my.regulator.mut.data, my.regulator.metadata)
+            
+            p <- p %>% 
+                add.base.layer(gene.mutation.data, REL606.genes, my.color="grey",
+                               subset.size=regulator.size) %>%
+                add.cumulative.mut.layer(c.my.regulators,my.color='black')
+        }
+        ## add a title to the plots.
+        p <- p + ggtitle(modulon.text)
+        return(p)
     }
-    ## add a title to the plots.
-    p <- p + ggtitle(modulon.text)
-    return(p)
+    
+    ## split into groups by I-modulon, and map them to the plotting helper.
+    Imodulon.plot.list <- Imodulons.to.regulators %>% group_split(I.modulon) %>%
+        map(.f=make.modulon.plots.helper)
+
+    ## too big for PDF-- plot to separate pngs.
+    ## to make Supplementary File S1, run "python stitchS1File.py".
+    png("../results/gene-modules/figures/I-modulon-plots/plot-%02d.png")
+    Imodulon.plot.list
+    dev.off()
 }
 
-## too big for PDF-- plot to separate pngs.
-## to make Supplementary File S1, run "python stitchS1File.py".
-png("../results/gene-modules/figures/I-modulon-plots/plot-%02d.png")
-## split into groups by I-modulon, and map them to the plotting helper.
-Imodulons.to.regulators %>% group_split(I.modulon) %>%
-    map(.f=make.modulon.plots.helper)
-dev.off()
+make.modulon.plots(gene.mutation.data, REL606.genes, Imodulons.to.regulators)
+
+################
+## re-run STIMS, summing mutations over all LTEE populations.
+
+make.all.pops.modulon.plots <- function(gene.mutation.data,
+                                        REL606.genes,
+                                        Imodulons.to.regulators) {
+    ## Make plots for each I-modulon, summing data over all populations.
+
+    make.all.pops.modulon.plots.helper <- function(my.I.modulon,plot.regulators=FALSE) {
+        
+        my.modulon.name <- unique(my.I.modulon$I.modulon)
+        modulon.text <- paste(my.modulon.name,"I-modulon")
+        print(modulon.text) ## to help with debugging.
+        
+        my.regulators <- my.I.modulon %>% filter(!(is.na(regulator)))
+        regulator.size <- length(unique(my.regulators$regulator))
+        
+        my.modulon.genes <- genes.to.Imodulons %>%
+            filter(I.modulon == my.modulon.name) %>%
+            filter(!(is.na(Gene))) %>%
+            ## remove any regulators of this I-modulon (if they exist)
+            ## to make an orthogonal comparison.
+            filter(!(Gene %in% my.regulators$regulator))
+        
+        my.modulon.mut.data <- gene.mutation.data %>%
+            filter(Gene %in% my.modulon.genes$Gene)
+
+        my.modulon.metadata <- REL606.genes %>%
+            filter(Gene %in% my.modulon.genes$Gene)
+        
+        c.my.modulon.muts <- calc.cumulative.muts.over.all.pops(
+            my.modulon.mut.data, my.modulon.metadata)
+        ## for the plots, subsample based on the cardinality of the I-modulon.
+        modulon.size <- length(unique(my.modulon.genes$Gene))
+        modulon.base.layer <- plot.base.layer.over.all.pops(
+            gene.mutation.data,
+            REL606.genes,
+            subset.size=modulon.size,
+            my.color="pink")
+        p <- modulon.base.layer %>%
+            add.cumulative.mut.layer(c.my.modulon.muts,my.color="red")
+        
+        ## if any regulators exist and flag set, then
+        ## add layers for mutations in those genes.
+        if ((regulator.size > 0) & plot.regulators) {
+            my.regulator.mut.data <- gene.mutation.data %>%
+                filter(Gene %in% my.regulators$regulator)
+            my.regulator.metadata <- REL606.genes %>%
+                filter(Gene %in% my.regulators$regulator)
+            c.my.regulators <- calc.cumulative.muts(
+                my.regulator.mut.data, my.regulator.metadata)
+            
+            p <- p %>% 
+                add.base.layer.over.all.pops(
+                    gene.mutation.data, REL606.genes, my.color="grey",
+                    subset.size=regulator.size) %>%
+                add.cumulative.mut.layer(c.my.regulators,my.color='black')
+        }
+        ## add a title to the plots.
+        p <- p + ggtitle(modulon.text)
+        return(p)
+    }
+    
+    ## split into groups by I-modulon, and map them to the plotting helper.
+    Imodulon.plot.list <- Imodulons.to.regulators %>% group_split(I.modulon) %>%
+        map(.f=make.all.pops.modulon.plots.helper)
+
+    ## too big for PDF-- plot to separate pngs.
+    ## to make Supplementary File S2, run "python stitchS1File.py".
+    png("../results/gene-modules/figures/all-pops-I-modulon-plots/plot-%02d.png")
+    Imodulon.plot.list
+    dev.off()
+}
+
+make.all.pops.modulon.plots(gene.mutation.data, REL606.genes, Imodulons.to.regulators)
 
 ######################################################################################
 ## CIS-REGULATORY EVOLUTION IN REGULATORS VERSUS EFFECTORS IN I-MODULONS.

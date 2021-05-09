@@ -311,8 +311,6 @@ calc.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, sample.genes.
     return(uppertail.probs)
 }
 
-
-
 calc.slope.of.cumulative.muts <- function(c.muts) {
     ## Calculate the derivative of the cumulative accumulation of mutation occurrence.
     ## This is simply the rate of mutation occurrence in a class of genes.
