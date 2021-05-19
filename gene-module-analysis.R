@@ -80,10 +80,10 @@ neutral.base.layer <- plot.base.layer(
     REL606.genes,
     subset.size=length(unique(neutral.genes$Gene)))
 
-## Figure 2: plot of "gold standard" neutral genes.
-Fig2 <- neutral.base.layer %>% 
+## Figure 4: plot of "gold standard" neutral genes.
+Fig4 <- neutral.base.layer %>% 
     add.cumulative.mut.layer(c.neutral.genes, my.color="black")
-ggsave("../results/gene-modules/figures/Fig2.pdf", Fig2)
+ggsave("../results/gene-modules/figures/Fig4.pdf", Fig4)
 
 ## calculate more rigorous statistics than the figures.
 neutral.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
@@ -104,9 +104,9 @@ neutral.base.layer.over.all.pops <- plot.base.layer.over.all.pops(
     REL606.genes,
     subset.size=length(unique(neutral.genes$Gene)))
 
-allpop.Fig2 <- neutral.base.layer.over.all.pops %>% 
+S1Fig <- neutral.base.layer.over.all.pops %>% 
     add.cumulative.mut.layer(c.all.pops.neutral.genes, my.color="black")
-ggsave("../results/gene-modules/figures/allpop-Fig2.pdf", allpop.Fig2)
+ggsave("../results/gene-modules/figures/S1Fig.pdf", S1Fig)
 
 #########################################################################
 ## PURIFYING SELECTION CONTROL EXPERIMENT AND ANALYSIS.
@@ -147,9 +147,9 @@ purifying.base.layer <- plot.base.layer(
     subset.size=length(unique(purifying.genes$Gene)))
 
 ##  Yes. evidence of purifying selection in these genes based on my test.
-Fig3 <- purifying.base.layer %>% 
+Fig5 <- purifying.base.layer %>% 
     add.cumulative.mut.layer(c.purifying.genes, my.color="black")
-ggsave("../results/gene-modules/figures/Fig3.pdf", Fig3)
+ggsave("../results/gene-modules/figures/Fig5.pdf", Fig5)
 
 ## calculate more rigorous statistics than the figures.
 purifying.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
@@ -170,9 +170,9 @@ purifying.base.layer.over.all.pops <- plot.base.layer.over.all.pops(
     REL606.genes,
     subset.size=length(unique(purifying.genes$Gene)))
 
-allpop.Fig3 <- purifying.base.layer.over.all.pops %>% 
+S2Fig <- purifying.base.layer.over.all.pops %>% 
     add.cumulative.mut.layer(c.all.pops.purifying.genes, my.color="black")
-ggsave("../results/gene-modules/figures/allpop-Fig3.pdf", allpop.Fig3)
+ggsave("../results/gene-modules/figures/S2Fig.pdf", S2Fig)
 
 ################
 
@@ -256,12 +256,12 @@ no.dS.genes <- only.dS.allowed.genes %>% filter(Gene %in% no.mutation.genes$Gene
 ## 18 of these.
 no.dS.genes.in.purifying.set <- no.dS.genes %>%
     filter(Gene %in% purifying.genes$Gene)
-write.csv(no.dS.genes.in.purifying.set,file="../results/gene-modules/Table1.csv")
+write.csv(no.dS.genes.in.purifying.set,file="../results/gene-modules/S1Table.csv")
 
 ## 30 of these.
 only.dS.genes.in.purifying.set <- only.dS.genes %>%
     filter(Gene %in% purifying.genes$Gene)
-write.csv(only.dS.genes.in.purifying.set,file="../results/gene-modules/Table2.csv")
+write.csv(only.dS.genes.in.purifying.set,file="../results/gene-modules/S2Table.csv")
 
 ## the overlap is highly significant:
 ## 18 genes in purifying.genes and no.dS.genes.
@@ -296,9 +296,9 @@ top.nonmut.metadata <- REL606.genes %>% filter(Gene %in% top.nonmut.genomics$Gen
 
 c.top.nonmuts <- calc.cumulative.muts(top.nonmut.mutation.data, top.nonmut.metadata)
 
-Fig4 <- rando.plot %>%
+Fig6 <- rando.plot %>%
     add.cumulative.mut.layer(c.top.nonmuts,my.color="black")
-ggsave("../results/gene-modules/figures/Fig4.pdf",Fig4)
+ggsave("../results/gene-modules/figures/Fig6.pdf",Fig6)
 
 ## calculate more rigorous statistics than the figures.
 top.nonmut.pvals <- calc.traj.pvals(gene.mutation.data,
@@ -321,9 +321,9 @@ top.hypermut.metadata <- REL606.genes %>%
 c.top.hypermut <- calc.cumulative.muts(top.hypermut.mutation.data,
                                        top.hypermut.metadata)
 
-S1Fig <- rando.plot %>%
+S4Fig <- rando.plot %>%
     add.cumulative.mut.layer(c.top.hypermut, my.color="black")
-ggsave("../results/gene-modules/figures/S1Fig.pdf",S1Fig)
+ggsave("../results/gene-modules/figures/S4Fig.pdf",S4Fig)
 
 ## calculate more rigorous statistics than the figures.
 top.hypermut.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
@@ -342,16 +342,16 @@ rando.over.all.pops.plot <- plot.base.layer.over.all.pops(
 c.all.pops.top.nonmuts <- calc.cumulative.muts.over.all.pops(
     top.nonmut.mutation.data, top.nonmut.metadata)
 
-allpop.Fig4 <- rando.over.all.pops.plot %>% 
+S3Fig <- rando.over.all.pops.plot %>% 
     add.cumulative.mut.layer(c.all.pops.top.nonmuts, my.color="black")
-ggsave("../results/gene-modules/figures/allpop-Fig4.pdf", allpop.Fig4)
+ggsave("../results/gene-modules/figures/S3Fig.pdf", S3Fig)
 
 c.all.pops.top.hypermuts <- calc.cumulative.muts.over.all.pops(
     top.hypermut.mutation.data, top.hypermut.metadata)
 
-allpop.S1Fig <- rando.over.all.pops.plot %>% 
+S5Fig <- rando.over.all.pops.plot %>% 
     add.cumulative.mut.layer(c.all.pops.top.hypermuts, my.color="black")
-ggsave("../results/gene-modules/figures/allpop-S1Fig.pdf", allpop.S1Fig)
+ggsave("../results/gene-modules/figures/S5Fig.pdf", S5Fig)
 
 
 ##########################################################################
@@ -491,14 +491,14 @@ c.C.muts <- calc.cumulative.muts(C.sector.mut.data,
                                  filter(proteome.assignments,Sector.assigned=='C'))
 
 ## plot for proteome sectors.
-S2Fig <- proteome.rando.layer %>%
+S6Fig <- proteome.rando.layer %>%
     add.cumulative.mut.layer(c.A.muts, my.color="black") %>%
     add.cumulative.mut.layer(c.S.muts,my.color="red") %>%
     add.cumulative.mut.layer(c.O.muts,my.color="blue") %>%
     add.cumulative.mut.layer(c.U.muts,my.color="green") %>%
     add.cumulative.mut.layer(c.R.muts,my.color="yellow") %>%
     add.cumulative.mut.layer(c.C.muts,my.color="orange")
-ggsave(S2Fig, filename='../results/gene-modules/figures/S2Fig.pdf')
+ggsave("../results/gene-modules/figures/S6Fig.pdf", S6Fig)
 
 ################
 ## re-run STIMS, summing mutations over all LTEE populations.
@@ -531,14 +531,14 @@ c.all.pops.C.muts <- calc.cumulative.muts.over.all.pops(
     C.sector.mut.data,
     filter(proteome.assignments,Sector.assigned=='C'))
 
-all.pops.S2Fig <- proteome.over.all.pops.rando.layer %>%
+S7Fig <- proteome.over.all.pops.rando.layer %>%
     add.cumulative.mut.layer(c.all.pops.A.muts, my.color="black") %>%
     add.cumulative.mut.layer(c.all.pops.S.muts,my.color="red") %>%
     add.cumulative.mut.layer(c.all.pops.O.muts,my.color="blue") %>%
     add.cumulative.mut.layer(c.all.pops.U.muts,my.color="green") %>%
     add.cumulative.mut.layer(c.all.pops.R.muts,my.color="yellow") %>%
     add.cumulative.mut.layer(c.all.pops.C.muts,my.color="orange")
-ggsave(all.pops.S2Fig, filename='../results/gene-modules/figures/all-pops-S2Fig.pdf')
+ggsave("../results/gene-modules/figures/S7Fig.pdf", S7Fig)
 
 ##########################################################################
 ## look at accumulation of stars over time for genes in different eigengenes
@@ -594,7 +594,7 @@ c.eigen8.muts <- calc.cumulative.muts(eigengene8.mut.data,
 c.eigen9.muts <- calc.cumulative.muts(eigengene9.mut.data,
                                       filter(eigengenes,Eigengene==9))
 
-S3Fig <- eigen.rando.layer %>%
+S8Fig <- eigen.rando.layer %>%
     add.cumulative.mut.layer(c.eigen1.muts, my.color="red") %>%
     add.cumulative.mut.layer(c.eigen2.muts,my.color="orange") %>%
     add.cumulative.mut.layer(c.eigen3.muts,my.color="yellow") %>%
@@ -604,7 +604,7 @@ S3Fig <- eigen.rando.layer %>%
     add.cumulative.mut.layer(c.eigen7.muts,my.color="violet") %>%
     add.cumulative.mut.layer(c.eigen8.muts,my.color="pink") %>%
     add.cumulative.mut.layer(c.eigen9.muts,my.color="black")
-ggsave(S3Fig, filename='../results/gene-modules/figures/S3Fig.pdf')
+ggsave("/results/gene-modules/figures/S8Fig.pdf", S8Fig)
 
 ################
 ## re-run STIMS, summing mutations over all LTEE populations.
@@ -632,7 +632,7 @@ c.all.pops.eigen8.muts <- calc.cumulative.muts.over.all.pops(eigengene8.mut.data
 c.all.pops.eigen9.muts <- calc.cumulative.muts.over.all.pops(eigengene9.mut.data,
                                       filter(eigengenes,Eigengene==9))
 
-all.pops.S3Fig <- eigen.over.all.pops.rando.layer %>%
+S9Fig <- eigen.over.all.pops.rando.layer %>%
     add.cumulative.mut.layer(c.all.pops.eigen1.muts, my.color="red") %>%
     add.cumulative.mut.layer(c.all.pops.eigen2.muts,my.color="orange") %>%
     add.cumulative.mut.layer(c.all.pops.eigen3.muts,my.color="yellow") %>%
@@ -643,7 +643,7 @@ all.pops.S3Fig <- eigen.over.all.pops.rando.layer %>%
     add.cumulative.mut.layer(c.all.pops.eigen8.muts,my.color="pink") %>%
     add.cumulative.mut.layer(c.all.pops.eigen9.muts,my.color="black")
 
-ggsave(all.pops.S3Fig, filename='../results/gene-modules/figures/all-pops-S3Fig.pdf')
+ggsave("../results/gene-modules/figures/S9Fig.pdf", S9Fig)
 
 ####################################
 ## Now for real results.
@@ -709,14 +709,14 @@ Imodulon.regulators.base.layer <- plot.base.layer(
     subset.size=length(unique(Imodulon.regulators$regulator)))
 
 ## Figure for paper:  compare I-modulon regulators to the genes they regulate.
-Fig5 <- Imodulon.regulators.base.layer %>% ## null for regulators
+Fig7 <- Imodulon.regulators.base.layer %>% ## null for regulators
     add.base.layer(gene.mutation.data, ## add null for regulated genes
                    REL606.genes,
                    subset.size=length(unique(Imodulon.regulated$Gene)),
                    my.color="pink") %>%
     add.cumulative.mut.layer(c.Imodulon.regulators, my.color="black") %>%
     add.cumulative.mut.layer(c.Imodulon.regulated, my.color="red")
-ggsave("../results/gene-modules/figures/Fig5.pdf", Fig5)
+ggsave("../results/gene-modules/figures/Fig7.pdf", Fig7)
 
 
 ################
@@ -734,7 +734,7 @@ c.all.pops.Imodulon.regulated <- calc.cumulative.muts.over.all.pops(
     Imodulon.regulated.mut.data,
     Imodulon.regulated.metadata)
 
-all.pops.Fig5 <- Imodulon.regulators.over.all.pops.rando.layer %>%
+S10Fig <- Imodulon.regulators.over.all.pops.rando.layer %>%
     add.base.layer.over.all.pops(gene.mutation.data,
                    REL606.genes,
                    subset.size=length(unique(Imodulon.regulated$Gene)),
@@ -742,7 +742,7 @@ all.pops.Fig5 <- Imodulon.regulators.over.all.pops.rando.layer %>%
     add.cumulative.mut.layer(c.all.pops.Imodulon.regulators, my.color="black") %>%
     add.cumulative.mut.layer(c.all.pops.Imodulon.regulated, my.color="red")
     
-ggsave("../results/gene-modules/figures/allpop-Fig5.pdf", all.pops.Fig5)
+ggsave("../results/gene-modules/figures/S10Fig.pdf", S10Fig)
 ################
 
 make.modulon.plots <- function(gene.mutation.data,
@@ -808,12 +808,13 @@ make.modulon.plots <- function(gene.mutation.data,
         map(.f=make.modulon.plots.helper)
 
     ## too big for PDF-- plot to separate pngs.
-    ## to make Supplementary File S1, run "python stitchS1File.py".
+    ## to make Supplementary File S2, run "python stitchS1File.py".
     png("../results/gene-modules/figures/I-modulon-plots/plot-%02d.png")
     Imodulon.plot.list
     dev.off()
 }
 
+## Make Supplementary File S2 (shows each population).
 make.modulon.plots(gene.mutation.data, REL606.genes, Imodulons.to.regulators)
 
 ################
@@ -884,12 +885,13 @@ make.all.pops.modulon.plots <- function(gene.mutation.data,
         map(.f=make.all.pops.modulon.plots.helper)
 
     ## too big for PDF-- plot to separate pngs.
-    ## to make Supplementary File S2, run "python stitchS1File.py".
+    ## to make Supplementary File S1, run "python stitchS1File.py".
     png("../results/gene-modules/figures/all-pops-I-modulon-plots/plot-%02d.png")
     Imodulon.plot.list
     dev.off()
 }
 
+## Make Supplementary File S1 (STIMS summed over all populations).
 make.all.pops.modulon.plots(gene.mutation.data, REL606.genes, Imodulons.to.regulators)
 
 ######################################################################################
@@ -970,7 +972,7 @@ Mehta.data <- read.csv("../results/Mehta2018-hypermutators.csv") %>%
     ## filter any rows with NAs.
     drop_na()
 
-## show both replicate populations in Supplementary Figure S4.
+## show both replicate populations in Supplementary Figure S11.
 Mehta.regulator.mut.data <- Mehta.data %>%
     filter(Gene %in% PAO11.regulators$Gene)
 ## 188 mutations occurring in annotated regulators.
@@ -979,11 +981,11 @@ c.Mehta.regulators <- calc.Mehta.cumulative.muts(Mehta.regulator.mut.data,
                                                  PAO11.regulators)
 Mehta.base.layer <- plot.Mehta.base.layer(Mehta.data, PAO11.genes,
                                           subset.size=nrow(PAO11.regulators))
-S4Fig <- Mehta.base.layer %>%
+S11Fig <- Mehta.base.layer %>%
     add.Mehta.cumulative.mut.layer(c.Mehta.regulators, my.color="black")
-ggsave("../results/gene-modules/figures/S4Fig.pdf", S4Fig, width=5, height=5)
+ggsave("../results/gene-modules/figures/S11Fig.pdf", S11Fig, width=5, height=5)
 
-## combine both replicates for Figure 6.
+## combine both replicates for Figure 8.
 combined.Mehta.data <- Mehta.data %>%
     mutate(Population = recode(Population,
                                `Replicate 1` = "Replicate populations combined",
@@ -998,11 +1000,11 @@ c.combined.Mehta.regulators <- calc.Mehta.cumulative.muts(
 combined.Mehta.base.layer <- plot.Mehta.base.layer(combined.Mehta.data,
                                                    PAO11.genes,
                                                    subset.size=nrow(PAO11.regulators))
-Fig6 <- combined.Mehta.base.layer %>%
+Fig8 <- combined.Mehta.base.layer %>%
     add.Mehta.cumulative.mut.layer(c.combined.Mehta.regulators, my.color="black")
-ggsave("../results/gene-modules/figures/Fig6.pdf", Fig6, width=5, height=5)
+ggsave("../results/gene-modules/figures/Fig6.pdf", Fig8, width=5, height=5)
 
-## calculate rigorous statistics for Figure 6.
+## calculate rigorous statistics for Figure 8.
 Mehta.pvals <- calc.Mehta.traj.pvals(combined.Mehta.data, PAO11.genes,
                                      unique(PAO11.regulators$Gene))
 
@@ -1049,18 +1051,18 @@ m1.blank.rando.layer <- plot.base.layer(m1.pop.gene.mutation.data, REL606.genes,
 
 m1.ribosome.associated.prot.Fig <- m1.blank.rando.layer %>%
     add.cumulative.mut.layer(c.m1.ribosome.associated.prot.muts, my.color="black")
-ggsave("../results/gene-modules/figures/Fig0-panels/Fig0-STIMS-1.pdf",
+ggsave("../results/gene-modules/figures/Fig0-panels/Fig1-STIMS-1.pdf",
        m1.ribosome.associated.prot.Fig,height=4.2, width=4.2)
 
 ## plot this panel to add to the figure.
 m1.rando.layer <- plot.base.layer(m1.pop.gene.mutation.data, REL606.genes,
                                   subset.size=ribosome.associated.prot.subset.size)
-ggsave("../results/gene-modules/figures/Fig0-panels/Fig0-STIMS-2.pdf",
+ggsave("../results/gene-modules/figures/Fig0-panels/Fig1-STIMS-2.pdf",
        m1.rando.layer,height=4.2, width=4.2)
 
 
 exampleFig <- m1.rando.layer %>%
     add.cumulative.mut.layer(c.m1.ribosome.associated.prot.muts, my.color="black")
-ggsave("../results/gene-modules/figures/Fig0-panels/Fig0-STIMS-3.pdf",
+ggsave("../results/gene-modules/figures/Fig0-panels/Fig1-STIMS-3.pdf",
        exampleFig,height=4.2, width=4.2)
 

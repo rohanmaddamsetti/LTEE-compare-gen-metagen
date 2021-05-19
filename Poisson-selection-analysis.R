@@ -206,7 +206,6 @@ couce.essential.result <- Run.All.LTEE.Poisson.module.analysis(
 nonmut.genomics <- read.csv('../data/tenaillon2016-nonmutator-parallelism.csv') %>% ## make sure these genes passed the filters on REL606.genes.
     filter(Gene.name %in% REL606.genes$Gene)
 
-
 hypermut.genomics <- read.csv('../data/tenaillon2016-mutator-parallelism.csv') %>%
     ## make sure these genes passed the filters on REL606.genes.
     filter(Gene.name %in% REL606.genes$Gene)    
@@ -264,8 +263,8 @@ proteome.sector.results <- proteome.assignments %>%
     arrange(min.tail.fdr.corrected.pois.prob) %>%
     select(-background.mut.density, -pois.lambda)
 
-## Get eigengene sector assignments from Wytock and Motter (2018)
-## Supplementary File 1.
+## Get eigengene sector assignments from 
+## Supplementary File 1 of Wytock and Motter (2018).
 ## I saved a reduced version of the data.
 
 eigengenes <- read.csv('../data/Wytock2018-eigengenes.csv',as.is=TRUE) %>%
@@ -310,3 +309,7 @@ Imodulon.regulated.result <- Imodulon.regulated %>%
 significant.Imodulon.regulated <- Imodulon.regulated.result %>%
     filter(min.tail.fdr.corrected.pois.prob < 0.01) %>%
     select(-background.mut.density, -pois.lambda)
+
+## Note that rbs operon being under "purifying selection" is an artifact
+## of parallel deletions of this region. This is excluded from the final table.
+write.csv("../gene-modules/S4Table.csv", significant.Imodulon.regulated)

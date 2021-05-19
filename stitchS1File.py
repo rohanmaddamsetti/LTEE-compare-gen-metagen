@@ -55,12 +55,10 @@ def stitchFile(outfile, dirname):
 
 S1outfile = "../results/gene-modules/figures/S1File.pdf"
 # convert all files ending in .png inside the directory
-S1dirname = "../results/gene-modules/figures/I-modulon-plots"
-        
+S1dirname = "../results/gene-modules/figures/all-pops-I-modulon-plots"
 stitchFile(S1outfile, S1dirname)
 
 S2outfile = "../results/gene-modules/figures/S2File.pdf"
 # convert all files ending in .png inside the directory
-S2dirname = "../results/gene-modules/figures/all-pops-I-modulon-plots"
-
+S2dirname = "../results/gene-modules/figures/I-modulon-plots"
 stitchFile(S2outfile, S2dirname)
