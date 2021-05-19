@@ -280,18 +280,13 @@ calc.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, sample.genes.
     }
     
     gene.vec.data <- data %>% filter(Gene %in% gene.vec)
+    gene.vec.metadata <- REL606.genes %>% filter(Gene %in% gene.vec)
     data.trajectory <- calc.cumulative.muts(gene.vec.data, gene.vec.metadata)
     data.trajectory.summary <- data.trajectory %>%
         group_by(Population,.drop=FALSE) %>%
         summarize(final.norm.cs=max(normalized.cs)) %>%
         ungroup()
-    
-    trajectory.summary <- bootstrapped.trajectories %>%
-        ## important: don't drop empty groups.
-        group_by(bootstrap_replicate, Population,.drop=FALSE) %>%
-        summarize(final.norm.cs=max(normalized.cs)) %>%
-        ungroup()
-    
+
     trajectory.filter.helper <- function(pop.trajectories) {
         pop <- unique(pop.trajectories$Population)
         data.traj <- filter(data.trajectory.summary,Population == pop)
@@ -299,6 +294,16 @@ calc.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, sample.genes.
         tail.trajectories <- filter(pop.trajectories, final.norm.cs >= final.data.norm.cs)
         return(tail.trajectories)
     }
+    
+    trajectory.summary <- bootstrapped.trajectories %>%
+        ## important: don't drop empty groups.
+        group_by(bootstrap_replicate, Population,.drop=FALSE) %>%
+        summarize(final.norm.cs=max(normalized.cs)) %>%
+        ungroup()
+
+    rm(bootstrapped.trajectories)
+    rm(data.trajectory)
+    gc() ## hopefully this reduces memory footprint...
     
     ## split by Population, then filter for bootstraps > data trajectory.
     uppertail.probs <- trajectory.summary %>%
@@ -787,6 +792,10 @@ calc.Mehta.traj.pvals <- function(data, PAO11.genes, gene.vec, N=10000, normaliz
         tail.trajectories <- filter(pop.trajectories, final.norm.cs >= final.data.norm.cs)
         return(tail.trajectories)
     }
+
+    rm(bootstrapped.trajectories)
+    rm(data.trajectory)
+    gc() ## hopefully this reduces memory footprint...
     
     ## split by Population, then filter for bootstraps > data trajectory.
     uppertail.probs <- trajectory.summary %>%
@@ -798,7 +807,6 @@ calc.Mehta.traj.pvals <- function(data, PAO11.genes, gene.vec, N=10000, normaliz
     
     return(uppertail.probs)
 }
-
 
 ########### Plotting code for Mehta hypermutator data.
 ## main difference is using Day instead of Generation,

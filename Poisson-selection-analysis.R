@@ -80,7 +80,7 @@ pop.poisson.data.analysis <- gene.mutation.data %>%
            min.tail.fdr.corrected.pois.prob) %>%
     arrange(Population, min.tail.fdr.corrected.pois.prob)
 
-write.csv(pop.poisson.data.analysis, "../results/FileS3_B.csv")
+write.csv(pop.poisson.data.analysis, "../results/gene-modules/FileS3_B.csv")
 
 ################################################################################
 ## summary over all LTEE.
@@ -312,4 +312,4 @@ significant.Imodulon.regulated <- Imodulon.regulated.result %>%
 
 ## Note that rbs operon being under "purifying selection" is an artifact
 ## of parallel deletions of this region. This is excluded from the final table.
-write.csv("../gene-modules/S4Table.csv", significant.Imodulon.regulated)
+write.csv(significant.Imodulon.regulated, "../results/gene-modules/S4Table.csv")

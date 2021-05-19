@@ -88,11 +88,13 @@ ggsave("../results/gene-modules/figures/Fig4.pdf", Fig4)
 ## calculate more rigorous statistics than the figures.
 neutral.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
                                  unique(neutral.genes$Gene))
+gc() ## deallocate memory
 ## recalculate, sampling from the same genomic regions (bins).
 ## results should be unchanged.
 neutral.pvals.loc <- calc.traj.pvals(gene.mutation.data, REL606.genes,
                                      unique(neutral.genes$Gene),
                                      sample.genes.by.location=TRUE)
+gc() ## deallocate memory
 ################
 ## re-run STIMS, summing mutations over all LTEE populations.
 
@@ -154,11 +156,13 @@ ggsave("../results/gene-modules/figures/Fig5.pdf", Fig5)
 ## calculate more rigorous statistics than the figures.
 purifying.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
                                    unique(purifying.genes$Gene))
+gc() ## deallocate memory
 ## recalculate, sampling from the same genomic regions (bins).
 ## results should be unchanged.
 purifying.pvals.loc <- calc.traj.pvals(gene.mutation.data, REL606.genes,
                                        unique(purifying.genes$Gene),
                                        sample.genes.by.location=TRUE)
+gc() ## deallocate memory
 ################
 ## re-run STIMS, summing mutations over all LTEE populations.
 
@@ -304,12 +308,14 @@ ggsave("../results/gene-modules/figures/Fig6.pdf",Fig6)
 top.nonmut.pvals <- calc.traj.pvals(gene.mutation.data,
                                     REL606.genes,
                                     unique(top.nonmut.genomics$Gene.name))
+gc() ## deallocate memory
 ## recalculate, sampling from the same genomic regions (bins).
 ## results should be unchanged.
 top.nonmut.pvals.loc <- calc.traj.pvals(gene.mutation.data,
                                         REL606.genes,
                                         unique(top.nonmut.genomics$Gene.name),
                                         sample.genes.by.location=TRUE)
+gc() ## deallocate memory
 
 ## 2) plot top genes in hypermutators.
 top.hypermut.mutation.data <- gene.mutation.data %>%
@@ -328,11 +334,13 @@ ggsave("../results/gene-modules/figures/S4Fig.pdf",S4Fig)
 ## calculate more rigorous statistics than the figures.
 top.hypermut.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
                                       unique(top.hypermut.genomics$Gene.name))
+gc() ## deallocate memory
 ## recalculate, sampling from the same genomic regions (bins).
 ## results should be unchanged.
 top.hypermut.pvals.loc <- calc.traj.pvals(gene.mutation.data, REL606.genes,
                                           unique(top.hypermut.genomics$Gene.name),
                                           sample.genes.by.location=TRUE)
+gc() ## deallocate memory
 ################
 ## re-run STIMS, summing mutations over all LTEE populations.
 
@@ -352,7 +360,6 @@ c.all.pops.top.hypermuts <- calc.cumulative.muts.over.all.pops(
 S5Fig <- rando.over.all.pops.plot %>% 
     add.cumulative.mut.layer(c.all.pops.top.hypermuts, my.color="black")
 ggsave("../results/gene-modules/figures/S5Fig.pdf", S5Fig)
-
 
 ##########################################################################
 ## CORE GENES ANALYSIS.
@@ -677,11 +684,13 @@ c.Imodulon.regulators <- calc.cumulative.muts(Imodulon.regulator.mut.data,
 ## calculate more rigorous statistics than the figures.
 Imodulon.regulator.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
                                             unique(Imodulon.regulators$regulator))
+gc() ## deallocate memory
 ## recalculate, sampling from the same genomic regions (bins).
 ## results should be unchanged.
 Imodulon.regulator.pvals.loc <- calc.traj.pvals(gene.mutation.data, REL606.genes,
                                                 unique(Imodulon.regulators$regulator),
                                                 sample.genes.by.location=TRUE)
+gc() ## deallocate memory
 
 ## Now look at genes that are regulated within Imodulons.
 ## I expect relaxed or purifying selection overall.
@@ -1007,6 +1016,7 @@ ggsave("../results/gene-modules/figures/Fig6.pdf", Fig8, width=5, height=5)
 ## calculate rigorous statistics for Figure 8.
 Mehta.pvals <- calc.Mehta.traj.pvals(combined.Mehta.data, PAO11.genes,
                                      unique(PAO11.regulators$Gene))
+gc() ## deallocate memory
 
 ##########################################################################
 ## Examples plots for the new Figure 1.
