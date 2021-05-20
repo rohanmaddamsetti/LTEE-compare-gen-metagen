@@ -313,3 +313,31 @@ significant.Imodulon.regulated <- Imodulon.regulated.result %>%
 ## Note that rbs operon being under "purifying selection" is an artifact
 ## of parallel deletions of this region. This is excluded from the final table.
 write.csv(significant.Imodulon.regulated, "../results/gene-modules/S4Table.csv")
+
+######################################################
+####### As an extra sanity check, run the Mehta dataset
+## through the Poisson method.
+
+PAO11.genes <- read.csv("../results/PAO11_IDS.csv")
+## let's find all genes that match these keywords:
+## regulator, regulatory, regulation.
+PAO11.regulators <- PAO11.genes %>%
+    filter(str_detect(product, 'regulator|regulatory|regulation'))
+## OK. there are 424 such genes.
+
+Mehta.data <- read.csv("../results/Mehta2018-hypermutators.csv") %>%
+    ## remove intergenic mutations.
+    filter(!str_detect(Gene,'/')) %>%
+    left_join(PAO11.genes) %>%
+    mutate(Day = t0) %>%
+    filter(Population != 'control') %>%
+    mutate(Population = factor(Population)) %>%
+    mutate(Population = recode(Population, `replicate1` = "Replicate 1",
+                               `replicate2` = "Replicate 2")) %>%
+    ## filter any rows with NAs.
+    drop_na()
+
+## OK. Significant by Poisson method as well.
+All.LTEE.Poisson.module.analysis(PAO11.regulators$Gene,
+                                 Mehta.data, PAO11.genes)
+                                             
