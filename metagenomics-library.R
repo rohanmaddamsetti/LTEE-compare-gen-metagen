@@ -76,20 +76,20 @@ calc.cumulative.muts <- function(d, d.metadata, plot.to.end=TRUE, reset.pop.leve
         df <- d %>% filter(Population==pop)
         if (nrow(df) == 0) { ## if no mutations in this pop.
             almost.done.df <- tibble(Population = factor(pop, levels = pop.levels),
-                                     Generation=finalgen,
+                                     Time=finalgen,
                                      count=0,
                                      cs=0)
         } else {
             summary.df <- df %>%
                 arrange(t0) %>%
-                group_by(Population, Generation) %>%
+                group_by(Population, Time) %>%
                 summarize(count=n(), .groups = "drop_last") %>%
                 mutate(cs=cumsum(count)) %>%
                 ungroup()
             ## if the final generation is not in ret.df,
             ## then add one final row (for nicer plots).
             final.row.df <- tibble(Population=factor(pop, levels = pop.levels),
-                                   Generation=finalgen,
+                                   Time=finalgen,
                                    count=0,
                                    cs=max(summary.df$cs))
             if (plot.to.end) {
@@ -98,10 +98,10 @@ calc.cumulative.muts <- function(d, d.metadata, plot.to.end=TRUE, reset.pop.leve
                 almost.done.df <- summary.df
             }
         }
-        ## add an row for Generation == 0 (for nicer plots).
+        ## add an row for Time == 0 (for nicer plots).
         init.row.df <- tibble(
             Population = factor(pop, levels = pop.levels),
-            Generation = 0,
+            Time = 0,
             count = 0,
             cs = 0)
         
@@ -127,13 +127,15 @@ calc.cumulative.muts <- function(d, d.metadata, plot.to.end=TRUE, reset.pop.leve
 ## the next two functions are for estimating local mutation rates by
 ## splitting the genome into z bins.
 
+## IMPORTANT: THESE FUNCTIONS ONLY WORK ON REL606.
+
 ## find.bin is useful for sampling random genes while preserving bin identity,
 ## that is, only sampling genes near the genes of interest.
 
 bin.mutations <- function(mut.data, z) {
     ## z is the number of bins we are using.
     ## count the number of mutations in each bin, M(z_i).
-    ## filter araplus3.mut.data using each adjacent pair of fenceposts,
+    ## filter mut.data using each adjacent pair of fenceposts,
     ## and count the number of rows to get mutations per bin.
     mutations.by.bin.vec <- rep(0,z)
 
@@ -147,14 +149,14 @@ bin.mutations <- function(mut.data, z) {
     for (i in 1:z) {
         left <- fenceposts[i]
         right <- fenceposts[i+1]
-        bin.data <- araplus3.mut.data %>%
+        bin.data <- mut.data %>%
             filter(Position >= left & Position < right)
         bin.mut.count <- nrow(bin.data)
         mutations.by.bin.vec[i] <- bin.mut.count
     }
     
     ## assert that all mutations have been assigned to a bin.
-    stopifnot(sum(mutations.by.bin.vec) == nrow(araplus3.mut.data))
+    stopifnot(sum(mutations.by.bin.vec) == nrow(mut.data))
     
     return(mutations.by.bin.vec)
 }
@@ -370,12 +372,12 @@ plot.base.layer <- function(data, REL606.genes, subset.size=50, N=1000, alphaval
         filter(is.na(in.bottom)) %>%
         dplyr::select(-in.top,-in.bottom)
 
-    p <- ggplot(filtered.trajectories,aes(x=Generation,y=normalized.cs)) +
+    p <- ggplot(filtered.trajectories,aes(x=Time,y=normalized.cs)) +
         ylab('Cumulative number of mutations (normalized)') +
         theme_classic() +
         geom_point(size=0.2, color=my.color) +
         facet_wrap(.~Population,scales='free',nrow=4) +
-        xlab('Generations (x 10,000)') +
+        xlab('Times (x 10,000)') +
         xlim(0,6.3) +
         theme(axis.title.x = element_text(size=14),
               axis.title.y = element_text(size=14),
@@ -436,7 +438,7 @@ add.base.layer <- function(p, data, REL606.genes, my.color, subset.size=50, N=10
         dplyr::select(-in.top,-in.bottom)
 
     p <- p + geom_point(data=filtered.trajectories,
-                        aes(x=Generation, y=normalized.cs),
+                        aes(x=Time, y=normalized.cs),
                         size=0.2, color=my.color)
     return(p)                
 }
@@ -445,25 +447,34 @@ add.cumulative.mut.layer <- function(p, layer.df, my.color) {
     ## take a ggplot object output by plot.cumulative.muts, and add an extra layer.
     p <- p +
         geom_point(data=layer.df,
-                   aes(x=Generation,y=normalized.cs),
+                   aes(x=Time,y=normalized.cs),
                    color=my.color, size=0.2) +
-        geom_step(data=layer.df, aes(x=Generation,y=normalized.cs),
+        geom_step(data=layer.df, aes(x=Time,y=normalized.cs),
                   size=0.2, color=my.color)
     return(p)
 }
 
-plot.cumulative.muts <- function(mut.data, my.color="black") {
+plot.cumulative.muts <- function(mut.data, my.color="black",ltee.not.mehta=TRUE) {
     ## calculate cumulative numbers of mutations in each category.
     ## for vanilla plotting, without null distributions, as plotted by
     ## plot.base.layer.
-    p <- ggplot(mut.data,aes(x=Generation,y=normalized.cs)) +
+    p <- ggplot(mut.data,aes(x=Time,y=normalized.cs)) +
         ylab('Cumulative number of mutations (normalized)') +
         theme_classic() +
         geom_point(size=0.2, color=my.color) +
         geom_step(size=0.2, color=my.color) +
-        facet_wrap(.~Population,scales='free',nrow=4) +
-        xlab('Generations (x 10,000)') +
-        xlim(0,6.3)
+        facet_wrap(.~Population,scales='free',nrow=4)
+
+    if (ltee.not.mehta) {
+        p <- p +
+            xlab("Generations (x 10,000)") +
+            xlim(0, 6.3)            
+    } else {
+        p <- p +
+            xlab("Days") +
+            xlim(0, 28)                    
+    }
+    
     return(p)
 }
 
@@ -488,7 +499,7 @@ calc.slope.of.cumulative.muts <- function(c.muts) {
 
 plot.slope.of.cumulative.muts <- function(mut.data, my.color="black") {
     ## calculate derivative of cumulative numbers of mutations in each category.
-    p <- ggplot(mut.data,aes(x=Generation,y=D.normalized.cs)) +
+    p <- ggplot(mut.data,aes(x=Time,y=D.normalized.cs)) +
         ylab('Slope of Cumulative number of mutations (normalized)') +
         theme_classic() +
         geom_point(size=0.2, color=my.color) +
@@ -503,8 +514,8 @@ plot.slope.of.cumulative.muts <- function(mut.data, my.color="black") {
 add.slope.of.cumulative.mut.layer <- function(p, layer.df, my.color) {
     ## take a ggplot object output by plot.cumulative.muts, and add an extra layer.
     p <- p +
-        geom_point(data=layer.df, aes(x=Generation,y=D.normalized.cs), color=my.color, size=0.2) +
-        geom_step(data=layer.df, aes(x=Generation,y=D.normalized.cs), color=my.color, size=0.2) +
+        geom_point(data=layer.df, aes(x=Time,y=D.normalized.cs), color=my.color, size=0.2) +
+        geom_step(data=layer.df, aes(x=Time,y=D.normalized.cs), color=my.color, size=0.2) +
         geom_smooth(data=layer.df,size=0.2, color=my.color)
     return(p)
 }
@@ -529,14 +540,13 @@ calc.cumulative.muts.over.all.pops <- function(d, d.metadata, plot.to.end=TRUE) 
     normalization.constant <- sum(my.genes$gene_length)
     
     summary.df <- d %>%
-        arrange(t0) %>%
-        group_by(Generation) %>%
+        group_by(Time) %>%
         summarize(count=n(), .groups = "drop_last") %>%
         mutate(cs=cumsum(count)) %>%
         ungroup()
     ## if the final generation is not in ret.df,
     ## then add one final row (for nicer plots).
-    final.row.df <- tibble(Generation=finalgen,
+    final.row.df <- tibble(Time=finalgen,
                            count=0,
                            cs=max(summary.df$cs))
     if (plot.to.end) {
@@ -545,8 +555,8 @@ calc.cumulative.muts.over.all.pops <- function(d, d.metadata, plot.to.end=TRUE) 
         almost.done.df <- summary.df
     }
     
-    ## add an row for Generation == 0 (for nicer plots).
-    init.row.df <- tibble(Generation = 0,
+    ## add an row for Time == 0 (for nicer plots).
+    init.row.df <- tibble(Time = 0,
                           count = 0,
                           cs = 0)
     
@@ -613,11 +623,11 @@ plot.base.layer.over.all.pops <- function(data, REL606.genes, subset.size=50, N=
         filter(is.na(in.bottom)) %>%
         dplyr::select(-in.top,-in.bottom)
 
-    p <- ggplot(filtered.trajectories,aes(x=Generation,y=normalized.cs)) +
+    p <- ggplot(filtered.trajectories,aes(x=Time,y=normalized.cs)) +
         ylab('Cumulative number of mutations (normalized)') +
         theme_classic() +
         geom_point(size=0.2, color=my.color) +
-        xlab('Generations (x 10,000)') +
+        xlab('Times (x 10,000)') +
         xlim(0,6.3) +
         theme(axis.title.x = element_text(size=14),
               axis.title.y = element_text(size=14),
@@ -677,7 +687,7 @@ add.base.layer.over.all.pops <- function(p, data, REL606.genes, my.color, subset
         dplyr::select(-in.top,-in.bottom)
 
     p <- p + geom_point(data=filtered.trajectories,
-                        aes(x=Generation, y=normalized.cs),
+                        aes(x=Time, y=normalized.cs),
                         size=0.2, color=my.color)
     return(p)                
 }
@@ -935,7 +945,7 @@ calc.Mehta.traj.pvals <- function(data, PAO11.genes, gene.vec, N=10000) {
 }
 
 ########### Plotting code for Mehta hypermutator data.
-## main difference is using Day instead of Generation,
+## main difference is using Day instead of Time,
 ## and calling calc.Mehta.cumulative.muts().
 
 plot.Mehta.base.layer <- function(data, PAO11.genes, subset.size=50, N=1000, alphaval = 0.05, my.color="gray") {
@@ -1115,7 +1125,7 @@ plot.slope.of.base.layer <- function(data, subset.size=300, N=1000, alphaval = 0
         filter(is.na(in.bottom)) %>%
         dplyr::select(-in.top,-in.bottom)
 
-    p <- ggplot(filtered.trajectories,aes(x=Generation,y=D.normalized.cs)) +
+    p <- ggplot(filtered.trajectories,aes(x=Time,y=D.normalized.cs)) +
         ylab('slope of cumulative number of mutations (normalized)') +
         theme_classic() +
         geom_point(size=0.2, color='gray') +
