@@ -4,6 +4,37 @@
 library(tidyverse)
 library(cowplot)
 
+#########################################################################
+## A nice function for memory management/checking usage.
+## From: https://stackoverflow.com/questions/1358003/tricks-to-manage-the-available-memory-in-an-r-session/11899573
+# improved list of objects
+.ls.objects <- function(pos = 1, pattern, order.by,
+                        decreasing=FALSE, head=FALSE, n=5) {
+    napply <- function(names, fn) sapply(names, function(x)
+                                         fn(get(x, pos = pos)))
+    names <- ls(pos = pos, pattern = pattern)
+    obj.class <- napply(names, function(x) as.character(class(x))[1])
+    obj.mode <- napply(names, mode)
+    obj.type <- ifelse(is.na(obj.class), obj.mode, obj.class)
+    obj.size <- napply(names, object.size)
+    obj.dim <- t(napply(names, function(x)
+                        as.numeric(dim(x))[1:2]))
+    vec <- is.na(obj.dim)[, 1] & (obj.type != "function")
+    obj.dim[vec, 1] <- napply(names, length)[vec]
+    out <- data.frame(obj.type, obj.size, obj.dim)
+    names(out) <- c("Type", "Size", "Rows", "Columns")
+    if (!missing(order.by))
+        out <- out[order(out[[order.by]], decreasing=decreasing), ]
+    if (head)
+        out <- head(out, n)
+    out
+}
+# shorthand
+lsos <- function(..., n=10) {
+    .ls.objects(..., order.by="Size", decreasing=TRUE, head=TRUE, n=n)
+}
+
+
 ##########################################################################
 ## FUNCTIONS FOR DATA ANALYSIS
 ##########################################################################
@@ -75,7 +106,7 @@ rotate.REL606.chr <- function(my.position, c) {
     
     if (nrow(df) == 0) { ## if no mutations in this pop.
         almost.done.df <- tibble(Population = factor(pop, levels = pop.levels),
-                                 Time = final.day,
+                                 Time = final.time,
                                  count=0,
                                  cs=0)
     } else {
@@ -86,7 +117,7 @@ rotate.REL606.chr <- function(my.position, c) {
             ungroup()
         ## if the final generation is not in ret.df,
         ## then add one final row (for nicer plots).
-        final.row.df <- tibble(Population = pop,
+        final.row.df <- tibble(Population = factor(pop, levels = pop.levels),
                                Time = final.time,
                                count=0,
                                cs=max(summary.df$cs))   
@@ -95,7 +126,7 @@ rotate.REL606.chr <- function(my.position, c) {
     
     ## add an row for Time == 0 (for nicer plots).
     init.row.df <- tibble(
-        Population = pop,
+        Population = factor(pop, levels = pop.levels),
         Time = 0,
         count = 0,
         cs = 0)
@@ -119,13 +150,13 @@ rotate.REL606.chr <- function(my.position, c) {
         ## Generate a one-argument helper function for LTEE data.
         ## set the last timepoint to 6.3 * 10000 generations.
         cumsum.helper <- partial(
-            .construct.cumsum.per.pop.helper.function,
+            .construct.cumsum.per.pop.helper,
             d, 6.3, reset.pop.levels)
     } else {
         ## Generate a one-argument helper function for Mehta data.
         ## set the last timepoint to 28 days and never reset levels(Population).
         cumsum.helper <- partial(
-            .construct.cumsum.per.pop.helper.function,
+            .construct.cumsum.per.pop.helper,
             d, 28, FALSE)
     }
 
@@ -136,7 +167,7 @@ rotate.REL606.chr <- function(my.position, c) {
     
     c.dat <- map_dfr(.x = levels(d$Population),
                      .f = cumsum.helper) %>%
-        mutate(normalized.cs=cs/normalization.constant) %>%
+        mutate(normalized.cs = cs / normalization.constant) %>%
         ## remove any NA values.
         na.omit()
     
@@ -148,8 +179,7 @@ calc.LTEE.cumulative.muts <- partial(.f = .calc.cumulative.muts,
                                      TRUE, TRUE)
 
 calc.Mehta.cumulative.muts <- partial(.f = .calc.cumulative.muts,
-                                     TRUE, FALSE)
-
+                                     FALSE, FALSE)
 ###############################
 ## the next two functions are for estimating local mutation rates by
 ## splitting the genome into z bins.
@@ -209,9 +239,100 @@ find.bin <- function(locus.row, z) {
     return(-1)
 }
 
-###############################
+assign.genes.to.bins <- function(d.metadata) {
+    ## use 46 bins so that each bin is ~10,000 bp (for REL606).
+    find.bin.46 <- partial(find.bin,z=46)
+    
+    ## output a bin from each row in gene.info.
+    bin.list <- d.metadata %>%
+        split(.$Gene) %>%
+        lapply(find.bin.46)
+    
+    ## associate each gene in the genome to its bin, and add as a column.
+    bin.df <- data.frame(Gene = names(bin.list), bin = as.numeric(bin.list))
+    return(bin.df)
+}
 
-calc.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, sample.genes.by.location=FALSE) {
+sample.genes.by.genomebin <- function(module.metadata.with.bins) {
+    ## map each gene in gene.vec to a random gene in its bin
+    ## in the genome.
+    sample_one <- partial(sample_n,size = 1)
+    
+    module.to.random.module <- module.metadata.with.bins %>%
+        ## the genes to sample are stored in a nested column called "data".
+        mutate(sampled.info = map(data, sample_one)) %>%
+        transmute(Gene, sampled.gene = map_chr(sampled.info, function(x) x$Gene))
+    return(module.to.random.module$sampled.gene)
+}
+
+
+calc.LTEE.cumulative.mut.subset.by.bin <- function(d, d.metadata,
+                                                   module.metadata.with.bins,
+                                                   idx) {
+    ## This function is partialized within bootstrap.LTEE.traj.by.loc.
+    rando.genes <- sample.genes.by.genomebin(module.metadata.with.bins)
+    mut.subset <- filter(d, Gene %in% rando.genes)
+    mut.subset.metadata <- filter(d.metadata, Gene %in% rando.genes)
+    c.mut.subset <- calc.LTEE.cumulative.muts(mut.subset, mut.subset.metadata) %>%
+        mutate(bootstrap_replicate=idx)
+    return(c.mut.subset)
+}
+
+bootstrap.LTEE.traj.by.loc <- function(d, d.metadata, gene.vec, N) {
+    ## sample genes near the genes in the module of interest,
+    ## i.e. gene.vec.
+    
+    ## for efficiency, pre-calculate gene bin assignments before bootstrapping.
+    bin.df <- assign.genes.to.bins(d.metadata)
+    
+    ## map bins to the genes in those bins (excepting those in gene.vec).
+    nested.genes.to.sample.by.bin <- left_join(d.metadata, bin.df) %>%
+        ## when sampling, exclude the genes in the module of interest.
+        filter(!(Gene %in% gene.vec)) %>%
+        group_by(bin) %>%
+        nest()
+    
+    ## add the genes to be sampled as a list column corresponding
+    ## to the genes in gene.vec,
+    ## such that each gene in the module maps to the other genes in its bin.
+    ## then, one of those genes will be sampled to make the random module,
+    ## while preserving bin location.
+    module.metadata.with.bins <- d.metadata %>%
+        filter(Gene %in% gene.vec) %>%
+        left_join(bin.df) %>%
+        left_join(nested.genes.to.sample.by.bin)
+
+    ## partialized function to calculate cumulative mutations.
+    generate.LTEE.cumulative.mut.subset.by.bin <- partial(
+        .f = calc.LTEE.cumulative.mut.subset.by.bin,
+        d, d.metadata, module.info.with.bins)
+    
+    ## make a dataframe of bootstrapped trajectories.
+    ## look at accumulation of stars over time for random subsets of genes.
+    bootstrapped.trajectories <- map_dfr(
+        .x=seq_len(N),
+        .f=generate.LTEE.cumulative.mut.subset.by.bin)
+
+    return(bootstrapped.trajectories)
+}
+
+filter.pop.trajectories.by.data <- function(data.trajectory, pop.trajectories) {
+
+    data.trajectory.summary <- data.trajectory %>%
+        group_by(Population, .drop=FALSE) %>%
+        summarize(final.norm.cs = max(normalized.cs)) %>%
+        ungroup()
+    
+    pop <- unique(pop.trajectories$Population)
+    data.traj <- filter(data.trajectory.summary, Population == pop)
+    
+    final.data.norm.cs <- unique(data.traj$final.norm.cs)
+    tail.trajectories <- filter(pop.trajectories, final.norm.cs >= final.data.norm.cs)
+    return(tail.trajectories)
+}
+
+calc.traj.pvals <- function(data, d.metadata, gene.vec, N=10000,
+                            ltee.not.mehta = TRUE, sample.genes.by.location=FALSE) {
     ## calculate the tail probabilities of the true cumulative mutation trajectory
     ## of a given vector of genes (a 'module'), based on resampling
     ## random sets of genes. Returns the upper tail of null distribution,
@@ -220,120 +341,65 @@ calc.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, sample.genes.
 
     ## check type for gene.vec (e.g., if factor, change to vanilla vector of strings)
     gene.vec <- as.character(gene.vec)
-    
     ## each sample has the same cardinality as the gene.vec.
     subset.size <- length(gene.vec)
 
-    if (sample.genes.by.location) {
-        ## then sample genes near the genes in the module of interest,
-        ## i.e. gene.vec.
+    gene.vec.data <- data %>% filter(Gene %in% gene.vec)
+    gene.vec.metadata <- d.metadata %>% filter(Gene %in% gene.vec)
 
-        ## for efficiency, pre-calculate gene bin assignments.
-        ## use 46 bins so that each bin is ~10000 bp. 
-        find.bin.46 <- partial(find.bin,z=46)
-        gene.info <- REL606.genes %>%
-            select(Gene, locus_tag, blattner, gene_length,
-                   product, start, end, strand) %>%
-            distinct() ## remove duplicate rows,
-        ## as mutations in the same gene have the same gene info
-        
-        ## output a bin from each row in gene.info.
-        bin.list <- gene.info %>%
-            split(.$Gene) %>%
-            lapply(find.bin.46)
-        ## map each gene in the module of interest to their bin.
-        bin.vec <- sapply(gene.vec,function(gene) bin.list[[gene]])
-
-        ## associate each gene in the genome to its bin, and add as a column.
-        bin.df <- data.frame(Gene=names(bin.list),bin=as.numeric(bin.list))
-        
-        ## map bins to the genes in those bins (excepting those in gene.vec).
-        nested.gene.info.with.bins <- left_join(gene.info, bin.df) %>%
-            ## when sampling, exclude the genes in the module of interest.
-            filter(!(Gene %in% gene.vec)) %>%
-            group_by(bin) %>%
-            nest()
-
-        ## add the genes to be sampled as a list column corresponding
-        ## to the genes in gene.vec,
-        ## such that each gene in the module maps to the other genes in its bin.
-        ## then, one of those genes will be sampled to make the random module,
-        ## while preserving bin location.
-        module.info.with.bins <- left_join(gene.info, bin.df) %>%
-            filter(Gene %in% gene.vec) %>%
-            left_join(nested.gene.info.with.bins)
-
-        sample.one <- partial(sample_n,size=1)
-        
-        sample.genes.by.genomebin <- function() {
-            ## map each gene in gene.vec to a random gene in its bin
-            ## in the genome.
-            module.to.random.module <- module.info.with.bins %>%
-                mutate(sampled.info = map(data, sample.one)) %>%
-                transmute(Gene, sampled.gene = map_chr(sampled.info, function(x) x$Gene))
-            return(module.to.random.module$sampled.gene)
-        }
-
-        generate.cumulative.mut.subset.by.loc <- function(idx) {
-            rando.genes <- sample.genes.by.genomebin()
-            mut.subset <- filter(data,Gene %in% rando.genes)
-            mut.subset.metadata <- filter(REL606.genes, Gene %in% rando.genes)
-            c.mut.subset <- calc.cumulative.muts(mut.subset,
-                                                 mut.subset.metadata) %>%
-                mutate(bootstrap_replicate=idx)
-            return(c.mut.subset)
-        }
-
-        ## make a dataframe of bootstrapped trajectories.
-        ## look at accumulation of stars over time for random subsets of genes.
-        bootstrapped.trajectories <- map_dfr(.x=seq_len(N),
-                                             .f=generate.cumulative.mut.subset.by.loc)
+    if(ltee.not.mehta) {
+        data.trajectory <- calc.LTEE.cumulative.muts(gene.vec.data, gene.vec.metadata)
     } else {
+        data.trajectory <- calc.Mehta.cumulative.muts(gene.vec.data, gene.vec.metadata)
+    }
+
+    ## partialized-- the last blocks uses this function to calculate the tail.
+    trajectory.filter.helper <- partial(
+        .f = filter.pop.trajectories.by.data,
+        data.trajectory)
+
+    if(!ltee.not.mehta) { ## if analyzing the Mehta dataset:
         ## This function takes the index for the current draw, and samples the data,
         ## generating a random gene set for which to calculate cumulative mutations.
-        ## IMPORTANT: this function depends on variables defined in
-        ## calc.traj.pvals.
-        generate.cumulative.mut.subset <- function(idx) {
-            rando.genes <- base::sample(unique(REL606.genes$Gene),subset.size)
-            mut.subset <- filter(data,Gene %in% rando.genes)
-            mut.subset.metadata <- filter(REL606.genes, Gene %in% rando.genes)
-            c.mut.subset <- calc.cumulative.muts(
-                mut.subset, mut.subset.metadata) %>%
-                mutate(bootstrap_replicate=idx)
-            return(c.mut.subset)
-        }
+        generate.Mehta.cumulative.mut.subset <- partial(
+            .f = .generate.cumulative.mut.subset,
+            data, d.metadata, gene.vec, subset.size, calc.Mehta.cumulative.muts)
         
         ## make a dataframe of bootstrapped trajectories.
         ## look at accumulation of stars over time for random subsets of genes.
         bootstrapped.trajectories <- map_dfr(
             .x=seq_len(N),
-            .f=generate.cumulative.mut.subset)
+            .f=generate.Mehta.cumulative.mut.subset)
+        
+    } else { ## then analyzing LTEE dataset.
+        
+        if (sample.genes.by.location) {
+            ## then sample genes near the genes in the module of interest,
+            ## i.e. gene.vec.
+            bootstrapped.trajectories <- bootstrap.LTEE.traj.by.loc(
+                data, d.metadata, gene.vec, N)
+            
+        } else {
+            ## This function takes the index for the current draw, and samples the data,
+            ## generating a random gene set for which to calculate cumulative mutations.
+            generate.LTEE.cumulative.mut.subset <- partial(
+                .f = .generate.cumulative.mut.subset,
+                data, d.metadata, subset.size, calc.LTEE.cumulative.muts)
+            
+            ## make a dataframe of bootstrapped trajectories.
+            ## look at accumulation of stars over time for random subsets of genes.
+            bootstrapped.trajectories <- map_dfr(
+                .x = seq_len(N),
+                .f = generate.LTEE.cumulative.mut.subset)          
+        }
     }
     
-    gene.vec.data <- data %>% filter(Gene %in% gene.vec)
-    gene.vec.metadata <- REL606.genes %>% filter(Gene %in% gene.vec)
-    data.trajectory <- calc.cumulative.muts(gene.vec.data, gene.vec.metadata)
-    data.trajectory.summary <- data.trajectory %>%
-        group_by(Population, .drop=FALSE) %>%
-        summarize(final.norm.cs = max(normalized.cs)) %>%
-        ungroup()
-
-    trajectory.filter.helper <- function(pop.trajectories) {
-        pop <- unique(pop.trajectories$Population)
-        data.traj <- filter(data.trajectory.summary, Population == pop)
-        final.data.norm.cs <- unique(data.traj$final.norm.cs)
-        tail.trajectories <- filter(pop.trajectories, final.norm.cs >= final.data.norm.cs)
-        return(tail.trajectories)
-    }
-    
-    trajectory.summary <- bootstrapped.trajectories %>%
+    uppertail.probs <- bootstrapped.trajectories %>%
         ## important: don't drop empty groups.
         group_by(bootstrap_replicate, Population,.drop=FALSE) %>%
         summarize(final.norm.cs=max(normalized.cs)) %>%
-        ungroup()
-    
-    ## split by Population, then filter for bootstraps > data trajectory.
-    uppertail.probs <- trajectory.summary %>%
+        ungroup() %>%
+        ## split by Population, then filter for bootstraps > data trajectory.
         split(.$Population) %>%
         map_dfr(.f=trajectory.filter.helper) %>%
         group_by(Population,.drop=FALSE) %>%
@@ -343,7 +409,7 @@ calc.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, sample.genes.
     return(uppertail.probs)
 }
 
-filter.trajectories <- function(bootstrapped.trajectories, alphaval) {
+get.middle.trajectories <- function(bootstrapped.trajectories, alphaval) {
     ## filter out the top alphaval/2 and bottom alphaval/2 trajectories
     ## from each population, for a two-sided test.
     ## usual default is alphaval == 0.05.
@@ -374,30 +440,68 @@ filter.trajectories <- function(bootstrapped.trajectories, alphaval) {
     return(filtered.trajectories)
 }
 
-plot.base.layer <- function(data, gene.metadata, subset.size=50, N=1000, alphaval = 0.05, my.color="gray") {
+get.middle.trajs.over.all.pops <- function(bootstrapped.trajectories, alphaval) {
+    ## filter out the top alphaval/2 and bottom alphaval/2 trajectories
+    ## from each population, for a two-sided test.
+    ## usual default is alphaval == 0.05.
+    trajectory.summary <- bootstrapped.trajectories %>%
+        ## important: don't drop empty groups.
+        group_by(bootstrap_replicate,.drop=FALSE) %>%
+        summarize(final.norm.cs=max(normalized.cs)) %>%
+        ungroup()
+    
+    top.trajectories <- trajectory.summary %>%
+        slice_max(prop=alphaval/2, order_by=final.norm.cs) %>%
+        dplyr::select(-final.norm.cs) %>%
+        mutate(in.top=TRUE)
+    
+    bottom.trajectories <- trajectory.summary %>%
+        slice_min(prop=alphaval/2, order_by=final.norm.cs) %>%
+        dplyr::select(-final.norm.cs) %>%
+        mutate(in.bottom=TRUE)
+    
+    filtered.trajectories <- bootstrapped.trajectories %>%
+        left_join(top.trajectories) %>%
+        left_join(bottom.trajectories) %>%
+        filter(is.na(in.top)) %>%
+        filter(is.na(in.bottom)) %>%
+        dplyr::select(-in.top,-in.bottom)
+    return(filtered.trajectories)
+}
+
+.generate.cumulative.mut.subset <- function(data, gene.metadata, subset.size,
+                                            calc.cumulative.muts.function, idx) {
+    ## This function takes the index for the current draw, and samples the data,
+    ## generating a random gene set for which to calculate cumulative mutations.
+    ## This function is not used directly-- it is 
+    rando.genes <- base::sample(unique(gene.metadata$Gene), subset.size)
+    mut.subset <- filter(data, Gene %in% rando.genes)
+    mut.subset.metadata <- filter(gene.metadata, Gene %in% rando.genes)
+    c.mut.subset <- calc.cumulative.muts.function(mut.subset, mut.subset.metadata) %>%
+        mutate(bootstrap_replicate=idx)
+    return(c.mut.subset)
+}
+
+plot.base.layer <- function(data, gene.metadata, subset.size=50, N=1000,
+                            alphaval = 0.05, my.color = "gray", ltee.not.mehta=TRUE) {
     ## This plot visualizes a two-tailed test (alphaval = 0.05)
     ## against a bootstrapped null distribution.
     ## Throughout, plots use the minimum subsample size to subsample
     ## the null distribution, to increase the variance in order to
     ## make a conservative comparison.
-    
-    ## This function takes the index for the current draw, and samples the data,
-    ## generating a random gene set for which to calculate cumulative mutations.
-    ## IMPORTANT: this function depends on variables defined in plot.base.layer.
-    generate.cumulative.mut.subset <- function(idx) {
-        rando.genes <- base::sample(unique(gene.metadata$Gene),subset.size)
-        mut.subset <- filter(data, Gene %in% rando.genes)
-        mut.subset.metadata <- filter(gene.metadata, Gene %in% rando.genes)
-        c.mut.subset <- calc.LTEE.cumulative.muts(mut.subset, mut.subset.metadata) %>%
-            mutate(bootstrap_replicate=idx)
-        return(c.mut.subset)
-    }
 
+    if (ltee.not.mehta) { ## use function for LTEE data.
+        generate.cumulative.mut.subset <- partial(
+            .f = .generate.cumulative.mut.subset,
+            data, gene.metadata, subset.size, calc.LTEE.cumulative.muts)
+    } else { ## use function for Mehta data.
+        generate.cumulative.mut.subset <- partial(
+            .f = .generate.cumulative.mut.subset,
+            data, gene.metadata, subset.size, calc.Mehta.cumulative.muts)        
+    }
+    
     ## make a dataframe of bootstrapped trajectories.
     ## look at accumulation of stars over time for random subsets of genes.
-    ## I want to plot the distribution of cumulative mutations over time for
-    ## say, 1000 or 10000 random subsets of genes.
-
     bootstrapped.trajectories <- map_dfr(
         .x=seq_len(N),
         .f=generate.cumulative.mut.subset)
@@ -405,52 +509,47 @@ plot.base.layer <- function(data, gene.metadata, subset.size=50, N=1000, alphava
     ## filter out the top alphaval/2 and bottom alphaval/2 trajectories
     ## from each population, for a two-sided test.
     ## default is alphaval == 0.05.
-    filtered.trajectories <- filter.trajectories(bootstrapped.trajectories, alphaval)
+    middle.trajs <- get.middle.trajectories(bootstrapped.trajectories, alphaval)
     
-    p <- ggplot(filtered.trajectories,aes(x=Time,y=normalized.cs)) +
-        ylab('Cumulative number of mutations (normalized)') +
-        theme_classic() +
-        geom_point(size=0.2, color=my.color) +
-        facet_wrap(.~Population,scales='free',nrow=4) +
-        xlab('Generations (x 10,000)') +
-        xlim(0,6.3) +
-        theme(axis.title.x = element_text(size=14),
-              axis.title.y = element_text(size=14),
-              axis.text.x  = element_text(size=14),
-              axis.text.y  = element_text(size=14)) +
-        scale_y_continuous(labels=fancy_scientific,
-                           breaks = scales::extended_breaks(n = 6),
-                           limits = c(0, NA))
+    p <- ggplot(middle.trajs,aes(x=Time,y=normalized.cs)) +
+           ylab('Cumulative number of mutations (normalized)') +
+           theme_classic() +
+           geom_point(size=0.2, color=my.color) +
+           theme(axis.title.x = element_text(size=14),
+                 axis.title.y = element_text(size=14),
+                 axis.text.x  = element_text(size=14),
+                 axis.text.y  = element_text(size=14)) +
+           scale_y_continuous(labels=fancy_scientific,
+                              breaks = scales::extended_breaks(n = 6),
+                              limits = c(0, NA)) +
+        facet_wrap(.~Population, scales='free', nrow=4)
+    
+    if (ltee.not.mehta) {
+        p <- p +
+            xlab('Generations (x 10,000)') +
+            xlim(0,6.3)
+    } else {
+        p <- p +
+            xlab('Day') +
+            xlim(0, 28)        
+    }
+    
     return(p)
 }
 
-add.base.layer <- function(p, data, REL606.genes, my.color, subset.size=50, N=1000, alphaval = 0.05) {
+add.LTEE.base.layer <- function(p, data, REL606.genes, my.color, subset.size=50,
+                           N=1000, alphaval = 0.05) {
     ## add a base layer to a plot. used in Imodulon code.
+    generate.cumulative.mut.subset <- partial(
+        .f = .generate.cumulative.mut.subset,
+        data, REL606.genes, subset.size, calc.LTEE.cumulative.muts)
     
-    ## This function takes the index for the current draw, and samples the data,
-    ## generating a random gene set for which to calculate cumulative mutations.
-    generate.cumulative.mut.subset <- function(idx) {
-        rando.genes <- base::sample(unique(REL606.genes$Gene),subset.size)
-        mut.subset <- filter(data,Gene %in% rando.genes)
-        mut.subset.metadata <- filter(REL606.genes, Gene %in% rando.genes)
-        c.mut.subset <- calc.LTEE.cumulative.muts(mut.subset, mut.subset.metadata) %>%
-            mutate(bootstrap_replicate=idx)
-        return(c.mut.subset)
-    }
-    
-    ## make a dataframe of bootstrapped trajectories.
-    ## look at accumulation of stars over time for random subsets of genes.
-    ## I want to plot the distribution of cumulative mutations over time for
-    ## say, 1000 or 10000 random subsets of genes.
     bootstrapped.trajectories <- map_dfr(
         .x=seq_len(N), .f=generate.cumulative.mut.subset)
 
-    ## filter out the top alphaval/2 and bottom alphaval/2 trajectories
-    ## from each population, for a two-sided test.
-    ## default is alphaval == 0.05.
-    filtered.trajectories <- filter.trajectories(bootstrapped.trajectories, alphaval)
+    middle.trajs <- get.middle.trajectories(bootstrapped.trajectories, alphaval)
 
-    p <- p + geom_point(data=filtered.trajectories,
+    p <- p + geom_point(data=middle.trajs,
                         aes(x=Time, y=normalized.cs),
                         size=0.2, color=my.color)
     return(p)                
@@ -459,24 +558,24 @@ add.base.layer <- function(p, data, REL606.genes, my.color, subset.size=50, N=10
 add.cumulative.mut.layer <- function(p, layer.df, my.color) {
     ## take a ggplot object output by plot.cumulative.muts, and add an extra layer.
     p <- p +
-        geom_point(data=layer.df,
-                   aes(x=Time,y=normalized.cs),
-                   color=my.color, size=0.2) +
-        geom_step(data=layer.df, aes(x=Time,y=normalized.cs),
-                  size=0.2, color=my.color)
+        geom_point(data = layer.df,
+                   aes(x = Time, y = normalized.cs),
+                   color = my.color, size = 0.2) +
+        geom_step(data = layer.df, aes(x = Time, y = normalized.cs),
+                  size = 0.2, color = my.color)
     return(p)
 }
 
-plot.cumulative.muts <- function(mut.data, my.color="black",ltee.not.mehta=TRUE) {
+plot.cumulative.muts <- function(mut.data, my.color="black", ltee.not.mehta=TRUE) {
     ## calculate cumulative numbers of mutations in each category.
     ## for vanilla plotting, without null distributions, as plotted by
     ## plot.base.layer.
-    p <- ggplot(mut.data, aes(x=Time,y=normalized.cs)) +
+    p <- ggplot(mut.data, aes(x = Time, y = normalized.cs)) +
         ylab('Cumulative number of mutations (normalized)') +
         theme_classic() +
-        geom_point(size=0.2, color=my.color) +
-        geom_step(size=0.2, color=my.color) +
-        facet_wrap(.~Population,scales='free',nrow=4)
+        geom_point(size = 0.2, color = my.color) +
+        geom_step(size = 0.2, color = my.color) +
+        facet_wrap(. ~ Population, scales = 'free', nrow = 4)
     
     if (ltee.not.mehta) {
         p <- p +
@@ -494,7 +593,7 @@ plot.cumulative.muts <- function(mut.data, my.color="black",ltee.not.mehta=TRUE)
 ######################################################################
 ## versions of STIMS plotting code, summing over all populations.
 
-calc.cumulative.muts.over.all.pops <- function(d, d.metadata) {
+calc.LTEE.cumulative.muts.over.all.pops <- function(d, d.metadata) {
     ## look at accumulation of stars over time
     ## in other words, look at the rates at which the mutations occur over time.
     ## To normalize, we need to supply the number of sites at risk
@@ -536,50 +635,46 @@ calc.cumulative.muts.over.all.pops <- function(d, d.metadata) {
     return(c.dat)
 }
 
-plot.base.layer.over.all.pops <- function(data, REL606.genes, subset.size=50, N=1000, alphaval = 0.05, my.color="gray") {
+plot.base.layer.over.all.pops <- function(data, REL606.genes, subset.size=50,
+                                          N=1000, alphaval = 0.05, my.color="gray") {
     ## This plot visualizes a two-tailed test (alphaval = 0.05)
     ## against a bootstrapped null distribution.
     ## Throughout, plots use the minimum subsample size to subsample
     ## the null distribution, to increase the variance in order to
     ## make a conservative comparison.
-    
+
     ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations.
-    ## IMPORTANT: this function depends on variables defined in plot.base.layer.
-    generate.cumulative.mut.subset <- function(idx) {
-        rando.genes <- base::sample(unique(REL606.genes$Gene),subset.size)
-        mut.subset <- filter(data,Gene %in% rando.genes)
-        mut.subset.metadata <- filter(REL606.genes, Gene %in% rando.genes)
-        c.mut.subset <- calc.cumulative.muts.over.all.pops(
-            mut.subset, mut.subset.metadata) %>%
-            mutate(bootstrap_replicate=idx)
-        return(c.mut.subset)
-    }
+    generate.cumulative.mut.subset.over.all.pops <- partial(
+        .f = .generate.cumulative.mut.subset,
+        data, REL606.genes, subset.size, calc.LTEE.cumulative.muts.over.all.pops)
 
     ## make a dataframe of bootstrapped trajectories.
     ## look at accumulation of stars over time for random subsets of genes.
     ## I want to plot the distribution of cumulative mutations over time for
     ## say, 1000 or 10000 random subsets of genes.
-
+    
     bootstrapped.trajectories <- map_dfr(
-        .x=seq_len(N),
-        .f=generate.cumulative.mut.subset)
+        .x = seq_len(N),
+        .f = generate.cumulative.mut.subset.over.all.pops)
+    
+    middle.trajs <- get.middle.trajs.over.all.pops(
+        bootstrapped.trajectories, alphaval)
 
-    filtered.trajectories <- filter.trajectories(bootstrapped.trajectories, alphaval)
-
-    p <- ggplot(filtered.trajectories,aes(x=Time,y=normalized.cs)) +
+    p <- ggplot(middle.trajs,aes(x=Time,y=normalized.cs)) +
         ylab('Cumulative number of mutations (normalized)') +
         theme_classic() +
         geom_point(size=0.2, color=my.color) +
-        xlab('Times (x 10,000)') +
-        xlim(0,6.3) +
         theme(axis.title.x = element_text(size=14),
               axis.title.y = element_text(size=14),
               axis.text.x  = element_text(size=14),
               axis.text.y  = element_text(size=14)) +
         scale_y_continuous(labels=fancy_scientific,
                            breaks = scales::extended_breaks(n = 6),
-                           limits = c(0, NA))
+                           limits = c(0, NA)) +
+        xlab('Generations (x 10,000)') +
+        xlim(0,6.3)
+    
     return(p)
 }
 
@@ -588,28 +683,76 @@ add.base.layer.over.all.pops <- function(p, data, REL606.genes, my.color, subset
     
     ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations.
-    generate.cumulative.mut.subset <- function(idx) {
-        rando.genes <- base::sample(unique(REL606.genes$Gene),subset.size)
-        mut.subset <- filter(data,Gene %in% rando.genes)
-        mut.subset.metadata <- filter(REL606.genes, Gene %in% rando.genes)
-        c.mut.subset <- calc.cumulative.muts.over.all.pops(
-            mut.subset, mut.subset.metadata) %>%
-            mutate(bootstrap_replicate=idx)
-        return(c.mut.subset)
-    }
+    generate.cumulative.mut.subset <- partial(
+        .f = .generate.cumulative.mut.subset,
+        data, REL606.genes, subset.size, calc.LTEE.cumulative.muts.over.all.pops)
 
     ## make a dataframe of bootstrapped trajectories.
     ## look at accumulation of stars over time for random subsets of genes.
     ## I want to plot the distribution of cumulative mutations over time for
     ## say, 1000 or 10000 random subsets of genes.
-    bootstrapped.trajectories <- map_dfr(.x=seq_len(N),.f=generate.cumulative.mut.subset)
+    
+    bootstrapped.trajectories <- map_dfr(
+        .x=seq_len(N),
+        .f=generate.cumulative.mut.subset)
 
-    filtered.trajectories <- filter.trajectories(bootstrapped.trajectories, alphaval)
+    middle.trajs <- get.middle.trajs(bootstrapped.trajectories, alphaval)
 
-    p <- p + geom_point(data=filtered.trajectories,
-                        aes(x=Time, y=normalized.cs),
-                        size=0.2, color=my.color)
+    p <- p + geom_point(data = filtered.trajectories,
+                        aes(x = Time, y = normalized.cs),
+                        size = 0.2, color = my.color)
     return(p)                
+}
+
+calc.all.pops.LTEE.cumulative.mut.subset.by.bin <- function(d, d.metadata,
+                                                            module.metadata.with.bins,
+                                                            idx) {
+    ## This function is partialized within bootstrap.all.LTEE.pops.traj.by.loc.
+    rando.genes <- sample.genes.by.genomebin(module.metadata.with.bins)
+    mut.subset <- filter(d, Gene %in% rando.genes)
+    mut.subset.metadata <- filter(d.metadata, Gene %in% rando.genes)
+    c.mut.subset <- calc.LTEE.cumulative.muts.over.all.pops(
+        mut.subset, mut.subset.metadata) %>%
+        mutate(bootstrap_replicate=idx)
+    return(c.mut.subset)
+}
+
+bootstrap.all.LTEE.pops.traj.by.loc <- function(data, REL606.genes, gene.vec, N) {
+    ## see bootstrap.LTEE.traj.by.loc. This version does not group by population.
+
+    ## for efficiency, pre-calculate gene bin assignments before bootstrapping.
+    bin.df <- assign.genes.to.bins(d.metadata)
+    
+    ## map bins to the genes in those bins (excepting those in gene.vec).
+    nested.genes.to.sample.by.bin <- left_join(d.metadata, bin.df) %>%
+        ## when sampling, exclude the genes in the module of interest.
+        filter(!(Gene %in% gene.vec)) %>%
+        group_by(bin) %>%
+        nest()
+    
+    ## add the genes to be sampled as a list column corresponding
+    ## to the genes in gene.vec,
+    ## such that each gene in the module maps to the other genes in its bin.
+    ## then, one of those genes will be sampled to make the random module,
+    ## while preserving bin location.
+    module.metadata.with.bins <- d.metadata %>%
+        filter(Gene %in% gene.vec) %>%
+        left_join(bin.df) %>%
+        left_join(nested.genes.to.sample.by.bin)
+    
+    ## partialized function to calculate cumulative mutations.
+    generate.all.LTEE.pops.cumulative.mut.subset.by.bin <- partial(
+        .f = calc.all.pops.LTEE.cumulative.mut.subset.by.bin,
+        d, d.metadata, module.info.with.bins)
+    
+    ## make a dataframe of bootstrapped trajectories.
+    ## look at accumulation of stars over time for random subsets of genes.
+    bootstrapped.trajectories <- map_dfr(
+        .x=seq_len(N),
+        .f=generate.all.LTEE.pops.cumulative.mut.subset.by.bin)
+
+    return(bootstrapped.trajectories)
+    
 }
 
 calc.all.pops.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, sample.genes.by.location=FALSE) {
@@ -621,85 +764,32 @@ calc.all.pops.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, samp
 
     ## check type for gene.vec (e.g., if factor, change to vanilla vector of strings)
     gene.vec <- as.character(gene.vec)
-    
     ## each sample has the same cardinality as the gene.vec.
     subset.size <- length(gene.vec)
+
+    gene.vec.data <- data %>% filter(Gene %in% gene.vec)
+    gene.vec.metadata <- REL606.genes %>% filter(Gene %in% gene.vec)
+
+    data.trajectory <- calc.LTEE.cumulative.muts.over.all.pops(
+        gene.vec.data, gene.vec.metadata)
+    ## This is a number, not a vector.
+    final.data.norm.cs <- max(data.trajectory$normalized.cs)
+
 
     if (sample.genes.by.location) {
         ## then sample genes near the genes in the module of interest,
         ## i.e. gene.vec.
-
-        ## for efficiency, pre-calculate gene bin assignments.
-        ## use 46 bins so that each bin is ~10000 bp. 
-        find.bin.46 <- partial(find.bin,z=46)
-        gene.info <- REL606.genes %>%
-            select(Gene, locus_tag, blattner, gene_length,
-                   product, start, end, strand) %>%
-            distinct() ## remove duplicate rows,
-        ## as mutations in the same gene have the same gene info
+        bootstrapped.trajectories <- bootstrap.LTEE.traj.by.loc(
+            data, REL606.genes, gene.vec, N)
         
-        ## output a bin from each row in gene.info.
-        bin.list <- gene.info %>%
-            split(.$Gene) %>%
-            lapply(find.bin.46)
-        ## map each gene in the module of interest to their bin.
-        bin.vec <- sapply(gene.vec,function(gene) bin.list[[gene]])
-
-        ## associate each gene in the genome to its bin, and add as a column.
-        bin.df <- data.frame(Gene=names(bin.list),bin=as.numeric(bin.list))
         
-        ## map bins to the genes in those bins (excepting those in gene.vec).
-        nested.gene.info.with.bins <- left_join(gene.info, bin.df) %>%
-            ## when sampling, exclude the genes in the module of interest.
-            filter(!(Gene %in% gene.vec)) %>%
-            group_by(bin) %>%
-            nest()
-
-        ## add the genes to be sampled as a list column corresponding
-        ## to the genes in gene.vec,
-        ## such that each gene in the module maps to the other genes in its bin.
-        ## then, one of those genes will be sampled to make the random module,
-        ## while preserving bin location.
-        module.info.with.bins <- left_join(gene.info, bin.df) %>%
-            filter(Gene %in% gene.vec) %>%
-            left_join(nested.gene.info.with.bins)
-
-        sample.one <- partial(sample_n,size=1)
-        
-        sample.genes.by.genomebin <- function() {
-            ## map each gene in gene.vec to a random gene in its bin
-            ## in the genome.
-            module.to.random.module <- module.info.with.bins %>%
-                mutate(sampled.info = map(data, sample.one)) %>%
-                transmute(Gene, sampled.gene = map_chr(sampled.info, function(x) x$Gene))
-            return(module.to.random.module$sampled.gene)
-        }
-
-        generate.cumulative.mut.subset.by.loc <- function(idx) {
+        generate.all.LTEE.pops.cumulative.mut.subset.by.loc <- function(idx) {
             rando.genes <- sample.genes.by.genomebin()
             mut.subset <- filter(data,Gene %in% rando.genes)
             mut.subset.metadata <- filter(REL606.genes, Gene %in% rando.genes)
-            c.mut.subset <- calc.cumulative.muts.over.all.pops(mut.subset,
-                                                 mut.subset.metadata) %>%
-                mutate(bootstrap_replicate=idx)
-            return(c.mut.subset)
-        }
-
-        ## make a dataframe of bootstrapped trajectories.
-        ## look at accumulation of stars over time for random subsets of genes.
-        bootstrapped.trajectories <- map_dfr(.x=seq_len(N),
-                                             .f=generate.cumulative.mut.subset.by.loc)
-    } else {
-        ## This function takes the index for the current draw, and samples the data,
-        ## generating a random gene set for which to calculate cumulative mutations.
-        ## IMPORTANT: this function depends on variables defined in
-        ## calc.traj.pvals.
-        generate.cumulative.mut.subset <- function(idx) {
-            rando.genes <- base::sample(unique(REL606.genes$Gene),subset.size)
-            mut.subset <- filter(data,Gene %in% rando.genes)
-            mut.subset.metadata <- filter(REL606.genes, Gene %in% rando.genes)
-            c.mut.subset <- calc.cumulative.muts.over.all.pops(
-                mut.subset, mut.subset.metadata) %>%
+            c.mut.subset <- calc.LTEE.cumulative.muts.over.all.pops(
+                mut.subset,
+                mut.subset.metadata) %>%
                 mutate(bootstrap_replicate=idx)
             return(c.mut.subset)
         }
@@ -708,18 +798,23 @@ calc.all.pops.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, samp
         ## look at accumulation of stars over time for random subsets of genes.
         bootstrapped.trajectories <- map_dfr(
             .x=seq_len(N),
-            .f=generate.cumulative.mut.subset)
+            .f=generate.all.LTEE.pops.cumulative.mut.subset.by.loc)
+        
+    } else {
+        ## This function takes the index for the current draw, and samples the data,
+        ## generating a random gene set for which to calculate cumulative mutations.
+        generate.all.pops.LTEE.cumulative.mut.subset <- partial(
+            .f = .generate.cumulative.mut.subset,
+            data, d.metadata, subset.size,
+            calc.LTEE.cumulative.muts.over.all.pops)
+        
+        ## make a dataframe of bootstrapped trajectories.
+        ## look at accumulation of stars over time for random subsets of genes.
+        bootstrapped.trajectories <- map_dfr(
+            .x = seq_len(N),
+            .f = generate.all.pops.LTEE.cumulative.mut.subset)
     }
     
-    gene.vec.data <- data %>% filter(Gene %in% gene.vec)
-    gene.vec.metadata <- REL606.genes %>% filter(Gene %in% gene.vec)
-
-    data.trajectory <- calc.cumulative.muts.over.all.pops(
-        gene.vec.data, gene.vec.metadata)
-
-    ## This is a number, not a vector.
-    final.data.norm.cs <- max(data.trajectory$normalized.cs)
-
     uppertail.probs <- bootstrapped.trajectories %>%
         ## important: don't drop empty groups.
         group_by(bootstrap_replicate,.drop=FALSE) %>%
@@ -732,123 +827,6 @@ calc.all.pops.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, samp
     
     return(uppertail.probs)
 }
-
-######################################################################
-## code for Mehta hypermutator data.
-
-calc.Mehta.traj.pvals <- function(data, PAO11.genes, gene.vec, N=10000) {
-    ## calc.traj.pvals, adapted for Mehta dataset.
-    
-    ## check type for gene.vec (e.g., if factor, change to vanilla vector of strings)
-    gene.vec <- as.character(gene.vec)
-    
-    ## each sample has the same cardinality as the gene.vec.
-    subset.size <- length(gene.vec)
-    
-    ## This function takes the index for the current draw, and samples the data,
-    ## generating a random gene set for which to calculate cumulative mutations.
-    ## IMPORTANT: this function depends on variables defined in
-    ## calculate.Mehta.traj.pvals.
-    generate.Mehta.cumulative.mut.subset <- function(idx) {
-        rando.genes <- base::sample(unique(PAO11.genes$Gene),subset.size)
-        mut.subset <- filter(data,Gene %in% rando.genes)
-        mut.subset.metadata <- filter(PAO11.genes, Gene %in% rando.genes)
-        c.mut.subset <- calc.Mehta.cumulative.muts(
-            mut.subset, mut.subset.metadata) %>%
-            mutate(bootstrap_replicate=idx)
-        return(c.mut.subset)
-    }
-    
-    ## make a dataframe of bootstrapped trajectories.
-    ## look at accumulation of stars over time for random subsets of genes.
-    bootstrapped.trajectories <- map_dfr(
-        .x=seq_len(N),
-        .f=generate.Mehta.cumulative.mut.subset)
-    
-    gene.vec.data <- data %>% filter(Gene %in% gene.vec)
-    gene.vec.metadata <- PAO11.genes %>% filter(Gene %in% gene.vec)
-    data.trajectory <- calc.Mehta.cumulative.muts(
-        gene.vec.data, gene.vec.metadata)
-    data.trajectory.summary <- data.trajectory %>%
-        group_by(Population, .drop=FALSE) %>%
-        summarize(final.norm.cs = max(normalized.cs)) %>%
-        ungroup()
-        
-    trajectory.filter.helper <- function(pop.trajectories) {
-        pop <- unique(pop.trajectories$Population)
-        data.traj <- filter(data.trajectory.summary, Population == pop)
-        final.data.norm.cs <- unique(data.traj$final.norm.cs)
-        tail.trajectories <- filter(pop.trajectories, final.norm.cs >= final.data.norm.cs)
-        return(tail.trajectories)
-    }
-
-    trajectory.summary <- bootstrapped.trajectories %>%
-        ## important: don't drop empty groups.
-        group_by(bootstrap_replicate, Population,.drop=FALSE) %>%
-        summarize(final.norm.cs=max(normalized.cs)) %>%
-        ungroup()
-
-    rm(bootstrapped.trajectories)
-    rm(data.trajectory)
-    gc() ## hopefully this reduces memory footprint...
-    
-    ## split by Population, then filter for bootstraps > data trajectory.
-    uppertail.probs <- trajectory.summary %>%
-        split(.$Population) %>%
-        map_dfr(.f=trajectory.filter.helper) %>%
-        group_by(Population,.drop=FALSE) %>%
-        summarize(count=n()) %>%
-        mutate(p.val=count/N)
-    
-    return(uppertail.probs)
-}
-
-########### Plotting code for Mehta hypermutator data.
-## main difference is using Day instead of Time,
-## and calling calc.Mehta.cumulative.muts().
-
-plot.Mehta.base.layer <- function(data, PAO11.genes, subset.size=50, N=1000, alphaval = 0.05, my.color="gray") {
-    
-    ## This function takes the index for the current draw, and samples the data,
-    ## generating a random gene set for which to calculate cumulative mutations.
-    ## IMPORTANT: this function depends on variables defined in plot.base.layer.
-    generate.Mehta.cumulative.mut.subset <- function(idx) {
-        rando.genes <- base::sample(unique(PAO11.genes$Gene),subset.size)
-        mut.subset <- filter(data, Gene %in% rando.genes)
-        mut.subset.metadata <- filter(PAO11.genes, Gene %in% rando.genes)
-        c.mut.subset <- calc.Mehta.cumulative.muts(mut.subset, mut.subset.metadata) %>%
-            mutate(bootstrap_replicate=idx)
-        return(c.mut.subset)
-    }
-    
-    ## make a dataframe of bootstrapped trajectories.
-    ## look at accumulation of stars over time for random subsets of genes.
-    ## I want to plot the distribution of cumulative mutations over time for
-    ## say, 1000 or 10000 random subsets of genes.
-
-    bootstrapped.trajectories <- map_dfr(
-        .x=seq_len(N),
-        .f=generate.Mehta.cumulative.mut.subset)
-
-    filtered.trajectories <- filter.trajectories(bootstrapped.trajectories, alphaval)
-
-    p <- ggplot(filtered.trajectories,aes(x=Day,y=normalized.cs)) +
-        ylab('Cumulative number of mutations (normalized)') +
-        theme_classic() +
-        geom_point(size=0.2, color=my.color) +
-        facet_wrap(.~Population,scales='free',nrow=4) +
-        xlab('Day') +
-        xlim(0, 28) +
-        theme(axis.title.x = element_text(size=14),
-              axis.title.y = element_text(size=14),
-              axis.text.x  = element_text(size=14),
-              axis.text.y  = element_text(size=14)) +
-        scale_y_continuous(labels=fancy_scientific,
-                           breaks = scales::extended_breaks(n = 6),
-                           limits = c(0, NA))
-    return(p)
-}
-
 
 ################################################################################
 ## Calculate densities of mutations per gene, over all LTEE and within each
@@ -986,5 +964,4 @@ plot.slope.of.base.layer <- function(data, subset.size=300, N=1000, alphaval = 0
               axis.text.y  = element_text(size=14))
     return(p)
 }
-
 ##########################################################################
