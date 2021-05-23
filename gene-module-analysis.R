@@ -344,6 +344,7 @@ S4Fig <- rando.plot %>%
     add.cumulative.mut.layer(c.top.hypermut, my.color="black")
 ggsave("../results/gene-modules/figures/S4Fig.pdf",S4Fig)
 rm(S4Fig)
+rm(rando.plot)
 
 ## calculate more rigorous statistics than the figures.
 top.hypermut.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
@@ -427,6 +428,11 @@ all.pops.coreFig <- core.rando.over.all.pops.layer %>%
     add.cumulative.mut.layer(c.all.pops.noncore.muts, my.color="red")
 ggsave("../results/gene-modules/figures/allpop-core-genes.pdf", all.pops.coreFig)
 
+rm(coreFig)
+rm(core.rando.layer)
+rm(all.pops.coreFig)
+
+
 ##########################################################################
 ## GENE MODULE ANALYSIS.
 ##########################################################################
@@ -488,6 +494,7 @@ S6Fig <- proteome.rando.layer %>%
     add.cumulative.mut.layer(c.C.muts,my.color="orange")
 ggsave("../results/gene-modules/figures/S6Fig.pdf", S6Fig)
 rm(S6Fig)
+rm(proteome.rando.layer)
 
 ################
 ## re-run STIMS, summing mutations over all LTEE populations.
@@ -703,7 +710,7 @@ Imodulon.regulated.mut.data <- gene.mutation.data %>%
 Imodulon.regulated.metadata <- REL606.genes %>%
     filter(Gene %in% Imodulon.regulated$Gene)
 
-c.Imodulon.regulated <- calc.cumulative.muts(Imodulon.regulated.mut.data,
+c.Imodulon.regulated <- calc.LTEE.cumulative.muts(Imodulon.regulated.mut.data,
                                              Imodulon.regulated.metadata)
 
 Imodulon.regulators.base.layer <- plot.base.layer(
@@ -713,7 +720,7 @@ Imodulon.regulators.base.layer <- plot.base.layer(
 
 ## Figure for paper:  compare I-modulon regulators to the genes they regulate.
 Fig7 <- Imodulon.regulators.base.layer %>% ## null for regulators
-    add.base.layer(gene.mutation.data, ## add null for regulated genes
+    add.LTEE.base.layer(gene.mutation.data, ## add null for regulated genes
                    REL606.genes,
                    subset.size=length(unique(Imodulon.regulated$Gene)),
                    my.color="pink") %>%
@@ -751,11 +758,23 @@ ggsave("../results/gene-modules/figures/S10Fig.pdf", S10Fig)
 rm(Imodulon.regulators.over.all.pops.rando.layer)
 rm(S10Fig)
 
-calc.all.pops.traj.pvals(gene.mutation.data, REL606.genes,
-                             unique(Imodulon.regulators$regulator))
 
-calc.all.pops.traj.pvals(gene.mutation.data, REL606.genes,
-                         unique(Imodulon.regulated$Gene))
+
+
+
+
+
+
+## CRITICAL TODO! The second call is definitely wrong, so the first may be incorrect
+## as well.
+
+all.pop.Imodulon.regulator.pvals <- calc.all.pops.traj.pvals(
+    gene.mutation.data, REL606.genes,
+    unique(Imodulon.regulators$regulator))
+
+all.pop.Imodulon.regulated.pvals <- calc.all.pops.traj.pvals(
+    gene.mutation.data, REL606.genes,
+    unique(Imodulon.regulated$Gene))
 
 ################
 
@@ -840,8 +859,7 @@ make.all.pops.modulon.plots <- function(gene.mutation.data,
     ## Make plots for each I-modulon, summing data over all populations.
 
     make.all.pops.modulon.plots.helper <- function(my.I.modulon,
-                                                   plot.regulators=FALSE) {
-        
+                                                   plot.regulators=FALSE) {        
         my.modulon.name <- unique(my.I.modulon$I.modulon)
         modulon.text <- paste(my.modulon.name,"I-modulon")
         print(modulon.text) ## to help with debugging.
@@ -970,8 +988,6 @@ non.Imodulon.noncoding.hits2 <- non.Imodulon.noncoding.hits %>%
 ## Data comes from Mehta et al. (2018):
 ## The Essential Role of Hypermutation in Rapid Adaptation to Antibiotic Stress.
 
-raw.PAO11.genes <- read.csv("../results/PAO11_IDS.csv")
-
 PAO11.genes <- raw.PAO11.genes %>%
     ## remove genes in the Pf4 bacteriophage (Pf1). Really odd pattern!
     filter(!str_detect(product, "bacteriophage Pf1"))
@@ -988,41 +1004,6 @@ Mehta.data <- read.csv("../results/Mehta2018-hypermutators.csv") %>%
                                `replicate2` = "Replicate 2")) %>%
     ## filter any rows with NAs.
     drop_na()
-
-## version WITH bacteriophage Pf4 (annotated as bacteriophage Pf1).
-raw.Mehta.data <- read.csv("../results/Mehta2018-hypermutators.csv") %>%
-    ## remove intergenic mutations.
-    filter(!str_detect(Gene,'/')) %>%
-    inner_join(raw.PAO11.genes) %>%
-    mutate(Time = t0) %>%
-    filter(Population != 'control') %>%
-    mutate(Population = factor(Population)) %>%
-    mutate(Population = recode(Population, `replicate1` = "Replicate 1",
-                               `replicate2` = "Replicate 2")) %>%
-    ## filter any rows with NAs.
-    drop_na()
-
-## Let's examine the tempo of mutations in bacteriophage Pf4.
-## show both replicate populations when examining the phage.
-raw.PAO11.Pf4 <- raw.PAO11.genes  %>%
-    filter(str_detect(product, "bacteriophage Pf1"))
-
-raw.Mehta.Pf4.mut.data <- raw.Mehta.data %>%
-    filter(str_detect(product, "bacteriophage Pf1"))
-
-c.raw.Mehta.Pf4 <- calc.Mehta.cumulative.muts(raw.Mehta.Pf4.mut.data,
-                                                 raw.PAO11.Pf4)
-
-raw.Mehta.base.layer <- plot.base.layer(raw.Mehta.data, raw.PAO11.genes,
-                                    subset.size = nrow(raw.PAO11.Pf4),
-                                    ltee.not.mehta = FALSE)
-
-## WTF??!!! This finding is crazy!!!
-Pf4Fig <- raw.Mehta.base.layer %>%
-    add.cumulative.mut.layer(c.raw.Mehta.Pf4, my.color="red")
-ggsave("../results/gene-modules/figures/Pf4Fig.pdf", Pf4Fig, width=5, height=5)
-
-#### Now, back to results which are actually relevant for the manuscript.
 
 ## let's find all genes that match these keywords:
 ## regulator, regulatory, regulation.
@@ -1079,8 +1060,9 @@ rm(Fig8)
 
 ## calculate rigorous statistics for Figure 8.
 ## takes about 5 minutes to calculate.
-Mehta.pvals <- calc.Mehta.traj.pvals(combined.Mehta.data, PAO11.genes,
-                                     unique(PAO11.regulators$Gene))
+Mehta.pvals <- calc.traj.pvals(combined.Mehta.data, PAO11.genes,
+                               unique(PAO11.regulators$Gene),
+                               ltee.not.mehta = FALSE)
 gc() ## garbage collect memory.
 
 ##########################################################################
@@ -1114,10 +1096,9 @@ m1.ribosome.associated.prot.mut.data <- filter(
     m1.pop.gene.mutation.data,
     locus_tag %in% ribosome.associated.prot.genes$locus_tag)
 
-c.m1.ribosome.associated.prot.muts <- calc.cumulative.muts(
+c.m1.ribosome.associated.prot.muts <- calc.single.LTEE.pop.cumulative.muts(
     m1.ribosome.associated.prot.mut.data,
-    ribosome.associated.prot.genes,
-    reset.pop.levels = FALSE)
+    ribosome.associated.prot.genes)
 
 ## to make the plots uniform, plot the rando layer as the invisible background.
 m1.blank.rando.layer <- plot.base.layer(m1.pop.gene.mutation.data, REL606.genes,

@@ -178,6 +178,9 @@ rotate.REL606.chr <- function(my.position, c) {
 calc.LTEE.cumulative.muts <- partial(.f = .calc.cumulative.muts,
                                      TRUE, TRUE)
 
+calc.single.LTEE.pop.cumulative.muts <- partial(.f = .calc.cumulative.muts,
+                                     TRUE, FALSE)
+
 calc.Mehta.cumulative.muts <- partial(.f = .calc.cumulative.muts,
                                      FALSE, FALSE)
 ###############################
@@ -305,7 +308,7 @@ bootstrap.LTEE.traj.by.loc <- function(d, d.metadata, gene.vec, N) {
     ## partialized function to calculate cumulative mutations.
     generate.LTEE.cumulative.mut.subset.by.bin <- partial(
         .f = calc.LTEE.cumulative.mut.subset.by.bin,
-        d, d.metadata, module.info.with.bins)
+        d, d.metadata, module.metadata.with.bins)
     
     ## make a dataframe of bootstrapped trajectories.
     ## look at accumulation of stars over time for random subsets of genes.
@@ -331,7 +334,7 @@ filter.pop.trajectories.by.data <- function(data.trajectory, pop.trajectories) {
     return(tail.trajectories)
 }
 
-calc.traj.pvals <- function(data, d.metadata, gene.vec, N=10000,
+calc.traj.pvals <- function(d, d.metadata, gene.vec, N=10000,
                             ltee.not.mehta = TRUE, sample.genes.by.location=FALSE) {
     ## calculate the tail probabilities of the true cumulative mutation trajectory
     ## of a given vector of genes (a 'module'), based on resampling
@@ -344,7 +347,7 @@ calc.traj.pvals <- function(data, d.metadata, gene.vec, N=10000,
     ## each sample has the same cardinality as the gene.vec.
     subset.size <- length(gene.vec)
 
-    gene.vec.data <- data %>% filter(Gene %in% gene.vec)
+    gene.vec.data <- d %>% filter(Gene %in% gene.vec)
     gene.vec.metadata <- d.metadata %>% filter(Gene %in% gene.vec)
 
     if(ltee.not.mehta) {
@@ -363,7 +366,7 @@ calc.traj.pvals <- function(data, d.metadata, gene.vec, N=10000,
         ## generating a random gene set for which to calculate cumulative mutations.
         generate.Mehta.cumulative.mut.subset <- partial(
             .f = .generate.cumulative.mut.subset,
-            data, d.metadata, gene.vec, subset.size, calc.Mehta.cumulative.muts)
+            d, d.metadata, gene.vec, subset.size, calc.Mehta.cumulative.muts)
         
         ## make a dataframe of bootstrapped trajectories.
         ## look at accumulation of stars over time for random subsets of genes.
@@ -377,14 +380,14 @@ calc.traj.pvals <- function(data, d.metadata, gene.vec, N=10000,
             ## then sample genes near the genes in the module of interest,
             ## i.e. gene.vec.
             bootstrapped.trajectories <- bootstrap.LTEE.traj.by.loc(
-                data, d.metadata, gene.vec, N)
+                d, d.metadata, gene.vec, N)
             
         } else {
             ## This function takes the index for the current draw, and samples the data,
             ## generating a random gene set for which to calculate cumulative mutations.
             generate.LTEE.cumulative.mut.subset <- partial(
                 .f = .generate.cumulative.mut.subset,
-                data, d.metadata, subset.size, calc.LTEE.cumulative.muts)
+                d, d.metadata, subset.size, calc.LTEE.cumulative.muts)
             
             ## make a dataframe of bootstrapped trajectories.
             ## look at accumulation of stars over time for random subsets of genes.
@@ -657,7 +660,7 @@ plot.base.layer.over.all.pops <- function(data, REL606.genes, subset.size=50,
     bootstrapped.trajectories <- map_dfr(
         .x = seq_len(N),
         .f = generate.cumulative.mut.subset.over.all.pops)
-    
+
     middle.trajs <- get.middle.trajs.over.all.pops(
         bootstrapped.trajectories, alphaval)
 
@@ -696,9 +699,9 @@ add.base.layer.over.all.pops <- function(p, data, REL606.genes, my.color, subset
         .x=seq_len(N),
         .f=generate.cumulative.mut.subset)
 
-    middle.trajs <- get.middle.trajs(bootstrapped.trajectories, alphaval)
+    middle.trajs <- get.middle.trajs.over.all.pops(bootstrapped.trajectories, alphaval)
 
-    p <- p + geom_point(data = filtered.trajectories,
+    p <- p + geom_point(data = middle.trajs,
                         aes(x = Time, y = normalized.cs),
                         size = 0.2, color = my.color)
     return(p)                
