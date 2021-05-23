@@ -34,7 +34,6 @@ lsos <- function(..., n=10) {
     .ls.objects(..., order.by="Size", decreasing=TRUE, head=TRUE, n=n)
 }
 
-
 ##########################################################################
 ## FUNCTIONS FOR DATA ANALYSIS
 ##########################################################################
@@ -366,7 +365,7 @@ calc.traj.pvals <- function(d, d.metadata, gene.vec, N=10000,
         ## generating a random gene set for which to calculate cumulative mutations.
         generate.Mehta.cumulative.mut.subset <- partial(
             .f = .generate.cumulative.mut.subset,
-            d, d.metadata, gene.vec, subset.size, calc.Mehta.cumulative.muts)
+            d, d.metadata, subset.size, calc.Mehta.cumulative.muts)
         
         ## make a dataframe of bootstrapped trajectories.
         ## look at accumulation of stars over time for random subsets of genes.
@@ -758,7 +757,7 @@ bootstrap.all.LTEE.pops.traj.by.loc <- function(data, REL606.genes, gene.vec, N)
     
 }
 
-calc.all.pops.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, sample.genes.by.location=FALSE) {
+calc.all.pops.traj.pvals <- function(d, d.metadata, gene.vec, N=10000, sample.genes.by.location=FALSE) {
     ## calculate the tail probabilities of the true cumulative mutation trajectory
     ## of a given vector of genes (a 'module'), based on resampling
     ## random sets of genes. Returns the upper tail of null distribution,
@@ -770,8 +769,8 @@ calc.all.pops.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, samp
     ## each sample has the same cardinality as the gene.vec.
     subset.size <- length(gene.vec)
 
-    gene.vec.data <- data %>% filter(Gene %in% gene.vec)
-    gene.vec.metadata <- REL606.genes %>% filter(Gene %in% gene.vec)
+    gene.vec.data <- d %>% filter(Gene %in% gene.vec)
+    gene.vec.metadata <- d.metadata %>% filter(Gene %in% gene.vec)
 
     data.trajectory <- calc.LTEE.cumulative.muts.over.all.pops(
         gene.vec.data, gene.vec.metadata)
@@ -783,13 +782,13 @@ calc.all.pops.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, samp
         ## then sample genes near the genes in the module of interest,
         ## i.e. gene.vec.
         bootstrapped.trajectories <- bootstrap.LTEE.traj.by.loc(
-            data, REL606.genes, gene.vec, N)
+            d, d.metadata, gene.vec, N)
         
         
         generate.all.LTEE.pops.cumulative.mut.subset.by.loc <- function(idx) {
             rando.genes <- sample.genes.by.genomebin()
-            mut.subset <- filter(data,Gene %in% rando.genes)
-            mut.subset.metadata <- filter(REL606.genes, Gene %in% rando.genes)
+            mut.subset <- filter(d, Gene %in% rando.genes)
+            mut.subset.metadata <- filter(d.metadata, Gene %in% rando.genes)
             c.mut.subset <- calc.LTEE.cumulative.muts.over.all.pops(
                 mut.subset,
                 mut.subset.metadata) %>%
@@ -808,7 +807,7 @@ calc.all.pops.traj.pvals <- function(data, REL606.genes, gene.vec, N=10000, samp
         ## generating a random gene set for which to calculate cumulative mutations.
         generate.all.pops.LTEE.cumulative.mut.subset <- partial(
             .f = .generate.cumulative.mut.subset,
-            data, d.metadata, subset.size,
+            d, d.metadata, subset.size,
             calc.LTEE.cumulative.muts.over.all.pops)
         
         ## make a dataframe of bootstrapped trajectories.

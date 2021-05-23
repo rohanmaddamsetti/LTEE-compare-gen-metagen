@@ -188,8 +188,9 @@ S2Fig <- purifying.base.layer.over.all.pops %>%
 ggsave("../results/gene-modules/figures/S2Fig.pdf", S2Fig)
 rm(S2Fig)
 
-calc.all.pops.traj.pvals(gene.mutation.data, REL606.genes,
-                             unique(purifying.genes$Gene))
+all.pop.purifying.pvals <- calc.all.pops.traj.pvals(
+    gene.mutation.data, REL606.genes,
+    unique(purifying.genes$Gene))
 ################
 
 ## What is the association between genes that are essential by transposon
@@ -757,16 +758,6 @@ ggsave("../results/gene-modules/figures/S10Fig.pdf", S10Fig)
 
 rm(Imodulon.regulators.over.all.pops.rando.layer)
 rm(S10Fig)
-
-
-
-
-
-
-
-
-## CRITICAL TODO! The second call is definitely wrong, so the first may be incorrect
-## as well.
 
 all.pop.Imodulon.regulator.pvals <- calc.all.pops.traj.pvals(
     gene.mutation.data, REL606.genes,
