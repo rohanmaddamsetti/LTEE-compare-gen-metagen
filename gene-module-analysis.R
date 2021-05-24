@@ -397,32 +397,28 @@ noncore.mut.data <- filter(gene.mutation.data, locus_tag %in% noncore.genes$locu
 core.subset.size <- length(unique(core.genes$locus_tag))
 noncore.subset.size <- length(unique(noncore.genes$locus_tag))
 
-core.rando.layer <- plot.base.layer(gene.mutation.data, REL606.genes,
-                                        subset.size=core.subset.size)
-
 c.core.muts <- calc.LTEE.cumulative.muts(core.mut.data, core.genes.metadata)
 c.noncore.muts <- calc.LTEE.cumulative.muts(noncore.mut.data, noncore.genes.metadata)
 
+core.rando.layer <- plot.base.layer(gene.mutation.data, REL606.genes,
+                                        subset.size=core.subset.size)
+
 coreFig <- core.rando.layer %>%
-    ##add.base.layer(gene.mutation.data, ## add null for noncore genes.
-    ##               REL606.genes,
-    ##               subset.size=length(unique(noncore.genes.metadata$Gene)),
-    ##               my.color="pink") %>%
     add.cumulative.mut.layer(c.core.muts, my.color="black") %>%
     add.cumulative.mut.layer(c.noncore.muts,my.color="red")
 
 ################
 ## re-run STIMS, summing mutations over all LTEE populations.
 
-core.rando.over.all.pops.layer <- plot.base.layer.over.all.pops(
-    gene.mutation.data, REL606.genes,
-    subset.size=core.subset.size)
-
 c.all.pops.core.muts <- calc.LTEE.cumulative.muts.over.all.pops(
     core.mut.data, core.genes.metadata)
 
 c.all.pops.noncore.muts <- calc.LTEE.cumulative.muts.over.all.pops(
     noncore.mut.data, noncore.genes.metadata)
+
+core.rando.over.all.pops.layer <- plot.base.layer.over.all.pops(
+    gene.mutation.data, REL606.genes,
+    subset.size=core.subset.size)
 
 all.pops.coreFig <- core.rando.over.all.pops.layer %>% 
     add.cumulative.mut.layer(c.all.pops.core.muts, my.color="black") %>%
@@ -979,7 +975,7 @@ non.Imodulon.noncoding.hits2 <- non.Imodulon.noncoding.hits %>%
 ## Data comes from Mehta et al. (2018):
 ## The Essential Role of Hypermutation in Rapid Adaptation to Antibiotic Stress.
 
-PAO11.genes <- raw.PAO11.genes %>%
+PAO11.genes <- read.csv("../results/PAO11_IDs.csv") %>%
     ## remove genes in the Pf4 bacteriophage (Pf1). Really odd pattern!
     filter(!str_detect(product, "bacteriophage Pf1"))
     
