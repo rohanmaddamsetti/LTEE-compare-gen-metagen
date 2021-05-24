@@ -120,7 +120,7 @@ all.ltee.poisson.data.analysis <- gene.mutation.data %>%
            min.tail.fdr.corrected.pois.prob) %>%
     arrange(fdr.corrected.upper.pois.prob)
 
-write.csv(all.ltee.poisson.data.analysis, "../results/FileS3_A.csv")
+write.csv(all.ltee.poisson.data.analysis, "../results/gene-modules/FileS3_A.csv")
 
 ################################################################################
 
