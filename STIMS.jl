@@ -485,7 +485,6 @@ end
 
 
 function main()
-
     parsed_args = parse_commandline()
     println("Parsed args:")
     for (arg,val) in parsed_args
@@ -499,7 +498,6 @@ function main()
     
     RunSTIMS(mutation_csv_path, genome_metadata_csv_path,
              gene_set_csv_path, outputdir)
-
 end
 
 ## only run main() when STIMS.jl is invoked from the command-line.
