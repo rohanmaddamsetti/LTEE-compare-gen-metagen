@@ -475,7 +475,7 @@ get.middle.trajs.over.all.pops <- function(bootstrapped.trajectories, alphaval) 
                                             calc.cumulative.muts.function, idx) {
     ## This function takes the index for the current draw, and samples the data,
     ## generating a random gene set for which to calculate cumulative mutations.
-    ## This function is not used directly-- it is 
+    ## This function is not used directly.
     rando.genes <- base::sample(unique(gene.metadata$Gene), subset.size)
     mut.subset <- filter(data, Gene %in% rando.genes)
     mut.subset.metadata <- filter(gene.metadata, Gene %in% rando.genes)
@@ -507,7 +507,7 @@ plot.base.layer <- function(data, gene.metadata, subset.size=50, N=1000,
     bootstrapped.trajectories <- map_dfr(
         .x=seq_len(N),
         .f=generate.cumulative.mut.subset)
-
+    
     ## filter out the top alphaval/2 and bottom alphaval/2 trajectories
     ## from each population, for a two-sided test.
     ## default is alphaval == 0.05.
