@@ -9,6 +9,8 @@ Examples for how to run from the command-line:
 
 julia STIMS.jl ../results/LTEE-metagenome-mutations.csv ../results/REL606_IDs.csv ../data/neutral_compilation.csv -o ../results/gene-modules/STIMS-jl-test-figures
 
+julia STIMS.jl ../results/SLiM-5000gen-v03.csv ../results/SLiM_geneIDs.csv ../results/SLiM_test_gene_module.csv -o ../results/gene-modules/STIMS-jl-test-figures
+
 """
 
 module STIMS
@@ -453,7 +455,7 @@ function run_examples()
 
     RunSTIMS("../results/LTEE-metagenome-mutations.csv", "../results/REL606_IDs.csv", "../data/neutral_compilation.csv", "../results/gene-modules/STIMS-jl-test-figures")
 
-    RunSTIMS("../results/SLiM-5000gen.csv", "../results/SLiM_geneIDs.csv", "../results/SLiM_test_gene_module.csv", "../results/gene-modules/STIMS-jl-test-figures")
+    RunSTIMS("../results/SLiM-5000gen-v03.csv", "../results/SLiM_geneIDs.csv", "../results/SLiM_test_gene_module.csv", "../results/gene-modules/STIMS-jl-test-figures")
     
 end
 
