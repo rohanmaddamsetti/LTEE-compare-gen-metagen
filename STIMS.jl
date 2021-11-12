@@ -63,11 +63,15 @@ function make_cumulative_muts_pop_df(gene_module_mutations_df, pop, final_time)
 end
 
 
-function calc_cumulative_muts(gene_module_mutations_df, gene_module_metadata, pop_level_vec)
+function calc_cumulative_muts(gene_module_df,
+                              gene_mutation_data, genome_metadata, pop_level_vec)
     ## look at accumulation of stars over time
     ## in other words, look at the rates at which the mutations occur over time.
     ## To normalize, we need to supply the number of sites at risk
     ## (such as sum of gene length).
+
+    gene_module_mut_data = @rsubset(gene_mutation_data, :Gene in gene_module_df.Gene)
+    gene_module_metadata = @rsubset(genome_metadata, :Gene in gene_module_df.Gene)
     
     ## normalize by the total length of genes
     ## in the given module (in d.metadata).
@@ -78,14 +82,14 @@ function calc_cumulative_muts(gene_module_mutations_df, gene_module_metadata, po
     
     normalization_constant = sum(my_genes.gene_length)
     
-    final_time = maximum(gene_module_mutations_df.t0) + 1
+    final_time = maximum(gene_mutation_data.t0) + 1
     ## + 1 so that final_time is outside of the actual data.
     
     ## we are going to concatenate the summarized data to this empty DataFrame.
     c_dat = DataFrame()
     
     for pop in pop_level_vec
-        pop_df = make_cumulative_muts_pop_df(gene_module_mutations_df, pop, final_time)
+        pop_df = make_cumulative_muts_pop_df(gene_module_mut_data, pop, final_time)
         ## concatenate the pop_df to cumulative_df.
         c_dat = vcat(c_dat, pop_df)
     end
@@ -96,21 +100,21 @@ function calc_cumulative_muts(gene_module_mutations_df, gene_module_metadata, po
     return c_dat
 end
 
+
 function generate_cumulative_mut_subset(gene_mutation_data, genome_metadata,
                                         pop_level_vec,
                                         subset_size)
     ## This function calculates cumulative mutations for a random gene set.
     rando_genes = sample(genome_metadata.Gene, subset_size; replace=false)
+    rando_genes_df = @rsubset(genome_metadata, :Gene in rando_genes)
     
-    mut_subset = @rsubset(gene_mutation_data, :Gene in rando_genes)
-    mut_subset_metadata = @rsubset(genome_metadata, :Gene in rando_genes)
-    
-    c_mut_subset = calc_cumulative_muts(mut_subset, mut_subset_metadata, pop_level_vec)
+    c_mut_subset = calc_cumulative_muts(rando_genes_df, gene_mutation_data, genome_metadata, pop_level_vec)
     return c_mut_subset
 end
 
 
-function calc_traj_pvals(gene_mutation_data, genome_metadata, gene_vec,
+function calc_traj_pvals(gene_module_df,
+                         gene_mutation_data, genome_metadata,
                          pop_level_vec; N = 10000, ncores = 4)    
     #= calculate the tail probabilities of the true cumulative mutation trajectory
     of a given vector of genes (a 'module'), based on resampling
@@ -119,16 +123,14 @@ function calc_traj_pvals(gene_mutation_data, genome_metadata, gene_vec,
     Output: a dataframe with three columns: Population, count, p.val.
     =#
 
-    ## each sample has the same cardinality as the gene.vec.
-    subset_size = length(gene_vec)
+    ## each sample has the same cardinality as gene_module_df.Gene.
+    subset_size = length(gene_module_df.Gene)
 
-    gene_vec_data = @rsubset(gene_mutation_data, :Gene in gene_vec)
-    gene_vec_metadata = @rsubset(genome_metadata, :Gene in gene_vec)
-
-    data_trajectory = calc_cumulative_muts(gene_vec_data,
-                                           gene_vec_metadata,
+    data_trajectory = calc_cumulative_muts(gene_module_df,
+                                           gene_mutation_data,
+                                           genome_metadata,
                                            pop_level_vec)
-
+    
     data_final_normalized_cs_summary = @chain data_trajectory begin
         groupby(:Population)
         combine(:normalized_cs => maximum => :data_final_normalized_cs)
@@ -155,12 +157,13 @@ function calc_traj_pvals(gene_mutation_data, genome_metadata, gene_vec,
             count_vec .+= greater_than_data_vec
         end
     end
-
+    
     uppertail_prob_df = DataFrame("Population" => pop_level_vec,
                                   "count" => count_vec,
                                   "pval" => count_vec/N); 
     return uppertail_prob_df
 end
+
 
 function get_middle_trajectories(bootstrapped_trajectories, alphaval, N)
     ## filter out the top alphaval/2 and bottom alphaval/2 trajectories
@@ -201,6 +204,7 @@ function get_middle_trajectories(bootstrapped_trajectories, alphaval, N)
     
     return middle_trajectories
 end
+
 
 function plot_base_layer(gene_mutation_data, genome_metadata, pop_level_vec;    
                          subset_size = 50, N = 1000, alphaval = 0.05,
@@ -246,6 +250,7 @@ function plot_base_layer(gene_mutation_data, genome_metadata, pop_level_vec;
     return p
 end
 
+
 function add_cumulative_mut_layer(p, layer_df; my_color="black")
     ## take a ggplot object output by plot_cumulative_muts, and add an extra layer.
     p = p +
@@ -256,6 +261,7 @@ function add_cumulative_mut_layer(p, layer_df; my_color="black")
                                  size = 0.2, color = my_color)
     return p
 end
+
 
 function run_LTEE_analyses()
     ## This function is for checking correctness,
@@ -300,14 +306,18 @@ function run_LTEE_analyses()
     ## and is used in the positive selection control analysis.
     nonmut_genomics = CSV.read("../data/tenaillon2016-nonmutator-parallelism.csv",
                                DataFrame, normalizenames=true)
+    ## rename the :Gene_name column to :Gene.
+    rename!(nonmut_genomics,:Gene_name => :Gene)
     ## make sure these genes passed the filters on REL606.genes.
-    @rsubset!(nonmut_genomics, :Gene_name in REL606_genes.Gene)
+    @rsubset!(nonmut_genomics, :Gene in REL606_genes.Gene)
     sort!(nonmut_genomics, :G_score, rev = true)
     
     hypermut_genomics = CSV.read("../data/tenaillon2016-mutator-parallelism.csv",
                                  DataFrame, normalizenames=true)
+        ## rename the :Gene_name column to :Gene.
+    rename!(hypermut_genomics,:Gene_name => :Gene)
     ## make sure these genes passed the filters on REL606.genes.
-    @rsubset(hypermut_genomics, :Gene_name in REL606_genes.Gene)    
+    @rsubset(hypermut_genomics, :Gene in REL606_genes.Gene)    
     sort!(hypermut_genomics, :G_score, rev = true)
     
     top_nonmut_genomics = first(nonmut_genomics, 50)
@@ -317,14 +327,13 @@ function run_LTEE_analyses()
     ## make sure that only loci that pass filters are included in the analysis.
     @rsubset!(neutral_genes, :Gene in REL606_genes.Gene)
     
-    neutral_genes_metadata = @rsubset(REL606_genes, :Gene in neutral_genes.Gene)
-    neutral_mut_data = @rsubset(gene_mutation_data, :Gene in neutral_genes.Gene)
-    c_neutral_genes = calc_cumulative_muts(neutral_mut_data,
-                                           neutral_genes_metadata,
+    c_neutral_genes = calc_cumulative_muts(neutral_genes,
+                                           gene_mutation_data,
+                                           REL606_genes,
                                            LTEE_pop_level_vec)
 
-    neutral_pvals = calc_traj_pvals(gene_mutation_data, REL606_genes,
-                                    neutral_genes.Gene,
+    neutral_pvals = calc_traj_pvals(neutral_genes,
+                                    gene_mutation_data, REL606_genes,
                                     LTEE_pop_level_vec)
     
     neutral_base_layer = plot_base_layer(
@@ -336,34 +345,31 @@ function run_LTEE_analyses()
         neutral_base_layer,
         c_neutral_genes)
     ggsave("../results/gene-modules/STIMS-jl-test-figures/Fig4.pdf", Fig4)
+
     
     essential_genes = CSV.read("../data/Couce2017-LTEE-essential.csv", DataFrame)
     essential_genes = @chain essential_genes begin
         innerjoin(REL606_genes, on = :Gene)
         @rsubset(!ismissing(:locus_tag))
     end
-    
     ## a significant proportion of genes under positive selection in the LTEE are
     ## essential genes, as reported in Maddamsetti et al. (2017).
     ## filter these ones out, since we are interested in purifying selection.
     ## 21 out of 50 top non-mut genes are essential.
     nonmut_top_hit_essential = @rsubset(essential_genes,
-                                        :Gene in top_nonmut_genomics.Gene_name)
+                                        :Gene in top_nonmut_genomics.Gene)
     ## what about the hypermutators? 3 out of 50 top hypermut genes.
-    hypermut_top_hit_essential = @rsubset(essential_genes, :Gene in top_hypermut_genomics.Gene_name)
+    hypermut_top_hit_essential = @rsubset(essential_genes, :Gene in top_hypermut_genomics.Gene)
     
     ## filtering out top G-score genes in the LTEE genomics dataset.
     purifying_genes = @chain essential_genes begin
         @rsubset(!(:Gene in nonmut_top_hit_essential.Gene))
         @rsubset(!(:Gene in hypermut_top_hit_essential.Gene))
     end
-    
-    purifying_mut_data = @rsubset(gene_mutation_data, :Gene in purifying_genes.Gene)
 
-purifying_genes_metadata = @rsubset(REL606_genes, :Gene in purifying_genes.Gene)
-
-c_purifying_genes = calc_cumulative_muts(purifying_mut_data,
-                                         purifying_genes_metadata, LTEE_pop_level_vec)
+c_purifying_genes = calc_cumulative_muts(purifying_genes,
+                                         gene_mutation_data,
+                                         REL606_genes, LTEE_pop_level_vec)
 
 purifying_base_layer = plot_base_layer(
     gene_mutation_data, REL606_genes, LTEE_pop_level_vec,
@@ -376,38 +382,33 @@ ggsave("../results/gene-modules/STIMS-jl-test-figures/Fig5.pdf", Fig5)
 
 
 ## calculate more rigorous statistics than the figures.
-purifying_pvals = calc_traj_pvals(gene_mutation_data, REL606_genes,
-                                  purifying_genes.Gene,
+purifying_pvals = calc_traj_pvals(purifying_genes,
+                                  gene_mutation_data, REL606_genes,
                                   LTEE_pop_level_vec)
 
-
+## now look at positive selection genes.
 rando_plot = plot_base_layer(gene_mutation_data, REL606_genes,
                              LTEE_pop_level_vec)
 
 ## 1) plot top genes in non-mutators.
-top_nonmut_mutation_data = @rsubset(gene_mutation_data,
-                                    :Gene in top_nonmut_genomics.Gene_name)
-
-top_nonmut_metadata = @rsubset(REL606_genes, :Gene in top_nonmut_genomics.Gene_name)
-
-c_top_nonmuts =  calc_cumulative_muts(top_nonmut_mutation_data,
-                                      top_nonmut_metadata,
-                                      LTEE_pop_level_vec)
+c_top_nonmuts =  calc_cumulative_muts(top_nonmut_genomics,
+                                      gene_mutation_data,
+                                      REL606_genes, LTEE_pop_level_vec)
 
 Fig6 = add_cumulative_mut_layer(rando_plot, c_top_nonmuts)
 ggsave("../results/gene-modules/STIMS-jl-test-figures/Fig6.pdf",Fig6)
 
 ## calculate more rigorous statistics than the figures.
-top_nonmut_pvals = calc_traj_pvals(gene_mutation_data,
+top_nonmut_pvals = calc_traj_pvals(top_nonmut_genomics,
+                                   gene_mutation_data,
                                    REL606_genes,
-                                   top_nonmut_genomics.Gene_name,
                                    LTEE_pop_level_vec)
 return 0
 end
 
 
 function RunSTIMS(mutation_csv_path, genome_metadata_csv_path,
-                  genelist_csv_path, outputdir)
+                  genelist_csv_path, outputdir, outfile = "STIMS-plot.pdf")
 
     mutation_data = CSV.read(mutation_csv_path, DataFrame)
     genome_metadata = CSV.read(genome_metadata_csv_path, DataFrame) 
@@ -427,15 +428,15 @@ function RunSTIMS(mutation_csv_path, genome_metadata_csv_path,
     ## make sure that only loci in genome_metadata are analyzed.
     @rsubset!(gene_module_df, :Gene in genome_metadata.Gene)
 
-    gene_module_mut_data = @rsubset(gene_mutation_data, :Gene in gene_module_df.Gene)
-    gene_module_metadata = @rsubset(genome_metadata, :Gene in gene_module_df.Gene)
-    c_gene_module = calc_cumulative_muts(gene_module_mut_data,
-                                           gene_module_metadata,
-                                           pop_level_vec)
+    c_gene_module = calc_cumulative_muts(gene_module_df,
+                                         gene_mutation_data,
+                                         genome_metadata,
+                                         pop_level_vec)
 
-    pvals = calc_traj_pvals(gene_mutation_data, genome_metadata,
-                                    gene_module_df.Gene,
-                                    pop_level_vec)
+    pvals = calc_traj_pvals(gene_module_df,
+                            gene_mutation_data,
+                            genome_metadata,
+                            pop_level_vec)
 
     println(pvals) ## print the results
     
@@ -446,7 +447,7 @@ function RunSTIMS(mutation_csv_path, genome_metadata_csv_path,
     Fig = add_cumulative_mut_layer(
         base_layer,
         c_gene_module)
-    ggsave(joinpath(outputdir,"STIMS-plot.pdf"), Fig)
+    ggsave(joinpath(outputdir, outfile), Fig)
     
 end
 
@@ -455,10 +456,61 @@ function run_examples()
 
     RunSTIMS("../results/LTEE-metagenome-mutations.csv", "../results/REL606_IDs.csv", "../data/neutral_compilation.csv", "../results/gene-modules/STIMS-jl-test-figures")
 
-    RunSTIMS("../results/SLiM-5000gen-v03.csv", "../results/SLiM_geneIDs.csv", "../results/SLiM_test_gene_module.csv", "../results/gene-modules/STIMS-jl-test-figures")
+    RunSTIMS("../results/SLiM-results/SLiM-5000gen-v03.csv", "../results/SLiM-results/SLiM_geneIDs.csv", "../results/SLiM-results/SLiM_test_gene_module.csv", "../results/SLiM-results")
     
 end
 
+function run_SLiM_tests()
+
+    RunSTIMS("../results/SLiM-results/SLiM-5000gen-v03.csv",
+             "../results/SLiM-results/SLiM_geneIDs.csv",
+             "../results/SLiM-results/SLiM_neutral_module.csv",
+             "../results/SLiM-results",
+             "SLiM-5000gen-neutral.pdf")
+
+    RunSTIMS("../results/SLiM-results/SLiM-5000gen-v03.csv",
+             "../results/SLiM-results/SLiM_geneIDs.csv",
+             "../results/SLiM-results/SLiM_weak_positive_module.csv",
+             "../results/SLiM-results",
+             "SLiM-5000gen-weak-positive.pdf")
+
+    RunSTIMS("../results/SLiM-results/SLiM-5000gen-v03.csv",
+             "../results/SLiM-results/SLiM_geneIDs.csv",
+             "../results/SLiM-results/SLiM_positive_module.csv",
+             "../results/SLiM-results",
+             "SLiM-5000gen-positive.pdf")
+
+    RunSTIMS("../results/SLiM-results/SLiM-5000gen-v03.csv",
+             "../results/SLiM-results/SLiM_geneIDs.csv",
+             "../results/SLiM-results/SLiM_purifying_module.csv",
+             "../results/SLiM-results",
+             "SLiM-5000gen-purifying.pdf")
+
+    RunSTIMS("../results/SLiM-results/SLIM-10000gen-FivePercent-v02.csv",
+             "../results/SLiM-results/SLiM_geneIDs.csv",
+             "../results/SLiM-results/SLiM_neutral_module.csv",
+             "../results/SLiM-results",
+             "SLiM-10000gen-FivePercent-neutral.pdf")
+
+    RunSTIMS("../results/SLiM-results/SLIM-10000gen-FivePercent-v02.csv",
+             "../results/SLiM-results/SLiM_geneIDs.csv",
+             "../results/SLiM-results/SLiM_weak_positive_module.csv",
+             "../results/SLiM-results",
+             "SLiM-10000gen-FivePercent-weak-positive.pdf")
+
+    RunSTIMS("../results/SLiM-results/SLIM-10000gen-FivePercent-v02.csv",
+             "../results/SLiM-results/SLiM_geneIDs.csv",
+             "../results/SLiM-results/SLiM_positive_module.csv",
+             "../results/SLiM-results",
+             "SLiM-10000gen-FivePercent-positive.pdf")
+
+    RunSTIMS("../results/SLiM-results/SLIM-10000gen-FivePercent-v02.csv",
+             "../results/SLiM-results/SLiM_geneIDs.csv",
+             "../results/SLiM-results/SLiM_purifying_module.csv",
+             "../results/SLiM-results",
+             "SLiM-10000gen-FivePercent-purifying.pdf")
+    return 0
+end
 
 function parse_commandline()
     s = ArgParseSettings()
