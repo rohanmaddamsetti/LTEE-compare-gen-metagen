@@ -462,49 +462,25 @@ end
 
 function run_SLiM_tests()
 
-    RunSTIMS("../results/SLiM-results/SLiM-5000gen-v03.csv",
-             "../results/SLiM-results/SLiM_geneIDs.csv",
-             "../results/SLiM-results/SLiM_neutral_module.csv",
-             "../results/SLiM-results",
-             "SLiM-5000gen-neutral.pdf")
-
-    RunSTIMS("../results/SLiM-results/SLiM-5000gen-v03.csv",
-             "../results/SLiM-results/SLiM_geneIDs.csv",
-             "../results/SLiM-results/SLiM_weak_positive_module.csv",
-             "../results/SLiM-results",
-             "SLiM-5000gen-weak-positive.pdf")
-
-    RunSTIMS("../results/SLiM-results/SLiM-5000gen-v03.csv",
-             "../results/SLiM-results/SLiM_geneIDs.csv",
-             "../results/SLiM-results/SLiM_positive_module.csv",
-             "../results/SLiM-results",
-             "SLiM-5000gen-positive.pdf")
-
-    RunSTIMS("../results/SLiM-results/SLiM-5000gen-v03.csv",
-             "../results/SLiM-results/SLiM_geneIDs.csv",
-             "../results/SLiM-results/SLiM_purifying_module.csv",
-             "../results/SLiM-results",
-             "SLiM-5000gen-purifying.pdf")
-
-    RunSTIMS("../results/SLiM-results/SLIM-10000gen-FivePercent-v02.csv",
+    RunSTIMS("../results/SLiM-results/SLiM-10000gen-FivePercent.csv",
              "../results/SLiM-results/SLiM_geneIDs.csv",
              "../results/SLiM-results/SLiM_neutral_module.csv",
              "../results/SLiM-results",
              "SLiM-10000gen-FivePercent-neutral.pdf")
 
-    RunSTIMS("../results/SLiM-results/SLIM-10000gen-FivePercent-v02.csv",
+    RunSTIMS("../results/SLiM-results/SLiM-10000gen-FivePercent.csv",
              "../results/SLiM-results/SLiM_geneIDs.csv",
              "../results/SLiM-results/SLiM_weak_positive_module.csv",
              "../results/SLiM-results",
              "SLiM-10000gen-FivePercent-weak-positive.pdf")
 
-    RunSTIMS("../results/SLiM-results/SLIM-10000gen-FivePercent-v02.csv",
+    RunSTIMS("../results/SLiM-results/SLiM-10000gen-FivePercent.csv",
              "../results/SLiM-results/SLiM_geneIDs.csv",
              "../results/SLiM-results/SLiM_positive_module.csv",
              "../results/SLiM-results",
              "SLiM-10000gen-FivePercent-positive.pdf")
 
-    RunSTIMS("../results/SLiM-results/SLIM-10000gen-FivePercent-v02.csv",
+    RunSTIMS("../results/SLiM-results/SLiM-10000gen-FivePercent.csv",
              "../results/SLiM-results/SLiM_geneIDs.csv",
              "../results/SLiM-results/SLiM_purifying_module.csv",
              "../results/SLiM-results",
