@@ -1,0 +1,115 @@
+//SLiM for STIMS 12/09/2021
+//Wright-fisher model for the SliMulation of haploid genomes 
+//Nkrumah Grant
+
+
+initialize()
+
+{
+	initializeSLiMOptions(mutationRuns=1);
+	setSeed(737);
+	defineConstant("Ne", 5e5);
+	defineConstant("Mu", 8.9e-7); // Nonmutator = 8.9e-10 , Hypermutator = 8.9e-9
+	defineConstant("genomeSize", 4e6);
+	defineConstant("N_generations", 1000);
+	initializeMutationRate(Mu);
+	
+	initializeMutationType("m1", 1.0, "f", 0.0); //neutral mutation
+	initializeMutationType("m2", 1.0, "f", 0.005); //beneficial mutation
+	initializeMutationType("m3", 1.0, "g", -0.03, 0.2); //deleterious mutation
+	
+	m1.color = "yellow";
+	m2.color = "green";
+	m3.color = "red";
+	
+	m1.colorSubstitution = "grey";
+	m2.colorSubstitution = "green";
+	m3.colorSubstitution = "red";
+	
+//Here, I parameterize the distribution of fitness effects in each of the genomic modules for each of the mutation types parameterized above. 
+	initializeGenomicElementType("g1", c(m1), c(1)); //neutral 
+	initializeGenomicElementType("g2", c(m1,m2,m3), c(0.85,0.15,0.05)); // weak selection 
+	initializeGenomicElementType("g3", c(m1,m2,m3), c(0.45,0.40,0.05)); // strong selection 
+	initializeGenomicElementType("g4", c(m1,m3), c(0.5,0.5)); // purifying selection  
+	
+	g1.color = "yellow";
+	g2.color = "blue";
+	g3.color = "green";
+	g4.color = "red";
+	
+	
+	initializeGenomicElement(g1, 0, 99999);
+	initializeGenomicElement(g2, 100000,199999);
+	initializeGenomicElement(g3,200000,299999);
+	initializeGenomicElement(g4, 300000,399999);
+	initializeRecombinationRate(0); // In SLiM recombination is between sister chromatids
+}
+
+// At the first generation:
+// - create a subpopulation (or many)
+
+1 early ()
+{
+	sim.chromosome.colorSubstitution = ""; //keeps the color I defined for mutation events above in the initialize callback. 
+	sim.addSubpop("p1", asInteger(Ne));
+	p1.setCloningRate(1.0); // Essential for bacteria.
+	sim.rescheduleScriptBlock(s1, start=N_generations, end=N_generations);
+}
+
+fitness(m3)
+{
+	// convert fecundity-based selection to survival-based selection
+	if (runif(1) < relFitness)
+		return 1.0;
+	else
+		return 0.0;
+}
+
+//Remove mutations from second chromosome
+modifyChild()
+{
+	if (size(childGenome2.mutations))
+		childGenome2.removeMutations();
+	return T;
+}
+
+// At each generation:
+// - Remove fixed mutations
+late()
+{
+	// Remove fixed mutation
+	// (SLiM does it automatically for diploid,
+	// but for haploid, mutations are fixed at 0.5)
+	//This must be done for each mutation class (m1-m3 in this model).
+	
+	muts_m1 = sim.mutationsOfType(m1);
+	freqs = sim.mutationFrequencies(NULL, muts_m1);
+	fixed_muts_m1 = muts_m1[freqs == 0.5];
+	if (size(fixed_muts_m1) > 0)
+		sim.subpopulations.genomes.removeMutations(fixed_muts_m1, T);
+	
+	muts_m2 = sim.mutationsOfType(m2);
+	freqs = sim.mutationFrequencies(NULL, muts_m2);
+	fixed_muts_m2 = muts_m2[freqs == 0.5];
+	if (size(fixed_muts_m2) > 0)
+		sim.subpopulations.genomes.removeMutations(fixed_muts_m2, T);
+	
+	muts_m3 = sim.mutationsOfType(m3);
+	freqs = sim.mutationFrequencies(NULL, muts_m3);
+	fixed_muts_m3 = muts_m3[freqs == 0.5];
+	if (size(fixed_muts_m3) > 0)
+		sim.subpopulations.genomes.removeMutations(fixed_muts_m3, F); // see pg 254 on removing fixed mutations 
+}
+
+//Output showing which mutations are segregating and fixing in the population at 100 generation intervals. 
+//I change these file names for the Nonmutator and Hypermutator scenarios. 
+
+1:1000 late ()
+{
+	if (sim.generation % 100 == 0)
+	{
+		sim.outputMutations(sim.mutationsOfType(m1), "~/Desktop/20211211-Mutator.txt", append = T);
+		sim.outputMutations(sim.mutationsOfType(m2), "~/Desktop/20211211-Mutator.txt", append = T);
+		sim.outputMutations(sim.mutationsOfType(m3), "~/Desktop/20211211-Mutator.txt", append = T);
+	}
+}

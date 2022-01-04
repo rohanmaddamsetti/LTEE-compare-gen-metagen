@@ -56,6 +56,42 @@ top.nonmut.genomics <- top_n(nonmut.genomics, 50, wt=G.score)
 top.hypermut.genomics <- top_n(hypermut.genomics, 50, wt=G.score)
 
 #########################################################################
+## Distribution of mutations per gene across all LTEE populations.
+## Perhaps this may be of use in parameterizing SLiM simulations.
+
+make.gene.all.mut.density.df <- function(gene.mutation.data, REL606.genes) {
+
+    all.mutation.density <- calc.gene.mutation.density(
+    gene.mutation.data,
+    c("missense", "sv", "synonymous", "noncoding", "indel", "nonsense")) %>%
+    rename(all.mut.count = mut.count) %>%
+    rename(all.mut.density = density)
+
+    gene.mutation.densities <- REL606.genes %>%
+    full_join(all.mutation.density)
+
+#### CRITICAL STEP: replace NAs with zeros.
+#### We need to keep track of genes that haven't been hit by any mutations
+#### in a given mutation class (sv, indels, dN, etc.)
+    gene.mutation.densities[is.na(gene.mutation.densities)] <- 0
+    gene.mutation.densities <- as_tibble(gene.mutation.densities)
+
+    return(gene.mutation.densities)
+}
+
+genic.muts.over.genome.df <- make.gene.all.mut.density.df(
+    gene.mutation.data, REL606.genes) %>%
+    arrange(desc(all.mut.density)) %>%
+    mutate(Gene_ranked_by_mut_density = row_number())
+
+mut.over.genome.dist.plot <- genic.muts.over.genome.df %>%
+    ggplot(aes(x=Gene_ranked_by_mut_density, y=all.mut.density)) +
+    theme_classic() + geom_point()
+
+write.csv(genic.muts.over.genome.df, "../results/gene-modules/gene-mutation-density.csv")
+ggsave("../results/gene-modules/gene-mutation-density.pdf", mut.over.genome.dist.plot)
+
+#########################################################################
 ## RELAXED SELECTION CONTROL EXPERIMENT.
 
 ## list of neutral genes from Alejandro Couce.

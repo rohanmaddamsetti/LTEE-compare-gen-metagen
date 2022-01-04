@@ -11,6 +11,13 @@ julia STIMS.jl ../results/LTEE-metagenome-mutations.csv ../results/REL606_IDs.cs
 
 julia STIMS.jl ../results/SLiM-5000gen-v03.csv ../results/SLiM_geneIDs.csv ../results/SLiM_test_gene_module.csv -o ../results/gene-modules/STIMS-jl-test-figures
 
+ISSUES:
+
+1) crashes when the data is too huge, due to plotting too many points.
+   Nkrumah proposed the following solution:
+   When the data reaches a critical size, plot a random sample of the
+   data to reduce it to some size.
+
 """
 
 module STIMS
