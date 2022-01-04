@@ -1,6 +1,7 @@
 ## SLiM-analysis.R by Rohan Maddamsetti.
 ## This script contains diagnostic code for analyzing SLiM simulation output.
-##source("metagenomics-library.R")
+
+library(tidyverse)
 
 SLiM.genes <- read.csv("../results/SLiM-results/SLiM_geneIDs.csv")
 SLiM.mutation.data <- read.csv(
@@ -16,8 +17,10 @@ mut.summary.2 <- SLiM.mutation.data %>%
     group_by(Gene) %>%
     summarize(count = n())
 
+## Let's plot the distribution of mutations over the genome.
 mut.dist.plot <- ggplot(SLiM.mutation.data, aes(x=Gene)) + geom_histogram(stat="count")
-
+ggsave("../results/SLiM-results/SLiM-genomic-mutation-distribution.pdf",
+       mut.dist.plot)
 
 
 calc.SLiM.gene.mutation.density <- function(SLiM.mutation.data, SLiM.genes) {
@@ -50,18 +53,17 @@ make.SLiM.gene.all.mut.density.df <- function(gene.mutation.data, SLiM.genes) {
     return(gene.mutation.densities)
 }
 
-genic.muts.over.genome.df <- make.SLiM.gene.all.mut.density.df(
+gene.mut.density.df <- make.SLiM.gene.all.mut.density.df(
     SLiM.mutation.data, SLiM.genes) %>%
     arrange(desc(mut.density)) %>%
     mutate(Gene_ranked_by_mut_density = row_number())
 
-
-## Let's plot the distribution of mutations across the genome.
-mut.over.genome.dist.plot <- genic.muts.over.genome.df %>%
+## Let's plot the ranked density of mutations per gene.
+mut.density.plot <- gene.mut.density.df %>%
     ggplot(aes(x=Gene_ranked_by_mut_density, y=mut.density)) +
     theme_classic() + geom_point()
 
-write.csv(genic.muts.over.genome.df,
-          "../results/gene-modules/SLiM-gene-mutation-density.csv")
-ggsave("../results/gene-modules/SLiM-gene-mutation-density.pdf",
-       mut.over.genome.dist.plot)
+write.csv(gene.mut.density.df,
+          "../results/SLiM-results/SLiM-gene-mutation-density.csv")
+ggsave("../results/SLiM-results/SLiM-gene-mutation-density.pdf",
+       mut.density.plot)
