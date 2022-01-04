@@ -8,6 +8,7 @@ library(cowplot)
 library(magick)
 library(ggplotify)
 
+## GLOBAL VARIABLES
 freq_threshold <- 0.05
 
 ## This file reflects all mutations that were segregating
@@ -44,6 +45,8 @@ d <- read.csv("../results/SLiM-results/20211212-Mutator.txt", header = F, sep = 
     filter(row_number() == 1) %>%
     arrange(ID) ## to double-check that each ID is unique
 
+
 ## write out the STIMS input file.
 write.csv(d, "../results/SLiM-results/SLiM-1000gen-FivePercent-Hypermutator.csv",
           quote = F, row.names = F)
+
