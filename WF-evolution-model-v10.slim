@@ -1,0 +1,138 @@
+//SLiM for STIMS 01/08/2022
+//Wright-fisher model for the SliMulation of haploid genomes
+//Nkrumah Grant and Rohan Maddamsetti
+
+initialize()
+
+{
+	initializeSLiMOptions(mutationRuns=1);
+	setSeed(737);
+	defineConstant("Ne", 10000);//5e5); //effective population size
+	defineConstant("Mu", 1e-8); // Nonmutator = 8.9e-11; Hypermutator = 8.9e-10 (10x), 8.9e-9(100x)
+	//currently set at 1/4 the size of the 100 x mutator population to account for a genome size that is
+	//1/4th smaller being modeled here.
+	
+	defineConstant("genomeSize", 1e6);
+	defineConstant("N_generations", 1000);
+	initializeMutationRate(Mu);
+	
+	//Define LTEE parameters before scaling
+	//Genome size = 4.62e6 base pairs
+	//Ne = 3.3e7 cells
+	//initial sb in LTEE = 0.01587 (Izutzu et al. 2021)
+	// mu = 8.9e-11 per base-pair per cell per generation,
+	// so mu = 0.00041118 = 4.11e-4 per cell per generation
+	
+	// parameters in STEPS simulations (Izutzu et al. 2021):
+	//all of the simulations in this study used the following inputs:
+	 // final population size, Nf = 5 x 10^8 cells;
+	 //beneficial mutation rate, mu_B = 1.7 x 10^–6 per cell per generation
+	 // mean effect size of beneficial mutations in the ancestor,
+	 // s = 0.01587;
+	 // and strength of diminishing-returns epistasis, g = 6.0217.	
+	
+	
+	//Rescaled LTEE parameters for computational efficiency
+	//Simulating genome size that is approximately 1/4 the size of REL606 ... 1e6
+	//Let's also rescale all other parameters by this much to begin with.
+	//Ne = 3.3e7/4 = 8.25e6
+	//Neutral mu = 8.9e-11/4 = 2.225e-11
+	
+	initializeMutationType("m1", 1.0, "f", 0.1);
+	initializeMutationType("m2", 1.0, "f", 0.0);
+	initializeMutationType("m3", 1.0, "f", -0.3);
+	
+	
+	m1.color = "green";
+	m2.color = "yellow";
+	m3.color = "red";
+	
+	m1.colorSubstitution = "green";
+	m2.colorSubstitution = "grey";
+	m3.colorSubstitution = "red";
+	
+	//Here, I parameterize the distribution of fitness effects in each of the genomic modules for each of the mutation types parameterized above.
+	
+	initializeGenomicElementType("g1", c(m1,m2), c(0.1, 0.9)); // 10% beneficial in this region
+	initializeGenomicElementType("g2", m2, 1.0);	// 100% neutral
+	initializeGenomicElementType("g3", c(m2,m3), c(0.6,0.4)); // 40% lethal
+	
+	// Will turn each one of these on when necessary. Should drive mutation dynamics for each region such that for the hyper mutator case there the obs mutations lie in the middle of the null distribution.
+	
+	g1.color = "green";
+	g2.color = "gray";
+	g3.color = "red";
+	
+	initializeGenomicElement(g1, 0,24999);
+	initializeGenomicElement(g2, 25000,974999);
+	initializeGenomicElement(g3, 975000, 999999);
+	initializeRecombinationRate(0); // In SLiM recombination is between sister chromatids
+}
+
+
+// At the first generation:
+// - create a subpopulation (or many)
+1 early ()
+{
+	sim.chromosome.colorSubstitution = ""; //keeps the color I defined for mutation events above in the initialize callback.
+	
+	sim.addSubpop("p1", asInteger(Ne));
+	p1.setCloningRate(1.0); // Essential for bacteria.	
+}
+
+//Remove mutations from second chromosome
+modifyChild()
+{
+	if (size(childGenome2.mutations))		
+		childGenome2.removeMutations();
+
+	return T;
+}
+
+// At each generation:
+// - Remove fixed mutations
+
+late()
+{
+	// Remove fixed mutation
+	// (SLiM does it automatically for diploid,
+	// but for haploid, mutations are fixed at 0.5)
+	//This must be done for each mutation class.
+	
+	muts_m1 = sim.mutationsOfType(m1);
+	freqs = sim.mutationFrequencies(NULL, muts_m1);
+	fixed_muts_m1 = muts_m1[freqs == 0.5];
+	
+	if (size(fixed_muts_m1) > 0)
+		sim.subpopulations.genomes.removeMutations(fixed_muts_m1, T);
+	
+	muts_m2 = sim.mutationsOfType(m2);
+	freqs = sim.mutationFrequencies(NULL, muts_m2);
+	fixed_muts_m2 = muts_m2[freqs == 0.5];
+	
+	if (size(fixed_muts_m2) > 0)
+		sim.subpopulations.genomes.removeMutations(fixed_muts_m2, T);
+	
+	muts_m3 = sim.mutationsOfType(m3);
+	freqs = sim.mutationFrequencies(NULL, muts_m3);
+	fixed_muts_m3 = muts_m3[freqs == 0.5];
+	
+	if (size(fixed_muts_m3) > 0)
+		sim.subpopulations.genomes.removeMutations(fixed_muts_m3, F); // see pg 254 on removing fixed mutations '
+
+}
+
+//Output showing which mutations are segregating in the population at 500 generation intervals.
+//Change these file names for the Nonmutator and Hypermutator scenarios.
+
+1:1000 late ()
+{
+	if (sim.generation % 500 == 0)
+	{
+		sim.outputMutations(sim.mutationsOfType(m1), "SLiM-output.txt", append = T);
+		
+		sim.outputMutations(sim.mutationsOfType(m2), "SLiM-output.txt", append = T);
+		
+		sim.outputMutations(sim.mutationsOfType(m3), "SLiM-output.txt", append = T);	
+	}
+}
