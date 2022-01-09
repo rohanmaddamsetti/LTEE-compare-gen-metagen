@@ -7,13 +7,13 @@ initialize()
 {
 	initializeSLiMOptions(mutationRuns=1);
 	setSeed(737);
-	defineConstant("Ne", 10000);//5e5); //effective population size
-	defineConstant("Mu", 1e-8); // Nonmutator = 8.9e-11; Hypermutator = 8.9e-10 (10x), 8.9e-9(100x)
+	defineConstant("Ne", 1e5); //effective population size
+	defineConstant("Mu", 8.9e-9); // Nonmutator = 8.9e-11; Hypermutator = 8.9e-10 (10x), 8.9e-9(100x)
 	//currently set at 1/4 the size of the 100 x mutator population to account for a genome size that is
 	//1/4th smaller being modeled here.
 	
 	defineConstant("genomeSize", 1e6);
-	defineConstant("N_generations", 1000);
+	defineConstant("N_generations", 5000);
 	initializeMutationRate(Mu);
 	
 	//Define LTEE parameters before scaling
@@ -36,36 +36,46 @@ initialize()
 	//Simulating genome size that is approximately 1/4 the size of REL606 ... 1e6
 	//Let's also rescale all other parameters by this much to begin with.
 	//Ne = 3.3e7/4 = 8.25e6
-	//Neutral mu = 8.9e-11/4 = 2.225e-11
+	//mu = 8.9e-11/4 = 2.225e-11
 	
-	initializeMutationType("m1", 1.0, "f", 0.1);
-	initializeMutationType("m2", 1.0, "f", 0.0);
-	initializeMutationType("m3", 1.0, "f", -0.3);
+	initializeMutationType("m1", 1.0, "e", 0.01587); //beneficial
+	initializeMutationType("m2", 1.0, "f", -0.3); // deleterious
 	
+	// nearly-neutral: use -1*Beta(alpha=0.0074,beta=2.4),
+	// based on Lydia Robert et al. (2018) in Science.
+	// multiply by -1 since most mutations are weakly deleterious.
+	initializeMutationType("m3", 1.0, "s", "return -1*rbeta(1,0.0074,2.4);");
+
+	// alternative: just make everything else neutral.
+	//initializeMutationType("m3", 1.0, "f", 0.0);
 	
 	m1.color = "green";
-	m2.color = "yellow";
-	m3.color = "red";
+	m2.color = "red";
+	m3.color = "yellow";
+
 	
 	m1.colorSubstitution = "green";
-	m2.colorSubstitution = "grey";
-	m3.colorSubstitution = "red";
+	m2.colorSubstitution = "red";
+	m3.colorSubstitution = "grey";
+	
 	
 	//Here, I parameterize the distribution of fitness effects in each of the genomic modules for each of the mutation types parameterized above.
 	
-	initializeGenomicElementType("g1", c(m1,m2), c(0.1, 0.9)); // 10% beneficial in this region
-	initializeGenomicElementType("g2", m2, 1.0);	// 100% neutral
-	initializeGenomicElementType("g3", c(m2,m3), c(0.6,0.4)); // 40% lethal
+	initializeGenomicElementType("g1", c(m1,m3), c(0.1, 0.9)); // 10% beneficial in this region
+	initializeGenomicElementType("g2", c(m2,m3), c(0.4,0.6)); // 40% lethal
+	initializeGenomicElementType("g3", m3, 1.0);	// 100% neutral
+
 	
 	// Will turn each one of these on when necessary. Should drive mutation dynamics for each region such that for the hyper mutator case there the obs mutations lie in the middle of the null distribution.
 	
 	g1.color = "green";
-	g2.color = "gray";
-	g3.color = "red";
+	g2.color = "red";
+	g3.color = "gray";
+
 	
 	initializeGenomicElement(g1, 0,24999);
-	initializeGenomicElement(g2, 25000,974999);
-	initializeGenomicElement(g3, 975000, 999999);
+	initializeGenomicElement(g2, 25000,49999);
+	initializeGenomicElement(g3, 50000, 999999);
 	initializeRecombinationRate(0); // In SLiM recombination is between sister chromatids
 }
 
@@ -125,7 +135,7 @@ late()
 //Output showing which mutations are segregating in the population at 500 generation intervals.
 //Change these file names for the Nonmutator and Hypermutator scenarios.
 
-1:1000 late ()
+1:5000 late ()
 {
 	if (sim.generation % 500 == 0)
 	{

@@ -3,18 +3,15 @@
 ## take the SliM output file and convert it into input for STIMS.
 
 library(tidyverse)
-library(gghighlight)
-library(cowplot)
-library(magick)
-library(ggplotify)
 
 ## GLOBAL VARIABLES
-freq_threshold <- 0.05
+freq_threshold <- 0.01
+Ne <- 1e5
 
 ## This file reflects all mutations that were segregating
 ## in the population as were sampled every 100 
 ## generations.
-d <- read.csv("../results/SLiM-results/20211212-Mutator.txt", header = F, sep = " ") %>%
+d <- read.csv("../results/SLiM-results/SLiM-output.txt", header = F, sep = " ") %>%
     ## Remove unnecessary columns from SLiM output. 
     select(c("V2", "V5" , "V6", "V7", "V10", "V11", "V12")) %>%
     rename(Generation = V2) %>%
@@ -24,8 +21,8 @@ d <- read.csv("../results/SLiM-results/20211212-Mutator.txt", header = F, sep = 
     rename(Population = V10) %>%
     rename(t0 = V11) %>%
     rename(prevalence = V12) %>%
-    mutate(Annotation = recode(Annotation, m1 = "neutral",
-                               m2 = "beneficial", m3 = "deleterious")) %>%
+    mutate(Annotation = recode(Annotation, m1 = "beneficial",
+                               m2 = "deleterious", m3 = "neutral")) %>%
     mutate(Population = recode(Population, p1 = "Hypermutator")) %>%
     mutate(Position = as.numeric(Position)) %>%
     ## annotate the Gene for each mutation.
@@ -34,7 +31,7 @@ d <- read.csv("../results/SLiM-results/20211212-Mutator.txt", header = F, sep = 
     select(-P1000) %>%
     ## Create new column that converts prevalence to allele frequency.
     ## The denominator is the number of individuals in the SliMulation. 
-    mutate("allele_freq" = prevalence/5e5) %>%
+    mutate("allele_freq" = prevalence/Ne) %>%
     ## Filter mutations with allele frequencies above 5% threshold. 
     ## Maybe look at 5% and 10% frequency thresholds. 
     filter(allele_freq > freq_threshold) %>%
@@ -47,6 +44,6 @@ d <- read.csv("../results/SLiM-results/20211212-Mutator.txt", header = F, sep = 
 
 
 ## write out the STIMS input file.
-write.csv(d, "../results/SLiM-results/SLiM-1000gen-FivePercent-Hypermutator.csv",
+write.csv(d, "../results/SLiM-results/SLiM-5000gen-OnePercent-Hypermutator.csv",
           quote = F, row.names = F)
 
