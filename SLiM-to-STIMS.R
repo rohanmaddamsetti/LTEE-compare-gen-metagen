@@ -44,6 +44,6 @@ d <- read.csv("../results/SLiM-results/SLiM-output.txt", header = F, sep = " ") 
 
 
 ## write out the STIMS input file.
-write.csv(d, "../results/SLiM-results/SLiM-5000gen-OnePercent-Hypermutator.csv",
+write.csv(d, "../results/SLiM-results/SLiM-10000gen-OnePercent-Hypermutator.csv",
           quote = F, row.names = F)
 
