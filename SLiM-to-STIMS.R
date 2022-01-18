@@ -6,7 +6,7 @@ library(tidyverse)
 
 ## GLOBAL VARIABLES
 freq_threshold <- 0.01
-Ne <- 1e5
+Ne <- 1e7
 
 ## This file reflects all mutations that were segregating
 ## in the population as were sampled every 100 
@@ -44,6 +44,6 @@ d <- read.csv("../results/SLiM-results/SLiM-output.txt", header = F, sep = " ") 
 
 
 ## write out the STIMS input file.
-write.csv(d, "../results/SLiM-results/SLiM-10000gen-OnePercent-Hypermutator.csv",
+write.csv(d, "../results/SLiM-results/SLiM-9200gen-OnePercent-Hypermutator.csv",
           quote = F, row.names = F)
 

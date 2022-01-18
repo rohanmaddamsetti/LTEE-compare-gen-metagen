@@ -1,0 +1,154 @@
+//bacterial-WF-model.slim 01/17/2022
+//Wright-Fisher model of an idealized haploid bacterial genome
+//Nkrumah Grant and Rohan Maddamsetti
+
+initialize()
+{
+	if (exists("slimgui")) // if running with the SLiM GUI
+	{
+		defineConstant("Ne", 1e5); //effective population size
+		defineConstant("mu", 1e-8);
+		defineConstant("numgens", 5000);
+		defineConstant("outfile", "SLiM-output.txt");
+	}
+	
+	// This parameter can be used to speed up SLiM.
+	initializeSLiMOptions(mutationRuns=1);
+	
+	// LTEE mutation rates per base per per generation.
+	// Nonmutator ~ 1e-10;
+	//  Hypermutator ~ 1e-8(100x)
+	initializeMutationRate(mu);
+	
+	// LTEE parameters:
+	//Genome size = 4.62e6 base pairs
+	//Ne = 3.3e7 cells
+	//initial sb in LTEE = 0.01587 (Izutzu et al. 2021)
+	// mu = 8.9e-11 per base-pair per cell per generation,
+	// so mu = 0.00041118 = 4.11e-4 per cell per generation
+	
+	// parameters in STEPS simulations (Izutzu et al. 2021):
+	//all of the simulations in this study used the following inputs:
+	// final population size, Nf = 5 x 10^8 cells;
+	//beneficial mutation rate, mu_B = 1.7 x 10^–6 per cell per generation
+	// mean effect size of beneficial mutations in the ancestor,
+	// s = 0.01587;
+	// and strength of diminishing-returns epistasis, g = 6.0217.	
+	
+	//beneficial mutations are drawn from an exponential distribution.
+	initializeMutationType("m1", 1.0, "e", 0.01587);
+	// strongly deleterious: 30% fitness decline, as defined in Robert et al. (2018)
+	initializeMutationType("m2", 1.0, "f", -0.3);
+	// completely neutral:
+	initializeMutationType("m3", 1.0, "f", 0.0);
+	// nearly-neutral background: use -1*Beta(alpha=0.0074,beta=2.4),
+	// based on Lydia Robert et al. (2018) in Science.
+	// multiply by -1 since most mutations are weakly deleterious.
+	initializeMutationType("m4", 1.0, "s", "return -1*rbeta(1,0.0074,2.4);");
+		
+	m1.color = "green";
+	m1.colorSubstitution = "green";
+	m2.color = "red";
+	m2.colorSubstitution = "red";
+	m3.color = "yellow";
+	m3.colorSubstitution = "yellow";
+	m4.color = "orange";
+	m4.colorSubstitution = "orange";
+	
+
+	//Parameterize the genomic DFE.
+	// 10% of mutations are beneficial in module 1.
+	initializeGenomicElementType("g1", c(m1,m4), c(0.1, 0.9));
+	// 40% of mutations are strongly deleterious in module 2.
+	initializeGenomicElementType("g2", c(m2,m4), c(0.4, 0.6));
+	// 100% of mutations are completely neutral in module 3.
+	initializeGenomicElementType("g3", m3, 1.0);
+	// the rest of the genome has the DFE reported by Robert et al. (2018).
+	initializeGenomicElementType("g4", m4, 1.0);
+	
+	g1.color = "green";
+	g2.color = "red";
+	g3.color = "yellow";
+	g4.color = "orange";
+	
+	// genome of 4 million base pairs.
+	initializeGenomicElement(g1, 0,99999);
+	initializeGenomicElement(g2, 100000,199999);
+	initializeGenomicElement(g3, 200000, 299999);
+	initializeGenomicElement(g4, 300000, 3999999);
+	
+	// Genome of 1 million base pairs.
+	//initializeGenomicElement(g1, 0,24999);
+	//initializeGenomicElement(g2, 25000,49999);
+	//initializeGenomicElement(g3, 50000, 74999);
+	//initializeGenomicElement(g4, 75000, 999999);
+	// asexual bacterial evolution.
+	initializeRecombinationRate(0);
+}
+
+
+// At the first generation, create a clonal population.
+1
+{
+	sim.addSubpop("p1", asInteger(Ne));
+	p1.setCloningRate(1.0); // Essential for bacteria.	
+}
+
+
+//Remove mutations from second chromosome
+modifyChild()
+{
+	if (size(childGenome2.mutations))
+		childGenome2.removeMutations();
+	return T;
+}
+
+
+// max number of generations is 100,000.
+1:100000 late()
+{
+	// print the generation that we are on.
+	cat("Generation: "  + sim.generation + "\n");
+	
+	//Send segregating mutations to the outfile every 100 generations.
+	if (sim.generation % 100 == 0)
+	{
+		// IMPORTANT: the outfile path is relative to the current directory.	
+		sim.outputMutations(sim.mutationsOfType(m1), outfile, append = T);
+		sim.outputMutations(sim.mutationsOfType(m2), outfile, append = T);
+		sim.outputMutations(sim.mutationsOfType(m3), outfile, append = T);
+		sim.outputMutations(sim.mutationsOfType(m4), outfile, append = T);
+		}	
+	
+	// Remove fixed mutations
+	// (SLiM does it automatically for diploid,
+	// but for haploid, mutations are fixed at 0.5)
+	//This must be done for each mutation class.
+	muts_m1 = sim.mutationsOfType(m1);
+	m1freqs = sim.mutationFrequencies(NULL, muts_m1);
+	fixed_muts_m1 = muts_m1[m1freqs == 0.5];
+	if (size(fixed_muts_m1) > 0)
+		sim.subpopulations.genomes.removeMutations(fixed_muts_m1, T);
+	
+	muts_m2 = sim.mutationsOfType(m2);
+	m2freqs = sim.mutationFrequencies(NULL, muts_m2);
+	fixed_muts_m2 = muts_m2[m2freqs == 0.5];
+	if (size(fixed_muts_m2) > 0)
+		sim.subpopulations.genomes.removeMutations(fixed_muts_m2, T);
+	
+	muts_m3 = sim.mutationsOfType(m3);
+	m3freqs = sim.mutationFrequencies(NULL, muts_m3);
+	fixed_muts_m3 = muts_m3[m3freqs == 0.5];
+	if (size(fixed_muts_m3) > 0)
+		sim.subpopulations.genomes.removeMutations(fixed_muts_m3, T);
+	
+	muts_m4 = sim.mutationsOfType(m4);
+	m4freqs = sim.mutationFrequencies(NULL, muts_m4);
+	fixed_muts_m4 = muts_m4[m4freqs == 0.5];
+	if (size(fixed_muts_m4) > 0)
+		sim.subpopulations.genomes.removeMutations(fixed_muts_m4, T);
+	
+	
+	// run for numgens, where numgens <= 100,000.
+	if (sim.generation == numgens) sim.simulationFinished();
+}
