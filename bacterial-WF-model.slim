@@ -6,11 +6,10 @@ initialize()
 {
 	if (exists("slimgui")) // if running with the SLiM GUI
 	{
-		defineConstant("Ne", 1e4); // effective population size
-		defineConstant("mu", 1e-9); // mutation rate
+		defineConstant("Ne", 1e5); // effective population size
+		defineConstant("mu", 1e-7); // mutation rate
 		defineConstant("numgens", 5000);
-		defineConstant("outfile", "SLiM-mutations.txt");
-		defineConstant("fixations_outfile", "SLiM-fixations.txt");
+		defineConstant("outfile", "SLiM-output.txt");
 	}
 	
 	// This parameter can be used to speed up SLiM.
@@ -46,7 +45,7 @@ initialize()
 	// based on Lydia Robert et al. (2018) in Science.
 	// multiply by -1 since most mutations are weakly deleterious.
 	initializeMutationType("m4", 1.0, "s", "return -1*rbeta(1,0.0074,2.4);");
-		
+	
 	m1.color = "green";
 	m1.colorSubstitution = "green";
 	m2.color = "red";
@@ -56,7 +55,7 @@ initialize()
 	m4.color = "orange";
 	m4.colorSubstitution = "orange";
 	
-
+	
 	//Parameterize the genomic DFE.
 	// 10% of mutations are beneficial in module 1.
 	initializeGenomicElementType("g1", c(m1,m4), c(0.1, 0.9));
@@ -107,45 +106,11 @@ modifyChild()
 	cat("Generation: "  + sim.generation + "\n");
 	
 	//Send segregating and fixed mutations to the outfile every 100 generations.
-	if (sim.generation % 100 == 0)
-	{
-		// IMPORTANT: the outfile path is relative to the current directory.	
+	// IMPORTANT: the outfile path is relative to the current directory.	
+	if (sim.generation % 100 == 0)	
 		sim.outputMutations(sim.mutations, outfile, append = T);
-		}	
-	
-	// Remove fixed mutations
-	// (SLiM does it automatically for diploid,
-	// but for haploid, mutations are fixed at 0.5)
-	//This must be done for each mutation class.
-	muts_m1 = sim.mutationsOfType(m1);
-	m1freqs = sim.mutationFrequencies(NULL, muts_m1);
-	fixed_muts_m1 = muts_m1[m1freqs == 0.5];
-	if (size(fixed_muts_m1) > 0)
-		sim.subpopulations.genomes.removeMutations(fixed_muts_m1, T);
-	
-	muts_m2 = sim.mutationsOfType(m2);
-	m2freqs = sim.mutationFrequencies(NULL, muts_m2);
-	fixed_muts_m2 = muts_m2[m2freqs == 0.5];
-	if (size(fixed_muts_m2) > 0)
-		sim.subpopulations.genomes.removeMutations(fixed_muts_m2, T);
-	
-	muts_m3 = sim.mutationsOfType(m3);
-	m3freqs = sim.mutationFrequencies(NULL, muts_m3);
-	fixed_muts_m3 = muts_m3[m3freqs == 0.5];
-	if (size(fixed_muts_m3) > 0)
-		sim.subpopulations.genomes.removeMutations(fixed_muts_m3, T);
-	
-	muts_m4 = sim.mutationsOfType(m4);
-	m4freqs = sim.mutationFrequencies(NULL, muts_m4);
-	fixed_muts_m4 = muts_m4[m4freqs == 0.5];
-	if (size(fixed_muts_m4) > 0)
-		sim.subpopulations.genomes.removeMutations(fixed_muts_m4, T);
-	
 	
 	// run for numgens, where numgens <= 100,000.
-	if (sim.generation == numgens) {
-			// write fixed mutations to file. 
-			sim.outputFixedMutations(fixations_outfile);
-			sim.simulationFinished();	
-	}
+	if (sim.generation == numgens)
+		sim.simulationFinished();
 }
