@@ -20,28 +20,41 @@ for (i in 1:n) {
 }
 
 ## The first 25 genes have beneficial mutations. 10% of mutations
-## in this region are beneficial, and 90% are neutral.
+## in this region are beneficial, and 90% are background.
 ## The next 25 genes have strongly deleterious mutations.
 ## 40% of mutations in this region are deleterious.
-## The rest of the genome is completely neutral.
+## The next 25 genes are completely neutral.
+## The rest of the genome is a weakly deleterious background,
+## based on the distribution reported by Lydia Robert et al. (2018).
 
-## neutral, beneficial, deleterious 
-## g1 = 0.9, 0.1, 0.0, 
-## g2 = 0.6, 0.0, 0.40 
-## g3 = 1.0, 0.0, 0.0 
+## beneficial, deleterious, neutral, background
+## g1 = 0.1, 0.0, 0.0, 0.9
+## g2 = 0.0. 0.4, 0.0, 0.6 
+## g3 = 0.0, 0.0, 1.0, 0.0
+## g4 = 0.0, 0.0, 0.0, 1.0
 
 SLiM.genes <- data.frame(Gene, start, end, gene_length) %>%
     ## Let's annotate the genome file.
     mutate(Module = c(rep("Positive", 25),
                       rep("Purifying",25),
                       rep("Neutral", 25),
-                      rep("Neutral_Background",925))) %>%
-    mutate(PercentageNeutral = c(rep(0.9, 25), rep(0.6, 25),
-                                 rep(1.0, 950))) %>%
-    mutate(PercentageBeneficial = c(rep(0.1, 25), rep(0.0, 25),
-                                    rep(0.0, 950))) %>%
-    mutate(PercentageDeleterious = c(rep(0.0, 25), rep(0.4, 25),
-                                     rep(0,950)))
+                      rep("Background",925))) %>%
+    mutate(PercentageBeneficial = c(rep(0.1, 25),
+                                    rep(0.0, 25),
+                                    rep(0.0, 25),
+                                    rep(0.0, 925))) %>%
+    mutate(PercentageDeleterious = c(rep(0.0, 25),
+                                     rep(0.4, 25),
+                                     rep(0.0, 25),
+                                     rep(0.0,925))) %>%
+    mutate(PercentageNeutral = c(rep(0.0, 25),
+                                 rep(0.0, 25),
+                                 rep(1.0, 25),
+                                 rep(0.0, 925))) %>%
+    mutate(PercentageBackground = c(rep(0.9, 25),
+                                    rep(0.6, 25),
+                                    rep(0.0, 25),
+                                    rep(1.0, 925)))
 
 write.csv(SLiM.genes, "../results/SLiM-results/SLiM_geneIDs.csv",
           quote = F, row.names = F)

@@ -6,7 +6,7 @@ library(tidyverse)
 
 ## GLOBAL VARIABLES
 freq_threshold <- 0.01
-Ne <- 1e7
+Ne <- 1e4##1e7
 
 ## This file reflects all mutations that were segregating
 ## in the population as were sampled every 100 
@@ -21,19 +21,21 @@ d <- read.csv("../results/SLiM-results/SLiM-output.txt", header = F, sep = " ") 
     rename(Population = V10) %>%
     rename(t0 = V11) %>%
     rename(prevalence = V12) %>%
-    mutate(Annotation = recode(Annotation, m1 = "beneficial",
-                               m2 = "deleterious", m3 = "neutral")) %>%
+    mutate(Annotation = recode(Annotation,
+                               m1 = "beneficial",
+                               m2 = "deleterious",
+                               m3 = "neutral",
+                               m4 = "background")) %>%
     mutate(Population = recode(Population, p1 = "Hypermutator")) %>%
     mutate(Position = as.numeric(Position)) %>%
     ## annotate the Gene for each mutation.
     mutate(P1000 = trunc(Position/1000)+1) %>% 
     mutate(Gene = paste("g", P1000, sep = "")) %>% 
     select(-P1000) %>%
-    ## Create new column that converts prevalence to allele frequency.
+    ## Convert prevalence to allele frequency.
     ## The denominator is the number of individuals in the SliMulation. 
     mutate("allele_freq" = prevalence/Ne) %>%
-    ## Filter mutations with allele frequencies above 5% threshold. 
-    ## Maybe look at 5% and 10% frequency thresholds. 
+    ## Filter mutations with allele frequencies above the sampling threshold.
     filter(allele_freq > freq_threshold) %>%
     ## IMPORTANT: There can only be one row per mutation.
     group_by(ID, Annotation, Position, Population, t0) %>%
@@ -44,6 +46,6 @@ d <- read.csv("../results/SLiM-results/SLiM-output.txt", header = F, sep = " ") 
 
 
 ## write out the STIMS input file.
-write.csv(d, "../results/SLiM-results/SLiM-9200gen-OnePercent-Hypermutator.csv",
+write.csv(d, "../results/SLiM-results/SLiM-5000gen-OnePercent-Hypermutator.csv",
           quote = F, row.names = F)
 

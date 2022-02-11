@@ -1,4 +1,4 @@
-//bacterial-WF-model.slim 01/17/2022
+//bacterial-WF-model.slim 02/11/2022
 //Wright-Fisher model of an idealized haploid bacterial genome
 //Nkrumah Grant and Rohan Maddamsetti
 
@@ -6,10 +6,11 @@ initialize()
 {
 	if (exists("slimgui")) // if running with the SLiM GUI
 	{
-		defineConstant("Ne", 1e5); //effective population size
-		defineConstant("mu", 1e-8);
+		defineConstant("Ne", 1e4); // effective population size
+		defineConstant("mu", 1e-9); // mutation rate
 		defineConstant("numgens", 5000);
-		defineConstant("outfile", "SLiM-output.txt");
+		defineConstant("outfile", "SLiM-mutations.txt");
+		defineConstant("fixations_outfile", "SLiM-fixations.txt");
 	}
 	
 	// This parameter can be used to speed up SLiM.
@@ -71,17 +72,12 @@ initialize()
 	g3.color = "yellow";
 	g4.color = "orange";
 	
-	// genome of 4 million base pairs.
-	initializeGenomicElement(g1, 0,99999);
-	initializeGenomicElement(g2, 100000,199999);
-	initializeGenomicElement(g3, 200000, 299999);
-	initializeGenomicElement(g4, 300000, 3999999);
 	
 	// Genome of 1 million base pairs.
-	//initializeGenomicElement(g1, 0,24999);
-	//initializeGenomicElement(g2, 25000,49999);
-	//initializeGenomicElement(g3, 50000, 74999);
-	//initializeGenomicElement(g4, 75000, 999999);
+	initializeGenomicElement(g1, 0,24999);
+	initializeGenomicElement(g2, 25000,49999);
+	initializeGenomicElement(g3, 50000, 74999);
+	initializeGenomicElement(g4, 75000, 999999);
 	// asexual bacterial evolution.
 	initializeRecombinationRate(0);
 }
@@ -110,14 +106,11 @@ modifyChild()
 	// print the generation that we are on.
 	cat("Generation: "  + sim.generation + "\n");
 	
-	//Send segregating mutations to the outfile every 100 generations.
+	//Send segregating and fixed mutations to the outfile every 100 generations.
 	if (sim.generation % 100 == 0)
 	{
 		// IMPORTANT: the outfile path is relative to the current directory.	
-		sim.outputMutations(sim.mutationsOfType(m1), outfile, append = T);
-		sim.outputMutations(sim.mutationsOfType(m2), outfile, append = T);
-		sim.outputMutations(sim.mutationsOfType(m3), outfile, append = T);
-		sim.outputMutations(sim.mutationsOfType(m4), outfile, append = T);
+		sim.outputMutations(sim.mutations, outfile, append = T);
 		}	
 	
 	// Remove fixed mutations
@@ -150,5 +143,9 @@ modifyChild()
 	
 	
 	// run for numgens, where numgens <= 100,000.
-	if (sim.generation == numgens) sim.simulationFinished();
+	if (sim.generation == numgens) {
+			// write fixed mutations to file. 
+			sim.outputFixedMutations(fixations_outfile);
+			sim.simulationFinished();	
+	}
 }
