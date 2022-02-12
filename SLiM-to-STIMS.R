@@ -8,7 +8,8 @@ library(data.table)
 
 ## This function nicely formats all mutations over time into a dataframe.
 ## Further processing is needed to generate STIMS input.
-SLiM.output.to.dataframe <- function(SLiM.outfile, freq_threshold=0.01, Ne=1e5) {
+SLiM.output.to.dataframe <- function(SLiM.outfile, pop.name,
+                                     freq_threshold=0.01, Ne=1e5) {
     ## all mutations in the population, sampled every 100 generations.
     SLiM.outfile %>%
     data.table::fread(header = F, sep = " ") %>%
@@ -26,7 +27,7 @@ SLiM.output.to.dataframe <- function(SLiM.outfile, freq_threshold=0.01, Ne=1e5) 
                                m2 = "deleterious",
                                m3 = "neutral",
                                m4 = "background")) %>%
-    mutate(Population = recode(Population, p1 = "Hypermutator")) %>%
+    mutate(Population = recode(Population, p1 = pop.name)) %>%
     mutate(Position = as.numeric(Position)) %>%
     ## annotate the Gene for each mutation.
     mutate(P1000 = trunc(Position/1000)+1) %>% 
@@ -42,8 +43,9 @@ SLiM.output.to.dataframe <- function(SLiM.outfile, freq_threshold=0.01, Ne=1e5) 
 
 ## This function makes STIMS input-- only one mutation per row,
 ## representing the first time the mutation was observed in the population.
-SLiM.output.to.STIMS.input <- function(SLiM.output, freq_threshold=0.01, Ne=1e5) {
-    SLiM.output.to.dataframe(SLiM.output, freq_threshold, Ne) %>%
+SLiM.output.to.STIMS.input <- function(SLiM.output, pop.name,
+                                       freq_threshold=0.01, Ne=1e5) {
+    SLiM.output.to.dataframe(SLiM.output, pop.name, freq_threshold, Ne) %>%
         ## IMPORTANT: There can only be one row per mutation.
         group_by(ID, Annotation, Position, Population, t0) %>%
         arrange(Generation) %>%
@@ -52,12 +54,25 @@ SLiM.output.to.STIMS.input <- function(SLiM.output, freq_threshold=0.01, Ne=1e5)
         arrange(ID) ## to double-check that each ID is unique    
 }
 
-
-d <- SLiM.output.to.STIMS.input(
-    "../results/SLiM-results/SLiMoutput_Ne10000_mu10-7_numgens5000.txt",
+## Simulated Hypermutator data.
+d1 <- SLiM.output.to.STIMS.input(
+    "../results/SLiM-results/SLiMoutput_Ne100000_mu10-8_numgens5000.txt",
+    "Hypermutator",
     freq_threshold = 0.01, Ne = 1e5)
-
 ## write out the STIMS input file.
-write.csv(d, "../results/SLiM-results/SLiM-5000gen-OnePercent-Hypermutator.csv",
-          quote = F, row.names = F)
+write.csv(
+    d1,
+    "../results/SLiM-results/SLiM-5000gen-OnePercent-Hypermutator.csv",
+    quote = F, row.names = F)
+
+## Simulated Nonmutator data.
+d2 <- SLiM.output.to.STIMS.input(
+    "../results/SLiM-results/SLiMoutput_Ne100000_mu10-10_numgens5000.txt",
+    "Nonmutator",
+    freq_threshold = 0.01, Ne = 1e5)
+## write out the STIMS input file.
+write.csv(
+    d2,
+    "../results/SLiM-results/SLiM-5000gen-OnePercent-Nonmutator.csv",
+    quote = F, row.names = F)
 

@@ -342,6 +342,9 @@ function run_LTEE_analyses()
     neutral_pvals = calc_traj_pvals(neutral_genes,
                                     gene_mutation_data, REL606_genes,
                                     LTEE_pop_level_vec)
+    println("gold standard relaxed selection results:")
+    println(neutral_pvals) ## print the results
+
     
     neutral_base_layer = plot_base_layer(
         gene_mutation_data, REL606_genes, LTEE_pop_level_vec,
@@ -392,6 +395,9 @@ ggsave("../results/gene-modules/STIMS-jl-test-figures/Fig5.pdf", Fig5)
 purifying_pvals = calc_traj_pvals(purifying_genes,
                                   gene_mutation_data, REL606_genes,
                                   LTEE_pop_level_vec)
+println("gold standard purifying selection results:")
+println(purifying_pvals) ## print the results
+
 
 ## now look at positive selection genes.
 rando_plot = plot_base_layer(gene_mutation_data, REL606_genes,
@@ -410,6 +416,9 @@ top_nonmut_pvals = calc_traj_pvals(top_nonmut_genomics,
                                    gene_mutation_data,
                                    REL606_genes,
                                    LTEE_pop_level_vec)
+println("gold standard positive selection results:")
+println(top_nonmut_pvals) ## print the results
+
 return 0
 end
 

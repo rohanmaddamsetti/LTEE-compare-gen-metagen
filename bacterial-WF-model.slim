@@ -7,27 +7,31 @@ initialize()
 	if (exists("slimgui")) // if running with the SLiM GUI
 	{
 		defineConstant("Ne", 1e5); // effective population size
-		defineConstant("mu", 1e-7); // mutation rate
+		defineConstant("mu", 1e-10); // mutation rate per bp per generation.
 		defineConstant("numgens", 5000);
 		defineConstant("outfile", "SLiM-output.txt");
 	}
 	
 	// This parameter can be used to speed up SLiM.
-	initializeSLiMOptions(mutationRuns=1);
+	initializeSLiMOptions(mutationRuns=1);	
 	
-	// LTEE mutation rates per base per per generation.
+	// LTEE point mutation rates per bp per genome per generation:
 	// Nonmutator ~ 1e-10;
-	//  Hypermutator ~ 1e-8(100x)
-	initializeMutationRate(mu);
-	
+	// Hypermutator ~ 1e-8(100x).
+	// Since the model has a population size is smaller by a factor of 33,
+	// scale mu by a factor of 33,
+	// so that Ne*mu for the model is similar to the LTEE.
+	defineConstant("scale_factor", 33);
+	initializeMutationRate(mu); //* scale_factor);
+
 	// LTEE parameters:
 	//Genome size = 4.62e6 base pairs
 	//Ne = 3.3e7 cells
 	//initial sb in LTEE = 0.01587 (Izutzu et al. 2021)
 	// mu = 8.9e-11 per base-pair per cell per generation,
-	// so mu = 0.00041118 = 4.11e-4 per cell per generation
+	// so mu = 0.00041118 = 4.11e-4 per cell per generation.
 	
-	// parameters in STEPS simulations (Izutzu et al. 2021):
+	// STEPS simulation parameters (Izutzu et al. 2021):
 	//all of the simulations in this study used the following inputs:
 	// final population size, Nf = 5 x 10^8 cells;
 	//beneficial mutation rate, mu_B = 1.7 x 10^–6 per cell per generation
@@ -55,7 +59,6 @@ initialize()
 	m4.color = "orange";
 	m4.colorSubstitution = "orange";
 	
-	
 	//Parameterize the genomic DFE.
 	// 10% of mutations are beneficial in module 1.
 	initializeGenomicElementType("g1", c(m1,m4), c(0.1, 0.9));
@@ -71,12 +74,20 @@ initialize()
 	g3.color = "yellow";
 	g4.color = "orange";
 	
+	// Genome of 4 million base pairs.	
+	initializeGenomicElement(g1, 0,99999);
+	initializeGenomicElement(g2, 100000,199999);
+	initializeGenomicElement(g3, 200000, 299999);
+	initializeGenomicElement(g4, 300000, 3999999);
 	
 	// Genome of 1 million base pairs.
+	/*
 	initializeGenomicElement(g1, 0,24999);
 	initializeGenomicElement(g2, 25000,49999);
 	initializeGenomicElement(g3, 50000, 74999);
 	initializeGenomicElement(g4, 75000, 999999);
+	*/
+	
 	// asexual bacterial evolution.
 	initializeRecombinationRate(0);
 }

@@ -7,7 +7,8 @@ library(cowplot)
 library(gghighlight)
 
 
-SLiM.output.to.dataframe <- function(SLiM.outfile, freq_threshold=0.01, Ne=1e5) {
+SLiM.output.to.dataframe <- function(SLiM.outfile, pop.name,
+                                     freq_threshold=0.01, Ne=1e5) {
     SLiM.outfile %>%
     data.table::fread(header = F, sep = " ") %>%
     ## Remove unnecessary columns from SLiM output. 
@@ -24,7 +25,7 @@ SLiM.output.to.dataframe <- function(SLiM.outfile, freq_threshold=0.01, Ne=1e5) 
                                m2 = "deleterious",
                                m3 = "neutral",
                                m4 = "background")) %>%
-    mutate(Population = recode(Population, p1 = "Hypermutator")) %>%
+    mutate(Population = recode(Population, p1 = pop.name)) %>%
     mutate(Position = as.numeric(Position)) %>%
     ## annotate the Gene for each mutation.
     mutate(P1000 = trunc(Position/1000)+1) %>% 
@@ -60,15 +61,24 @@ make.mutation.trajectory.plot <- function(df) {
 
 ## all mutations in the population, sampled every 100 generations.
 ## IMPORTANT: Pass in the correct Ne and filtering threshold.
-df <- SLiM.output.to.dataframe(
-    "../results/SLiM-results/SLiMoutput_Ne10000_mu10-7_numgens5000.txt",
+hypermut.df <- SLiM.output.to.dataframe(
+    "../results/SLiM-results/SLiMoutput_Ne100000_mu10-8_numgens5000.txt",
+    "Hypermutator",
     freq_threshold = 0.001, ## reduce frequency filtering.
     Ne = 1e5)
 
-p <- make.mutation.trajectory.plot(df) 
+hypermut.p <- make.mutation.trajectory.plot(hypermut.df) 
 
-## If we are plotting 
-p2 <- p + theme(axis.title.x = element_blank())
+nonmut.df <- SLiM.output.to.dataframe(
+    "../results/SLiM-results/SLiMoutput_Ne100000_mu10-10_numgens5000.txt",
+    "Nonmutator",
+    freq_threshold = 0.001, ## reduce frequency filtering.
+    Ne = 1e5)
+nonmut.p <- make.mutation.trajectory.plot(nonmut.df) 
+
+
+## If we are plotting multiple panels.
+##p2 <- hypermut.p + theme(axis.title.x = element_blank())
 
 #https://wilkelab.org/cowplot/articles/plot_grid.html
 ##p1 <- plot_grid(p1, labels = 'A', label_size = 14, ncol=1)
