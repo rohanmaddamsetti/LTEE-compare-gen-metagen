@@ -1,4 +1,4 @@
-//bacterial-WF-model.slim 02/11/2022
+//bacterial-WF-model.slim 02/12/2022
 //Wright-Fisher model of an idealized haploid bacterial genome
 //Nkrumah Grant and Rohan Maddamsetti
 
@@ -18,11 +18,7 @@ initialize()
 	// LTEE point mutation rates per bp per genome per generation:
 	// Nonmutator ~ 1e-10;
 	// Hypermutator ~ 1e-8(100x).
-	// Since the model has a population size is smaller by a factor of 33,
-	// scale mu by a factor of 33,
-	// so that Ne*mu for the model is similar to the LTEE.
-	defineConstant("scale_factor", 33);
-	initializeMutationRate(mu); //* scale_factor);
+	initializeMutationRate(mu);
 
 	// LTEE parameters:
 	//Genome size = 4.62e6 base pairs
@@ -41,7 +37,7 @@ initialize()
 	
 	//beneficial mutations are drawn from an exponential distribution.
 	initializeMutationType("m1", 1.0, "e", 0.01587);
-	// strongly deleterious: 30% fitness decline, as defined in Robert et al. (2018)
+	// strongly deleterious: 30% fitness defect, as defined in Robert et al. (2018)
 	initializeMutationType("m2", 1.0, "f", -0.3);
 	// completely neutral:
 	initializeMutationType("m3", 1.0, "f", 0.0);
@@ -80,14 +76,6 @@ initialize()
 	initializeGenomicElement(g3, 200000, 299999);
 	initializeGenomicElement(g4, 300000, 3999999);
 	
-	// Genome of 1 million base pairs.
-	/*
-	initializeGenomicElement(g1, 0,24999);
-	initializeGenomicElement(g2, 25000,49999);
-	initializeGenomicElement(g3, 50000, 74999);
-	initializeGenomicElement(g4, 75000, 999999);
-	*/
-	
 	// asexual bacterial evolution.
 	initializeRecombinationRate(0);
 }
@@ -97,7 +85,13 @@ initialize()
 1
 {
 	sim.addSubpop("p1", asInteger(Ne));
-	p1.setCloningRate(1.0); // Essential for bacteria.	
+	p1.setCloningRate(1.0); // Essential for bacteria.
+	
+	// if the outfile already exists,
+	// then delete it so we don't append
+	// new run data to old run data.
+	if (fileExists(outfile))
+		deleteFile(outfile);
 }
 
 
