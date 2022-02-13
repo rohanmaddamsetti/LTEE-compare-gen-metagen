@@ -65,9 +65,9 @@ SLiM.output.to.STIMS.input <- function(SLiM.output, pop.name,
 
 ## Simulated Hypermutator data.
 d1 <- SLiM.output.to.STIMS.input(
-    "../results/SLiM-results/SLiMoutput_Ne100000_mu10-8_numgens5000.txt",
+    "../results/SLiM-results/SLiM_Ne1000000_mu10-8_numgens5000.txt",
     "Hypermutator",
-    freq_threshold = 0.01, Ne = 1e5)
+    freq_threshold = 0.01, Ne = 1e6)
 ## write out the STIMS input file.
 write.csv(
     d1,
@@ -76,9 +76,9 @@ write.csv(
 
 ## Simulated Nonmutator data.
 d2 <- SLiM.output.to.STIMS.input(
-    "../results/SLiM-results/SLiMoutput_Ne100000_mu10-10_numgens5000.txt",
+    "../results/SLiM-results/SLiM_Ne1000000_mu10-10_numgens5000.txt",
     "Nonmutator",
-    freq_threshold = 0.01, Ne = 1e5)
+    freq_threshold = 0.01, Ne = 1e6)
 ## write out the STIMS input file.
 write.csv(
     d2,

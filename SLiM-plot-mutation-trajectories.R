@@ -70,20 +70,22 @@ make.mutation.trajectory.plot <- function(df) {
 ## all mutations in the population, sampled every 100 generations.
 ## IMPORTANT: Pass in the correct Ne and filtering threshold.
 hypermut.df <- SLiM.output.to.dataframe(
-    "../results/SLiM-results/SLiMoutput_Ne100000_mu10-8_numgens5000.txt",
+    "../results/SLiM-results/SLiM_Ne1000000_mu10-8_numgens5000.txt",
     "Hypermutator",
     freq_threshold = 0.001, ## reduce frequency filtering.
-    Ne = 1e5)
-
-hypermut.p <- make.mutation.trajectory.plot(hypermut.df) 
+    Ne = 1e6)
 
 nonmut.df <- SLiM.output.to.dataframe(
-    "../results/SLiM-results/SLiMoutput_Ne100000_mu10-10_numgens5000.txt",
+    "../results/SLiM-results/SLiM_Ne1000000_mu10-10_numgens5000.txt",
     "Nonmutator",
     freq_threshold = 0.001, ## reduce frequency filtering.
-    Ne = 1e5)
-nonmut.p <- make.mutation.trajectory.plot(nonmut.df) 
+    Ne = 1e6)
 
+hypermut.p <- make.mutation.trajectory.plot(hypermut.df)
+ggsave("../results/SLiM-results/hypermut-trajectory.pdf", hypermut.p, height=4)
+
+nonmut.p <- make.mutation.trajectory.plot(nonmut.df) 
+ggsave("../results/SLiM-results/nonmut-trajectory.pdf", nonmut.p, height=4)
 
 ## If we are plotting multiple panels.
 ##p2 <- hypermut.p + theme(axis.title.x = element_blank())
