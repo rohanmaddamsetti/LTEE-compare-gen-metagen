@@ -1,5 +1,5 @@
 """
-analyze-STIMS-power.jl by Rohan Maddamsetti.
+generate-STIMS-power-analysis-data.jl by Rohan Maddamsetti.
 
 What variables affect STIMS statistical power to detect selection? 
 To answer this question, we asked how the following variables affect STIMS Type I error 
@@ -37,12 +37,13 @@ For each replicate dataset:
       -- Take the first n genes of the module.
       -- Run STIMS.jl.
       -- Get the p-value, and add one row to the dataframe.
--- Use the dataframe to make figures using ggplot2.
+-- write the dataframe to file.
+
+Then, use the R script analyze-STIMS-power.R to make figures using ggplot2.
 """
 
 include("STIMS.jl")
 using DataFrames, DataFramesMeta, CSV, RCall
-@rlibrary ggplot2
 
 
 ## IMPORTANT: we are assuming that each gene is 1000 bp long.
@@ -215,15 +216,7 @@ function GeneratePowerAnalysisDataFrame()
 end
 
 
-## make the DataFrame for the power analysis.
+## make the DataFrame for the power analysis
 power_analysis_df = GeneratePowerAnalysisDataFrame()
-
-## now, let's make the figures!
-timeseries_length_df = rsubset(power_analysis)
-
-time_series_plot = ggplot(timeseries_length_df, aes(x = :VariableValue, y = :Pval)) +
-    theme_classic() +
-    geom_boxplot() +
-    facet_grid(R"MutatorStatus~GeneModule") +
-    ggtitle("Length of Simulated Evolution Experiment") +
-    xlab("Generations")
+## and write to file. Make figures with analyze-STIMS-power.R.
+CSV.write("../results/SLiM-results/STIMS-power-analysis-data.csv", power_analysis_df)
