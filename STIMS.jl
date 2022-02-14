@@ -22,8 +22,8 @@ ISSUES:
 
 module STIMS
 
-## exported interface-- the only function that users should use.
-export RunSTIMS
+## exported interface-- the only functions that users should use.
+export RunSTIMS, RunSTIMS_on_data
 
 using DataFrames, DataFramesMeta, CSV, StatsBase, FLoops, RCall, ArgParse
 
@@ -232,7 +232,7 @@ function plot_base_layer(gene_mutation_data, genome_metadata, pop_level_vec;
                                                          pop_level_vec,
                                                          subset_size)
         ## add a column for bootstrap replicate
-        @transform!(randomized_traj, bootstrap_replicate = bootstrap_rep)        
+        @transform!(randomized_traj, :bootstrap_replicate = bootstrap_rep)        
         bootstrapped_trajectories = vcat(bootstrapped_trajectories, randomized_traj)
     end
 
@@ -465,6 +465,33 @@ function RunSTIMS(mutation_csv_path, genome_metadata_csv_path,
         c_gene_module)
     ggsave(joinpath(outputdir, outfile), Fig)
     
+end
+
+
+## take dataframes directly as input, and don't make the plot.
+function RunSTIMS_on_data(mutation_data, genome_metadata, gene_module_df)
+   
+    gene_mutation_data = @chain mutation_data begin
+        transform(:t0 => ByRow(t -> t/10000) => :Time)
+        innerjoin(genome_metadata, on = :Gene)
+        @rsubset(:Gene != "intergenic")
+    end
+    
+    pop_level_vec = unique(gene_mutation_data.Population)
+    
+    ## make sure that only loci in genome_metadata are analyzed.
+    @rsubset!(gene_module_df, :Gene in genome_metadata.Gene)
+
+    c_gene_module = calc_cumulative_muts(gene_module_df,
+                                         gene_mutation_data,
+                                         genome_metadata,
+                                         pop_level_vec)
+
+    pvals = calc_traj_pvals(gene_module_df,
+                            gene_mutation_data,
+                            genome_metadata,
+                            pop_level_vec)
+    return(pvals)
 end
 
 

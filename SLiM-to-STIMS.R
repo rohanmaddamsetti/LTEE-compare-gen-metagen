@@ -56,7 +56,7 @@ SLiM.output.to.STIMS.input <- function(SLiM.output, pop.name,
                                        freq_threshold=0.01, Ne=1e5) {
     SLiM.output.to.dataframe(SLiM.output, pop.name, freq_threshold, Ne) %>%
         ## IMPORTANT: There can only be one row per mutation.
-        group_by(ID, Annotation, Position, Population, t0) %>%
+        group_by(ID, Annotation, Position, Gene, Population, t0) %>%
         arrange(Generation) %>%
         ## only take the first row (the first generation at which allele_freq > threshold)
         filter(row_number() == 1) %>%
