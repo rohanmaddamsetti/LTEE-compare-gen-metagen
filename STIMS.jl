@@ -233,7 +233,7 @@ function plot_base_layer(gene_mutation_data, genome_metadata, pop_level_vec;
                                                          pop_level_vec,
                                                          subset_size)
         ## add a column for bootstrap replicate
-        @transform!(randomized_traj, :bootstrap_replicate = bootstrap_rep)        
+        @transform!(randomized_traj, :bootstrap_replicate = bootstrap_rep)
         bootstrapped_trajectories = vcat(bootstrapped_trajectories, randomized_traj)
     end
 
@@ -241,6 +241,8 @@ function plot_base_layer(gene_mutation_data, genome_metadata, pop_level_vec;
     ## from each population, for a two-sided test.
     ## default is alphaval == 0.05.
     middle_trajs = get_middle_trajectories(bootstrapped_trajectories, alphaval, N)
+    ## for better plotting, divide x-axis labels by 1000.
+    transform!(middle_trajs, :t0 => ByRow(t -> t/1000) => :Time)
 
     ## R function for plotting better y-axis labels.
     ## see solution here for nice scientific notation on axes.
@@ -248,7 +250,7 @@ function plot_base_layer(gene_mutation_data, genome_metadata, pop_level_vec;
 
     fancy_scientific = R"""function(x) {ifelse(x==0, "0", parse(text=gsub("[+]", "", gsub("e", " %*% 10^", scales::scientific_format()(x)))))}"""
 
-    p = ggplot(middle_trajs, aes(x=:t0, y=:normalized_cs)) +
+    p = ggplot(middle_trajs, aes(x=:Time, y=:normalized_cs)) +
         ylab("Cumulative number of mutations (normalized)") +
         theme_classic() +
         geom_point(size=0.2, color=my_color) +
@@ -260,7 +262,7 @@ function plot_base_layer(gene_mutation_data, genome_metadata, pop_level_vec;
                                      breaks = R"scales::extended_breaks(n = 6)",
                                      limits = R"c(0, NA)") +
                   facet_wrap(R".~Population", scales="free", nrow=4) +
-                  xlab("Time")
+                  xlab("Generations (x 1,000)")
     return p
 end
 
@@ -269,9 +271,9 @@ function add_cumulative_mut_layer(p, layer_df; my_color="black")
     ## take a ggplot object output by plot_cumulative_muts, and add an extra layer.
     p = p +
         geom_point(data = layer_df,
-                   aes(x = :t0, y = :normalized_cs),
+                   aes(x = :Time, y = :normalized_cs),
                    color = my_color, size = 0.2) +
-                       geom_step(data = layer_df, aes(x = :t0, y = :normalized_cs),
+                       geom_step(data = layer_df, aes(x = :Time, y = :normalized_cs),
                                  size = 0.2, color = my_color)
     return p
 end
@@ -300,7 +302,7 @@ function run_LTEE_analyses()
         ## filters. In particular, genes that overlap with masked regions are
         ## excluded, even if the metagenomic data included mutations that
         ## are called in non-repetitive regions of those genes.
-        transform(:t0 => ByRow(t -> t/10000) => :Time)
+        transform(:t0 => ByRow(t -> t/1000) => :Time)
         innerjoin(REL606_genes, on = :Gene)
         @rsubset(:Gene != "intergenic")
     end
@@ -345,6 +347,9 @@ function run_LTEE_analyses()
                                            gene_mutation_data,
                                            REL606_genes,
                                            LTEE_pop_level_vec)
+    ## for better plotting, divide x-axis labels by 1000.
+    transform!(c_neutral_genes, :t0 => ByRow(t -> t/1000) => :Time)
+
 
     neutral_pvals = calc_traj_pvals(neutral_genes,
                                     gene_mutation_data, REL606_genes,
@@ -387,6 +392,8 @@ function run_LTEE_analyses()
 c_purifying_genes = calc_cumulative_muts(purifying_genes,
                                          gene_mutation_data,
                                          REL606_genes, LTEE_pop_level_vec)
+## for better plotting, divide x-axis labels by 1000.
+transform!(c_purifying_genes, :t0 => ByRow(t -> t/1000) => :Time)
 
 purifying_base_layer = plot_base_layer(
     gene_mutation_data, REL606_genes, LTEE_pop_level_vec,
@@ -414,6 +421,9 @@ rando_plot = plot_base_layer(gene_mutation_data, REL606_genes,
 c_top_nonmuts =  calc_cumulative_muts(top_nonmut_genomics,
                                       gene_mutation_data,
                                       REL606_genes, LTEE_pop_level_vec)
+## for better plotting, divide x-axis labels by 1000.
+transform!(c_top_nonmuts, :t0 => ByRow(t -> t/1000) => :Time)
+
 
 Fig6 = add_cumulative_mut_layer(rando_plot, c_top_nonmuts)
 ggsave("../results/gene-modules/STIMS-jl-test-figures/Fig6.pdf",Fig6)
@@ -438,7 +448,7 @@ function RunSTIMS(mutation_csv_path, genome_metadata_csv_path,
     ## https://juliadata.github.io/DataFramesMeta.jl/stable/#Comparison-with-dplyr-and-LINQ
     
     gene_mutation_data = @chain mutation_data begin
-        transform(:t0 => ByRow(t -> t/10000) => :Time)
+        transform(:t0 => ByRow(t -> t/1000) => :Time)
         innerjoin(genome_metadata, on = :Gene)
         @rsubset(:Gene != "intergenic")
     end
@@ -453,7 +463,9 @@ function RunSTIMS(mutation_csv_path, genome_metadata_csv_path,
                                          gene_mutation_data,
                                          genome_metadata,
                                          pop_level_vec)
-
+    ## for better plotting, divide x-axis labels by 1000.
+    transform!(c_gene_module, :t0 => ByRow(t -> t/1000) => :Time)
+    
     pvals = calc_traj_pvals(gene_module_df,
                             gene_mutation_data,
                             genome_metadata,
@@ -468,9 +480,15 @@ function RunSTIMS(mutation_csv_path, genome_metadata_csv_path,
     Fig = add_cumulative_mut_layer(
         base_layer,
         c_gene_module)
-
-    ## assume that we're plotting a single population.
-    ggsave(outfile, Fig, height=4, width=5)    
+    ## default figure dimensions.
+    fig_height = 7
+    fig_width = 7
+    ## if plotting a single population, then plot a smaller figure.
+    if (length(pop_level_vec) == 1)
+        fig_height = 4
+        fig_width = 4
+    end
+    ggsave(outfile, Fig, height = fig_height, width = fig_width)
 end
 
 
@@ -478,7 +496,7 @@ end
 function RunSTIMS_on_data(mutation_data, genome_metadata, gene_module_df)
    
     gene_mutation_data = @chain mutation_data begin
-        transform(:t0 => ByRow(t -> t/10000) => :Time)
+        transform(:t0 => ByRow(t -> t/1000) => :Time)
         innerjoin(genome_metadata, on = :Gene)
         @rsubset(:Gene != "intergenic")
     end
@@ -510,17 +528,32 @@ function run_SLiM_tests()
     RunSTIMS("../results/SLiM-results/SLiM-5000gen-OnePercent-Hypermutator.csv",
              "../results/SLiM-results/SLiM_geneIDs.csv",
              "../results/SLiM-results/SLiM_neutral_module.csv",
-             "../results/SLiM-results/SLiM-5000gen-OnePercent-neutral.pdf")
+             "../results/SLiM-results/SLiM-5000gen-OnePercent-Hypermutator-neutral.pdf")
 
     RunSTIMS("../results/SLiM-results/SLiM-5000gen-OnePercent-Hypermutator.csv",
              "../results/SLiM-results/SLiM_geneIDs.csv",
              "../results/SLiM-results/SLiM_positive_module.csv",
-             "../results/SLiM-results/SLiM-5000gen-OnePercent-positive.pdf")
+             "../results/SLiM-results/SLiM-5000gen-OnePercent-Hypermutator-positive.pdf")
 
     RunSTIMS("../results/SLiM-results/SLiM-5000gen-OnePercent-Hypermutator.csv",
              "../results/SLiM-results/SLiM_geneIDs.csv",
              "../results/SLiM-results/SLiM_purifying_module.csv",
-             "../results/SLiM-results/SLiM-5000gen-OnePercent-purifying.pdf")
+             "../results/SLiM-results/SLiM-5000gen-OnePercent-Hypermutator-purifying.pdf")
+
+    RunSTIMS("../results/SLiM-results/SLiM-5000gen-OnePercent-Nonmutator.csv",
+             "../results/SLiM-results/SLiM_geneIDs.csv",
+             "../results/SLiM-results/SLiM_neutral_module.csv",
+             "../results/SLiM-results/SLiM-5000gen-OnePercent-Nonmutator-neutral.pdf")
+
+    RunSTIMS("../results/SLiM-results/SLiM-5000gen-OnePercent-Nonmutator.csv",
+             "../results/SLiM-results/SLiM_geneIDs.csv",
+             "../results/SLiM-results/SLiM_positive_module.csv",
+             "../results/SLiM-results/SLiM-5000gen-OnePercent-Nonmutator-positive.pdf")
+
+    RunSTIMS("../results/SLiM-results/SLiM-5000gen-OnePercent-Nonmutator.csv",
+             "../results/SLiM-results/SLiM_geneIDs.csv",
+             "../results/SLiM-results/SLiM_purifying_module.csv",
+             "../results/SLiM-results/SLiM-5000gen-OnePercent-Nonmutator-purifying.pdf")
 end
 
 
