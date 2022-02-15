@@ -30,6 +30,7 @@ using DataFrames, DataFramesMeta, CSV, StatsBase, FLoops, RCall, ArgParse
 ## See this blog post about using ggplot within Julia:
 ## https://avt.im/blog/2018/03/23/R-packages-ggplot-in-julia
 @rlibrary ggplot2
+@rlibrary scales
 
 
 function make_cumulative_muts_pop_df(gene_module_mutations_df, pop, final_time)
@@ -241,17 +242,23 @@ function plot_base_layer(gene_mutation_data, genome_metadata, pop_level_vec;
     ## default is alphaval == 0.05.
     middle_trajs = get_middle_trajectories(bootstrapped_trajectories, alphaval, N)
 
+    ## R function for plotting better y-axis labels.
+    ## see solution here for nice scientific notation on axes.
+    ## https://stackoverflow.com/questions/10762287/how-can-i-format-axis-labels-with-exponents-with-ggplot2-and-scales
+
+    fancy_scientific = R"""function(x) {ifelse(x==0, "0", parse(text=gsub("[+]", "", gsub("e", " %*% 10^", scales::scientific_format()(x)))))}"""
+
     p = ggplot(middle_trajs, aes(x=:t0, y=:normalized_cs)) +
         ylab("Cumulative number of mutations (normalized)") +
         theme_classic() +
         geom_point(size=0.2, color=my_color) +
-        theme(var"axis.title.x" = element_text(size=14),
-              var"axis.title.y" = element_text(size=14),
-              var"axis.text.x"  = element_text(size=14),
-              var"axis.text.y"  = element_text(size=14)) +
-                  ##scale_y_continuous(labels=fancy_scientific,
-                  ##breaks = scales::extended_breaks(n = 6),
-                  ##limits = c(0, NA)) +
+        theme(var"axis.title.x" = element_text(size=13),
+              var"axis.title.y" = element_text(size=13),
+              var"axis.text.x"  = element_text(size=13),
+              var"axis.text.y"  = element_text(size=13)) +
+                  scale_y_continuous(labels=fancy_scientific,
+                                     breaks = R"scales::extended_breaks(n = 6)",
+                                     limits = R"c(0, NA)") +
                   facet_wrap(R".~Population", scales="free", nrow=4) +
                   xlab("Time")
     return p
@@ -418,13 +425,11 @@ top_nonmut_pvals = calc_traj_pvals(top_nonmut_genomics,
                                    LTEE_pop_level_vec)
 println("gold standard positive selection results:")
 println(top_nonmut_pvals) ## print the results
-
-return 0
 end
 
 
 function RunSTIMS(mutation_csv_path, genome_metadata_csv_path,
-                  genelist_csv_path, outputdir, outfile = "STIMS-plot.pdf")
+                  genelist_csv_path, outfile = "STIMS-plot.pdf")
 
     mutation_data = CSV.read(mutation_csv_path, DataFrame)
     genome_metadata = CSV.read(genome_metadata_csv_path, DataFrame) 
@@ -463,8 +468,9 @@ function RunSTIMS(mutation_csv_path, genome_metadata_csv_path,
     Fig = add_cumulative_mut_layer(
         base_layer,
         c_gene_module)
-    ggsave(joinpath(outputdir, outfile), Fig)
-    
+
+    ## assume that we're plotting a single population.
+    ggsave(outfile, Fig, height=4, width=5)    
 end
 
 
@@ -496,40 +502,27 @@ end
 
 
 function run_examples()
-
-    RunSTIMS("../results/LTEE-metagenome-mutations.csv", "../results/REL606_IDs.csv", "../data/neutral_compilation.csv", "../results/gene-modules/STIMS-jl-test-figures")
-
-    RunSTIMS("../results/SLiM-results/SLiM-5000gen-v03.csv", "../results/SLiM-results/SLiM_geneIDs.csv", "../results/SLiM-results/SLiM_test_gene_module.csv", "../results/SLiM-results")
-    
+    RunSTIMS("../results/LTEE-metagenome-mutations.csv", "../results/REL606_IDs.csv", "../data/neutral_compilation.csv", "../results/gene-modules/STIMS-jl-test-figures/neutral.pdf")
 end
+
 
 function run_SLiM_tests()
-
-    RunSTIMS("../results/SLiM-results/SLiM-10000gen-FivePercent.csv",
+    RunSTIMS("../results/SLiM-results/SLiM-5000gen-OnePercent-Hypermutator.csv",
              "../results/SLiM-results/SLiM_geneIDs.csv",
              "../results/SLiM-results/SLiM_neutral_module.csv",
-             "../results/SLiM-results",
-             "SLiM-10000gen-FivePercent-neutral.pdf")
+             "../results/SLiM-results/SLiM-5000gen-OnePercent-neutral.pdf")
 
-    RunSTIMS("../results/SLiM-results/SLiM-10000gen-FivePercent.csv",
-             "../results/SLiM-results/SLiM_geneIDs.csv",
-             "../results/SLiM-results/SLiM_weak_positive_module.csv",
-             "../results/SLiM-results",
-             "SLiM-10000gen-FivePercent-weak-positive.pdf")
-
-    RunSTIMS("../results/SLiM-results/SLiM-10000gen-FivePercent.csv",
+    RunSTIMS("../results/SLiM-results/SLiM-5000gen-OnePercent-Hypermutator.csv",
              "../results/SLiM-results/SLiM_geneIDs.csv",
              "../results/SLiM-results/SLiM_positive_module.csv",
-             "../results/SLiM-results",
-             "SLiM-10000gen-FivePercent-positive.pdf")
+             "../results/SLiM-results/SLiM-5000gen-OnePercent-positive.pdf")
 
-    RunSTIMS("../results/SLiM-results/SLiM-10000gen-FivePercent.csv",
+    RunSTIMS("../results/SLiM-results/SLiM-5000gen-OnePercent-Hypermutator.csv",
              "../results/SLiM-results/SLiM_geneIDs.csv",
              "../results/SLiM-results/SLiM_purifying_module.csv",
-             "../results/SLiM-results",
-             "SLiM-10000gen-FivePercent-purifying.pdf")
-    return 0
+             "../results/SLiM-results/SLiM-5000gen-OnePercent-purifying.pdf")
 end
+
 
 function parse_commandline()
     s = ArgParseSettings()
@@ -547,10 +540,10 @@ function parse_commandline()
         help = "a text file starting with the column name 'Gene', with one gene per line. This contains the set of genes that will be analyzed by STIMS."
         arg_type = String
         required = true
-        "--outputdir", "-o"
-        help = "output directory for figures. default is the current directory."
+        "--outfile", "-o"
+        help = "path for the figure. default is STIMS-plot.pdf."
         arg_type = String
-        default = "."
+        default = "STIMS-plot.pdf"
     end
 
     return parse_args(s)
@@ -567,15 +560,17 @@ function main()
     mutation_csv_path = parsed_args["mutation_csv_path"]
         genome_metadata_csv_path = parsed_args["genome_metadata_csv_path"]
         gene_set_csv_path = parsed_args["gene_set_path"]
-        outputdir = parsed_args["outputdir"]
+        outfile = parsed_args["outfile"]
     
     RunSTIMS(mutation_csv_path, genome_metadata_csv_path,
-             gene_set_csv_path, outputdir)
+             gene_set_csv_path, outfile)
 end
+
 
 ## only run main() when STIMS.jl is invoked from the command-line.
 if length(ARGS) > 0
     main()
 end
+
 
 end ## end of module STIMS.
