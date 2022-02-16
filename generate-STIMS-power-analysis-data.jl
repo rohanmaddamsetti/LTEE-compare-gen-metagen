@@ -39,10 +39,13 @@ For each replicate dataset:
       -- Get the p-value, and add one row to the dataframe.
 -- write the dataframe to file.
 
+On HPC, use the following command to run:
+sbatch -t 96:00:00 -c 24 --mem-per-cpu=32G --wrap="julia --threads 24 generate-STIMS-power-analysis-data.jl 24"
+
 Then, use the R script analyze-STIMS-power.R to make figures using ggplot2.
 """
 
-using DataFrames, DataFramesMeta, CSV, StatsBase, FLoops
+using DataFrames, DataFramesMeta, CSV, StatsBase, FLoops, ArgParse
 
 ################################################################################
 ## FUNCTIONS FROM STIMS.jl. I copied these functions into this script to remove
@@ -230,7 +233,7 @@ end
 
 
 ## take dataframes directly as input, and don't make the plot.
-function RunSTIMS_on_data(mutation_data, genome_metadata, gene_module_df)
+function RunSTIMS_on_data(mutation_data, genome_metadata, gene_module_df, ncores = 4)
    
     gene_mutation_data = @chain mutation_data begin
         transform(:t0 => ByRow(t -> t/1000) => :Time)
@@ -251,7 +254,8 @@ function RunSTIMS_on_data(mutation_data, genome_metadata, gene_module_df)
     pvals = calc_traj_pvals(gene_module_df,
                             gene_mutation_data,
                             genome_metadata,
-                            pop_level_vec)
+                            pop_level_vec,
+                            ncores=ncores)
     return(pvals)
 end
 ################################################################################
@@ -351,7 +355,7 @@ function getReplicate(SLiM_file)
 end
 
 
-function GeneratePowerAnalysisDataFrame()
+function GeneratePowerAnalysisDataFrame(ncores = 4)
     ## Add rows to this dataframe, one by one.
     power_analysis_df = DataFrame(MutatorStatus = String[],
                                   GeneModule = String[],
@@ -388,7 +392,7 @@ function GeneratePowerAnalysisDataFrame()
             STIMS_input = SLiM_output_to_STIMS_input(
                 SLiM_file, pop_name; timeseries_length = exp_length)
             for (module_type, module_df) in gene_module_df_dict         
-                pval_df = RunSTIMS_on_data(STIMS_input, genome_metadata, module_df)
+                pval_df = RunSTIMS_on_data(STIMS_input, genome_metadata, module_df, ncores)
                 println(pval_df)
                 ## push a new row onto the power analysis DataFrame.
                 push!(power_analysis_df, [pop_name,  module_type, replicate,"timeseries_length", exp_length, pval_df.count[1], pval_df.pval[1]])
@@ -399,7 +403,7 @@ function GeneratePowerAnalysisDataFrame()
             STIMS_input = SLiM_output_to_STIMS_input(
                 SLiM_file, pop_name; sampling_interval = sampling_int)
             for (module_type, module_df) in gene_module_df_dict
-                pval_df = RunSTIMS_on_data(STIMS_input, genome_metadata, module_df)
+                pval_df = RunSTIMS_on_data(STIMS_input, genome_metadata, module_df, ncores)
                 println(pval_df)
                 ## push a new row onto the power analysis DataFrame.
                 push!(power_analysis_df, [pop_name,  module_type, replicate, "sampling_interval", sampling_int, pval_df.count[1], pval_df.pval[1]])
@@ -410,7 +414,7 @@ function GeneratePowerAnalysisDataFrame()
             STIMS_input = SLiM_output_to_STIMS_input(
                 SLiM_file, pop_name; freq_threshold = threshold)
             for (module_type, module_df) in gene_module_df_dict
-                pval_df = RunSTIMS_on_data(STIMS_input, genome_metadata, module_df)
+                pval_df = RunSTIMS_on_data(STIMS_input, genome_metadata, module_df, ncores)
                 println(pval_df)
                 push!(power_analysis_df, [pop_name,  module_type, replicate, "filtering_threshold", threshold, pval_df.count[1], pval_df.pval[1]])
             end
@@ -422,7 +426,7 @@ function GeneratePowerAnalysisDataFrame()
                 ## Only run on the first num_genes in the module.
                 filtered_gene_module_df = module_df[1:num_genes, :]
                 pval_df = RunSTIMS_on_data(STIMS_input, genome_metadata,
-                                                 filtered_gene_module_df)
+                                                 filtered_gene_module_df, ncores)
                 println(pval_df)
                 ## push a new row onto the power analysis DataFrame.
                 push!(power_analysis_df, [pop_name,  module_type, replicate, "num_genes_from_module", num_genes, pval_df.count[1], pval_df.pval[1]])
@@ -433,9 +437,30 @@ function GeneratePowerAnalysisDataFrame()
 end
 
 
+function parse_commandline()
+    s = ArgParseSettings()
+
+    @add_arg_table s begin
+        "ncores"
+        help = "number of cores for parallel computation."
+        arg_type = Int64
+        default = 4
+    end
+
+    return parse_args(s)
+end
+
+
 function main()
+    parsed_args = parse_commandline()
+    println("Parsed args:")
+    for (arg,val) in parsed_args
+        println("  $arg  =>  $val")
+    end
+
+    ncores = parsed_args["ncores"]
     ## make the DataFrame for the power analysis
-    power_analysis_df = GeneratePowerAnalysisDataFrame()
+    power_analysis_df = GeneratePowerAnalysisDataFrame(ncores)
     ## and write to file. Make figures with analyze-STIMS-power.R.
     CSV.write("../results/SLiM-results/STIMS-power-analysis-data.csv", power_analysis_df)
 end

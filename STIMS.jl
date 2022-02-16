@@ -591,9 +591,9 @@ function main()
     end
 
     mutation_csv_path = parsed_args["mutation_csv_path"]
-        genome_metadata_csv_path = parsed_args["genome_metadata_csv_path"]
-        gene_set_csv_path = parsed_args["gene_set_path"]
-        outfile = parsed_args["outfile"]
+    genome_metadata_csv_path = parsed_args["genome_metadata_csv_path"]
+    gene_set_csv_path = parsed_args["gene_set_path"]
+    outfile = parsed_args["outfile"]
     
     RunSTIMS(mutation_csv_path, genome_metadata_csv_path,
              gene_set_csv_path, outfile)
