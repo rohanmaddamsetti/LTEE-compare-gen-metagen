@@ -123,7 +123,7 @@ end
 
 function calc_traj_pvals(gene_module_df,
                          gene_mutation_data, genome_metadata,
-                         pop_level_vec; N = 10000, ncores = 4)    
+                         pop_level_vec; N = 10000)    
     #= calculate the tail probabilities of the true cumulative mutation trajectory
     of a given vector of genes (a 'module'), based on resampling
     random sets of genes. Returns the upper tail of null distribution,
@@ -131,6 +131,8 @@ function calc_traj_pvals(gene_module_df,
     Output: a dataframe with three columns: Population, count, p.val.
     =#
 
+    nthreads = Threads.nthreads() ## get the number of threads available to Julia.
+    
     ## each sample has the same cardinality as gene_module_df.Gene.
     subset_size = length(gene_module_df.Gene)
 
@@ -144,7 +146,7 @@ function calc_traj_pvals(gene_module_df,
         combine(:normalized_cs => maximum => :data_final_normalized_cs)
     end
 
-    @floop ThreadedEx(basesize = N ÷ ncores) for _ in 1:N 
+    @floop ThreadedEx(basesize = N ÷ nthreads) for _ in 1:N 
         randomized_trajectory = generate_cumulative_mut_subset(gene_mutation_data,
                                                                genome_metadata,
                                                                pop_level_vec,

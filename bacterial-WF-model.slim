@@ -110,9 +110,9 @@ modifyChild()
 	// print the generation that we are on.
 	cat("Generation: "  + sim.generation + "\n");
 	
-	//Send segregating and fixed mutations to the outfile every 25 generations.
+	//Send segregating and fixed mutations to the outfile every 100 generations.
 	// IMPORTANT: the outfile path is relative to the current directory.	
-	if (sim.generation % 25 == 0)	
+	if (sim.generation % 100 == 0)	
 		sim.outputMutations(sim.mutations, outfile, append = T);
 	
 	// run for numgens, where numgens <= 100,000.
