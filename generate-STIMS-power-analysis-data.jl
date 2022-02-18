@@ -40,7 +40,7 @@ For each replicate dataset:
 -- write the dataframe to file.
 
 On HPC, use the following command to run:
-sbatch -t 96:00:00 -c 24 --mem-per-cpu=32G --wrap="julia --threads 24 generate-STIMS-power-analysis-data.jl 24"
+sbatch -t 96:00:00 -c 16 --mem-per-cpu=32G --wrap="julia --threads 16 generate-STIMS-power-analysis-data.jl 16"
 
 Then, use the R script analyze-STIMS-power.R to make figures using ggplot2.
 """
@@ -367,8 +367,8 @@ function GeneratePowerAnalysisDataFrame(ncores = 4)
     ## Variable parameters to test.
     timeseries_length_vec = [500, 1000, 2000, 5000]
     sampling_interval_vec = [25, 50, 100, 500]
-    num_genes_from_module_vec = [1, 10, 25, 50, 100]
     metagenomic_filtering_threshold_vec = [0, 0.001, 0.01, 0.05, 0.1]
+    num_genes_from_module_vec = [1, 10, 25, 50, 100]
     
     outdir = "../results/SLiM-results"
     genome_metadata_csv_path = joinpath(outdir, "SLiM_geneIDs.csv")
@@ -380,7 +380,8 @@ function GeneratePowerAnalysisDataFrame(ncores = 4)
     gene_module_df_dict = Dict(k => CSV.read(v, DataFrame) for (k,v) in gene_set_path_dict)
     
     SLiM_dataset_dir = "../results/SLiM-results/SLiM-replicate-runs"
-    SLiM_dataset_vec = readdir(SLiM_dataset_dir; join=true)
+    ## skip over any irrelevant files (like .DS_Store on macs!)
+    SLiM_dataset_vec = [x for x in readdir(SLiM_dataset_dir; join=true) if startswith(basename(x),"SLiM_")]
     
     for SLiM_file in SLiM_dataset_vec
         ## name as "Hypermutator" or "Nonmutator" based on the filename.
@@ -393,6 +394,7 @@ function GeneratePowerAnalysisDataFrame(ncores = 4)
                 SLiM_file, pop_name; timeseries_length = exp_length)
             for (module_type, module_df) in gene_module_df_dict         
                 pval_df = RunSTIMS_on_data(STIMS_input, genome_metadata, module_df, ncores)
+                println(module_type, ":")
                 println(pval_df)
                 ## push a new row onto the power analysis DataFrame.
                 push!(power_analysis_df, [pop_name,  module_type, replicate,"timeseries_length", exp_length, pval_df.count[1], pval_df.pval[1]])
@@ -403,6 +405,7 @@ function GeneratePowerAnalysisDataFrame(ncores = 4)
             STIMS_input = SLiM_output_to_STIMS_input(
                 SLiM_file, pop_name; sampling_interval = sampling_int)
             for (module_type, module_df) in gene_module_df_dict
+                println(module_type, ":")
                 pval_df = RunSTIMS_on_data(STIMS_input, genome_metadata, module_df, ncores)
                 println(pval_df)
                 ## push a new row onto the power analysis DataFrame.
@@ -414,6 +417,7 @@ function GeneratePowerAnalysisDataFrame(ncores = 4)
             STIMS_input = SLiM_output_to_STIMS_input(
                 SLiM_file, pop_name; freq_threshold = threshold)
             for (module_type, module_df) in gene_module_df_dict
+                println(module_type, ":")
                 pval_df = RunSTIMS_on_data(STIMS_input, genome_metadata, module_df, ncores)
                 println(pval_df)
                 push!(power_analysis_df, [pop_name,  module_type, replicate, "filtering_threshold", threshold, pval_df.count[1], pval_df.pval[1]])
@@ -425,6 +429,7 @@ function GeneratePowerAnalysisDataFrame(ncores = 4)
             for (module_type, module_df) in gene_module_df_dict
                 ## Only run on the first num_genes in the module.
                 filtered_gene_module_df = module_df[1:num_genes, :]
+                println(module_type, ":")
                 pval_df = RunSTIMS_on_data(STIMS_input, genome_metadata,
                                                  filtered_gene_module_df, ncores)
                 println(pval_df)
