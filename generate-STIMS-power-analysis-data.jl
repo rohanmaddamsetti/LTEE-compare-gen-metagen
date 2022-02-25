@@ -40,7 +40,7 @@ For each replicate dataset:
 -- write the dataframe to file.
 
 On HPC, use the following command to run:
-sbatch -t 96:00:00 --mem=32G --wrap="julia --threads=auto generate-STIMS-power-analysis-data.jl"
+sbatch -t 96:00:00 --mem=256G --wrap="julia --threads=auto generate-STIMS-power-analysis-data.jl"
 
 Then, use the R script analyze-STIMS-power.R to make figures using ggplot2.
 """
