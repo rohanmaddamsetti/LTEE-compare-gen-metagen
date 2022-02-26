@@ -84,6 +84,7 @@ make.pval.panel <- function(panel.df) {
         ## plot CIs.
         geom_errorbar(aes(ymin=Left,ymax=Right)) +
         facet_grid(MutatorStatus~GeneModule) +
+        ylim(0,1) +
         ylab("p-value") +
         geom_hline(yintercept = 0.05,linetype="dashed", color="red")
 }
@@ -98,7 +99,7 @@ make.pval.plot <- function(plot.df) {
 
     timeseries.length.panel <- make.pval.panel(timeseries.length.df) +
         ggtitle("Length of Evolution Experiment") +
-        xlab("Generations")
+        xlab("Generations") 
 
     sampling.interval.panel <- make.pval.panel(sampling.interval.df) +
         ggtitle("Interval between Samples") +
@@ -153,7 +154,7 @@ neutral.nonmut.plot <- power.analysis.df %>%
     filter(GeneModule == "neutral") %>%
     make.pval.plot()
 
-    purifying.nonmut.plot <- power.analysis.df %>%
+purifying.nonmut.plot <- power.analysis.df %>%
     filter(MutatorStatus == "Nonmutator") %>%
     filter(GeneModule == "purifying") %>%
     make.pval.plot()
@@ -165,9 +166,81 @@ ggsave("../results/SLiM-results/purifying-hypermut-plot.pdf", purifying.hypermut
 ggsave("../results/SLiM-results/positive-nonmut-plot.pdf", positive.nonmut.plot)
 ggsave("../results/SLiM-results/neutral-nonmut-plot.pdf", neutral.nonmut.plot)
 ggsave("../results/SLiM-results/purifying-nonmut-plot.pdf", purifying.nonmut.plot)
-####################################################################
+######################################################################################
+
+## Count the number of True Positives and False Negatives when testing
+## the positive selection module for positive selection.
+
+## Count the number of False Positives and True Negatives when testing
+## the neutral module for positive selection.
+
+## Count the number of True Positives and False Negatives when testing
+## the purifying selection module for purifying selection.
+
+## Count the number of False Positives and True Negatives when testing
+## the neutral module for purifying selection.
+
+calculate.outcomes <- function(df, pval.threshold) {
+    ## An outcome of F means STIMs incorrectly identified mode of selection, 
+    ## while T means STIMs correctly identified mode of selection.
+
+    df %>% 
+        mutate(Outcome = ifelse(GeneModule == "neutral" & Pval > 0.10 & Pval<0.90,T,F)) %>% 
+        mutate(Outcome = ifelse(GeneModule == "purifying" & Pval > 0.90, T, Outcome)) %>% 
+        mutate(Outcome = ifelse(GeneModule == "positive" & Pval < 0.10, T, Outcome))
+}
+
+positive.hypermut.df <- power.analysis.df %>%
+    filter(MutatorStatus == "Hypermutator") %>%
+    filter(GeneModule == "positive")
+
+neutral.hypermut.df <- power.analysis.df %>%
+    filter(MutatorStatus == "Hypermutator") %>%
+    filter(GeneModule == "neutral")
 
 
+purifying.hypermut.df <- power.analysis.df %>%
+    filter(MutatorStatus == "Hypermutator") %>%
+    filter(GeneModule == "purifying")
 
 
+pval.threshold <- 0.05
+## assume positive selection module here, testing for positive selection.
+test1 <- positive.hypermut.df %>%
+    group_by(MutatorStatus, Variable, VariableValue) %>%
+    mutate(Outcome = ifelse(Pval < pval.threshold, T, F)) %>%
+    summarize(TP = sum(Outcome == T), FN = n() - TP)
 
+## assume neutral module here, testing for positive selection.
+test2 <- neutral.hypermut.df %>%
+    group_by(MutatorStatus, Variable, VariableValue) %>%
+    mutate(Outcome = ifelse(Pval < pval.threshold, T, F)) %>%
+    summarize(FP = sum(Outcome == T), TN = n() - FP)
+
+## now, merge these two dataframes to make the confusion matrix.
+confusion.matrix1 <- full_join(test1, test2) %>%
+    ## See the definitions here:
+    ## https://en.wikipedia.org/wiki/Sensitivity_and_specificity
+    ## Statistical power is a synonym for sensitivity.
+    mutate(Sensitivity = 1 - (FN / (TP + FN))) %>%
+    mutate(Specificity = 1 - (FP / (FP + TN)))
+
+## assume negative selection module here, testing for negative selection.
+test3 <- purifying.hypermut.df %>%
+    group_by(MutatorStatus, Variable, VariableValue) %>%
+    mutate(Outcome = ifelse(Pval > (1 - pval.threshold), T, F)) %>%
+    summarize(TP = sum(Outcome == T), FN = n() - TP)
+
+## assume neutral module here, testing for positive selection.
+test4 <- neutral.hypermut.df %>%
+    group_by(MutatorStatus, Variable, VariableValue) %>%
+    mutate(Outcome = ifelse(Pval > (1 - pval.threshold), T, F)) %>%
+    summarize(FP = sum(Outcome == T), TN = n() - FP)
+
+## now, merge these two dataframes to make the confusion matrix.
+confusion.matrix2 <- full_join(test3, test4) %>%
+    ## See the definitions here:
+    ## https://en.wikipedia.org/wiki/Sensitivity_and_specificity
+    ## Statistical power is a synonym for sensitivity.
+    mutate(Sensitivity = 1 - (FN / (TP + FN))) %>%
+    mutate(Specificity = 1 - (FP / (FP + TN)))
