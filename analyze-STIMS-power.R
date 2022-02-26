@@ -7,10 +7,11 @@ library(cowplot)
 library(boot)
 
 
-calculate.Qval <- function(df, reps) {
+calculate.Qval <- function(df) {
     ## Calculate FDR-corrected p-values for each treatment, and average.
-    df %>% 
-        mutate(Qval = stats::p.adjust(Pval, method = "fdr", n = reps)) %>% 
+    df %>%
+        group_by(MutatorStatus, GeneModule, Variable, VariableValue) %>%  
+        summarise(Qval = stats::p.adjust(Pval, method = "fdr", n = n())) %>% 
         group_by(MutatorStatus, GeneModule, Variable, VariableValue) %>% 
         summarise(avg.Qval = mean(Qval), n = n()) %>%
         ## take the complement (1-q) for purifying selection.
@@ -152,12 +153,18 @@ neutral.nonmut.plot <- power.analysis.df %>%
     filter(GeneModule == "neutral") %>%
     make.pval.plot()
 
-purifying.nonmut.plot <- power.analysis.df %>%
+    purifying.nonmut.plot <- power.analysis.df %>%
     filter(MutatorStatus == "Nonmutator") %>%
     filter(GeneModule == "purifying") %>%
     make.pval.plot()
 
+ggsave("../results/SLiM-results/positive-hypermut-plot.pdf", positive.hypermut.plot)
+ggsave("../results/SLiM-results/neutral-hypermut-plot.pdf", neutral.hypermut.plot)
 ggsave("../results/SLiM-results/purifying-hypermut-plot.pdf", purifying.hypermut.plot)
+
+ggsave("../results/SLiM-results/positive-nonmut-plot.pdf", positive.nonmut.plot)
+ggsave("../results/SLiM-results/neutral-nonmut-plot.pdf", neutral.nonmut.plot)
+ggsave("../results/SLiM-results/purifying-nonmut-plot.pdf", purifying.nonmut.plot)
 ####################################################################
 
 
