@@ -305,28 +305,36 @@ nonmut.negative.plots <- plot_grid(
     nrow=3)
 
 
-hypermut.panelA <- plot.with.title(
+positive.hypermut.plot <- plot.with.title(
     hypermut.positive.plots,
     "STIMS detects positive selection in hypermutator populations")
 
-hypermut.panelB <- plot.with.title(
+negative.hypermut.plot <- plot.with.title(
     hypermut.negative.plots,
     "STIMS detects purifying selection in hypermutator populations")
 
-nonmut.panelA <- plot.with.title(
+positive.nonmut.plot <- plot.with.title(
     nonmut.positive.plots,
     "STIMS detects positive selection in nonmutator populations")
 
-nonmut.panelB <- plot.with.title(
+negative.nonmut.plot <- plot.with.title(
     nonmut.negative.plots,
     "STIMS does not detect purifying selection in nonmutator populations")
 
-hypermut.power.figure <- plot_grid(hypermut.panelA, hypermut.panelB, nrow=2)
-ggsave("../results/SLiM-results/hypermutator-power-figure.pdf",
-       hypermut.power.figure,
-       height = 8)
 
-nonmut.power.figure <- plot_grid(nonmut.panelA, nonmut.panelB, nrow=2)
-ggsave("../results/SLiM-results/nonmutator-power-figure.pdf",
-       nonmut.power.figure,
-       height = 8)
+ggsave("../results/SLiM-results/hypermutator-power-positive-selection.pdf",
+       positive.hypermut.plot,
+       height = 4)
+
+ggsave("../results/SLiM-results/hypermutator-power-negative-selection.pdf",
+       negative.hypermut.plot,
+       height = 4)
+
+ggsave("../results/SLiM-results/nonmutator-power-positive-selection.pdf",
+       positive.nonmut.plot,
+       height = 4)
+
+ggsave("../results/SLiM-results/nonmutator-power-negative-selection.pdf",
+       negative.nonmut.plot,
+       height = 4)
+
