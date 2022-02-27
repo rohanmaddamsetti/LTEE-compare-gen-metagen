@@ -322,19 +322,19 @@ negative.nonmut.plot <- plot.with.title(
     "STIMS does not detect purifying selection in nonmutator populations")
 
 
-ggsave("../results/SLiM-results/hypermutator-power-positive-selection.pdf",
+ggsave("../results/SLiM-results/figures/hypermutator-power-positive-selection.pdf",
        positive.hypermut.plot,
-       height = 4)
+       height = 4, width = 6.5)
 
-ggsave("../results/SLiM-results/hypermutator-power-negative-selection.pdf",
+ggsave("../results/SLiM-results/figures/hypermutator-power-negative-selection.pdf",
        negative.hypermut.plot,
-       height = 4)
+       height = 4, width = 6.5)
 
-ggsave("../results/SLiM-results/nonmutator-power-positive-selection.pdf",
+ggsave("../results/SLiM-results/figures/nonmutator-power-positive-selection.pdf",
        positive.nonmut.plot,
-       height = 4)
+       height = 4, width = 6.5)
 
-ggsave("../results/SLiM-results/nonmutator-power-negative-selection.pdf",
+ggsave("../results/SLiM-results/figures/nonmutator-power-negative-selection.pdf",
        negative.nonmut.plot,
-       height = 4)
+       height = 4, width = 6.5)
 

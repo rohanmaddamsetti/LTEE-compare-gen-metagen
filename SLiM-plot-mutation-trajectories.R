@@ -72,26 +72,17 @@ make.mutation.trajectory.plot <- function(df) {
 hypermut.df <- SLiM.output.to.dataframe(
     "../results/SLiM-results/SLiM_Ne1000000_mu10-8_numgens5000.txt",
     "Hypermutator",
-    freq_threshold = 0.001, ## reduce frequency filtering.
+    freq_threshold = 0.00001, ## reduce frequency filtering.
     Ne = 1e6)
 
 nonmut.df <- SLiM.output.to.dataframe(
     "../results/SLiM-results/SLiM_Ne1000000_mu10-10_numgens5000.txt",
     "Nonmutator",
-    freq_threshold = 0.001, ## reduce frequency filtering.
+    freq_threshold = 0.00001, ## reduce frequency filtering.
     Ne = 1e6)
 
 hypermut.p <- make.mutation.trajectory.plot(hypermut.df)
-ggsave("../results/SLiM-results/hypermut-trajectory.pdf", hypermut.p, height=4)
+ggsave("../results/SLiM-results/figures/hypermut-trajectory.pdf", hypermut.p, height=2.5, width=8)
 
 nonmut.p <- make.mutation.trajectory.plot(nonmut.df) 
-ggsave("../results/SLiM-results/nonmut-trajectory.pdf", nonmut.p, height=4)
-
-## If we are plotting multiple panels.
-##p2 <- hypermut.p + theme(axis.title.x = element_blank())
-
-#https://wilkelab.org/cowplot/articles/plot_grid.html
-##p1 <- plot_grid(p1, labels = 'A', label_size = 14, ncol=1)
-##p2 <- plot_grid(p2, labels = 'B', label_size = 14, ncol=1)
-
-
+ggsave("../results/SLiM-results/figures/nonmut-trajectory.pdf", nonmut.p, height=2.5, width=8)
