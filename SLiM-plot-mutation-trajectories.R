@@ -53,8 +53,8 @@ make.mutation.trajectory.plot <- function(df) {
     ggplot(df, aes(x=Generation, y=allele_freq, colour = as.factor(ID)))+
         geom_line() +
         gghighlight(max(allele_freq) == 1) +
-        xlab("Generation, t") +
-        ylab("Allele frequency f(t)") +
+        xlab("Generations") +
+        ylab("Allele frequency") +
         theme_classic() +
         theme(axis.text.x = element_text(colour = "black", size = 14,
                                          margin = (margin(t = 5, b=5)))) +
@@ -82,7 +82,7 @@ nonmut.df <- SLiM.output.to.dataframe(
     Ne = 1e6)
 
 hypermut.p <- make.mutation.trajectory.plot(hypermut.df)
-ggsave("../results/SLiM-results/figures/hypermut-trajectory.pdf", hypermut.p, height=2.5, width=9)
+ggsave("../results/SLiM-results/figures/hypermut-trajectory.pdf", hypermut.p, height=2.5, width=6.5)
 
 nonmut.p <- make.mutation.trajectory.plot(nonmut.df) 
-ggsave("../results/SLiM-results/figures/nonmut-trajectory.pdf", nonmut.p, height=2.5, width=9)
+ggsave("../results/SLiM-results/figures/nonmut-trajectory.pdf", nonmut.p, height=2.5, width=6.5)
