@@ -72,17 +72,17 @@ make.mutation.trajectory.plot <- function(df) {
 hypermut.df <- SLiM.output.to.dataframe(
     "../results/SLiM-results/SLiM_Ne1000000_mu10-8_numgens5000.txt",
     "Hypermutator",
-    freq_threshold = 0.00001, ## reduce frequency filtering.
+    freq_threshold = 0.00001, ## 1e-5 precision for nice curves.
     Ne = 1e6)
 
 nonmut.df <- SLiM.output.to.dataframe(
     "../results/SLiM-results/SLiM_Ne1000000_mu10-10_numgens5000.txt",
     "Nonmutator",
-    freq_threshold = 0.00001, ## reduce frequency filtering.
+    freq_threshold = 0.0000001, ## 1e-7 precision for nice curves.
     Ne = 1e6)
 
 hypermut.p <- make.mutation.trajectory.plot(hypermut.df)
-ggsave("../results/SLiM-results/figures/hypermut-trajectory.pdf", hypermut.p, height=2.5, width=8)
+ggsave("../results/SLiM-results/figures/hypermut-trajectory.pdf", hypermut.p, height=2.5, width=9)
 
 nonmut.p <- make.mutation.trajectory.plot(nonmut.df) 
-ggsave("../results/SLiM-results/figures/nonmut-trajectory.pdf", nonmut.p, height=2.5, width=8)
+ggsave("../results/SLiM-results/figures/nonmut-trajectory.pdf", nonmut.p, height=2.5, width=9)

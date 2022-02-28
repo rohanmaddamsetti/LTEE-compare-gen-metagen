@@ -253,7 +253,7 @@ function plot_base_layer(gene_mutation_data, genome_metadata, pop_level_vec;
     fancy_scientific = R"""function(x) {ifelse(x==0, "0", parse(text=gsub("[+]", "", gsub("e", " %*% 10^", scales::scientific_format()(x)))))}"""
 
     p = ggplot(middle_trajs, aes(x=:Time, y=:normalized_cs)) +
-        ylab("Cumulative number of mutations (normalized)") +
+        ylab("Cumulative mutations (normalized)") +
         theme_classic() +
         geom_point(size=0.2, color=my_color) +
         theme(var"axis.title.x" = element_text(size=13),
@@ -487,8 +487,8 @@ function RunSTIMS(mutation_csv_path, genome_metadata_csv_path,
     fig_width = 7
     ## if plotting a single population, then plot a smaller figure.
     if (length(pop_level_vec) == 1)
-        fig_height = 4
-        fig_width = 4
+        fig_height = 3
+        fig_width = 3
     end
     ggsave(outfile, Fig, height = fig_height, width = fig_width)
 end

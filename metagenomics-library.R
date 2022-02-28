@@ -514,7 +514,7 @@ plot.base.layer <- function(data, gene.metadata, subset.size=50, N=1000,
     middle.trajs <- get.middle.trajectories(bootstrapped.trajectories, alphaval)
     
     p <- ggplot(middle.trajs,aes(x=Time,y=normalized.cs)) +
-           ylab('Cumulative number of mutations (normalized)') +
+           ylab('Cumulative mutations (normalized)') +
            theme_classic() +
            geom_point(size=0.2, color=my.color) +
            theme(axis.title.x = element_text(size=14),
@@ -573,7 +573,7 @@ plot.cumulative.muts <- function(mut.data, my.color="black", ltee.not.mehta=TRUE
     ## for vanilla plotting, without null distributions, as plotted by
     ## plot.base.layer.
     p <- ggplot(mut.data, aes(x = Time, y = normalized.cs)) +
-        ylab('Cumulative number of mutations (normalized)') +
+        ylab('Cumulative mutations (normalized)') +
         theme_classic() +
         geom_point(size = 0.2, color = my.color) +
         geom_step(size = 0.2, color = my.color) +
@@ -664,7 +664,7 @@ plot.base.layer.over.all.pops <- function(data, REL606.genes, subset.size=50,
         bootstrapped.trajectories, alphaval)
 
     p <- ggplot(middle.trajs,aes(x=Time,y=normalized.cs)) +
-        ylab('Cumulative number of mutations (normalized)') +
+        ylab('Cumulative mutations (normalized)') +
         theme_classic() +
         geom_point(size=0.2, color=my.color) +
         theme(axis.title.x = element_text(size=14),
@@ -906,7 +906,7 @@ calc.slope.of.cumulative.muts <- function(c.muts) {
 plot.slope.of.cumulative.muts <- function(mut.data, my.color="black") {
     ## calculate derivative of cumulative numbers of mutations in each category.
     p <- ggplot(mut.data,aes(x=Time,y=D.normalized.cs)) +
-        ylab('Slope of Cumulative number of mutations (normalized)') +
+        ylab('Slope of cumulative mutations (normalized)') +
         theme_classic() +
         geom_point(size=0.2, color=my.color) +
         geom_step(size=0.2, color=my.color) +
@@ -953,7 +953,7 @@ plot.slope.of.base.layer <- function(data, subset.size=300, N=1000, alphaval = 0
     filtered.trajectories <- filter.trajectories(bootstrapped.trajectories, alphaval)
 
     p <- ggplot(filtered.trajectories,aes(x=Time,y=D.normalized.cs)) +
-        ylab('slope of cumulative number of mutations (normalized)') +
+        ylab('slope of cumulative mutations (normalized)') +
         theme_classic() +
         geom_point(size=0.2, color='gray') +
         geom_smooth() +
