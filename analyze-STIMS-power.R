@@ -138,13 +138,13 @@ plot.sampling_interval.specificity <- partial(
 plot.timeseries_length.sensitivity <- partial(
     .f=.plot.sensitivity,
     "timeseries_length",
-    "Timeseries length (generations)")
+    "Time series length (generations)")
 
 
 plot.timeseries_length.specificity <- partial(
     .f=.plot.specificity,
     "timeseries_length",
-    "Timeseries length (generations)")
+    "Time series length (generations)")
 
 
 ## This code comes straight from the cowplot documentation:
@@ -197,7 +197,13 @@ hypermut.positive.num_genes_from_module.sensitivity.plot <- positive.confusion.m
 
 hypermut.positive.num_genes_from_module.specificity.plot <- positive.confusion.matrix %>%
     plot.num_genes_from_module.specificity("Hypermutator")
-    
+
+hypermut.positive.sampling_interval.sensitivity.plot <- positive.confusion.matrix %>%
+    plot.sampling_interval.sensitivity("Hypermutator")
+
+hypermut.positive.sampling_interval.specificity.plot <- positive.confusion.matrix %>%
+plot.sampling_interval.specificity("Hypermutator")
+
 hypermut.positive.timeseries_length.sensitivity.plot <- positive.confusion.matrix %>%
     plot.timeseries_length.sensitivity("Hypermutator")
 
@@ -210,9 +216,11 @@ hypermut.positive.plots <- plot_grid(
     hypermut.positive.filtering_threshold.specificity.plot,
     hypermut.positive.num_genes_from_module.sensitivity.plot,
     hypermut.positive.num_genes_from_module.specificity.plot,
+    hypermut.positive.sampling_interval.sensitivity.plot,
+    hypermut.positive.sampling_interval.specificity.plot,
     hypermut.positive.timeseries_length.sensitivity.plot,
     hypermut.positive.timeseries_length.specificity.plot,
-    nrow=3)
+    nrow=4)
                                      
 
 ## make negative selection hypermutator plots
@@ -227,7 +235,13 @@ hypermut.negative.num_genes_from_module.sensitivity.plot <- negative.confusion.m
 
 hypermut.negative.num_genes_from_module.specificity.plot <- negative.confusion.matrix %>%
     plot.num_genes_from_module.specificity("Hypermutator")
-    
+
+hypermut.negative.sampling_interval.sensitivity.plot <- negative.confusion.matrix %>%
+    plot.sampling_interval.sensitivity("Hypermutator")
+
+hypermut.negative.sampling_interval.specificity.plot <- negative.confusion.matrix %>%
+plot.sampling_interval.specificity("Hypermutator")
+
 hypermut.negative.timeseries_length.sensitivity.plot <- negative.confusion.matrix %>%
     plot.timeseries_length.sensitivity("Hypermutator")
 
@@ -240,9 +254,11 @@ hypermut.negative.plots <- plot_grid(
     hypermut.negative.filtering_threshold.specificity.plot,
     hypermut.negative.num_genes_from_module.sensitivity.plot,
     hypermut.negative.num_genes_from_module.specificity.plot,
+    hypermut.negative.sampling_interval.sensitivity.plot,
+    hypermut.negative.sampling_interval.specificity.plot,
     hypermut.negative.timeseries_length.sensitivity.plot,
     hypermut.negative.timeseries_length.specificity.plot,
-    nrow=3)
+    nrow=4)
 
 
 ## make positive selection nonmutator plots.
@@ -257,7 +273,13 @@ nonmut.positive.num_genes_from_module.sensitivity.plot <- positive.confusion.mat
 
 nonmut.positive.num_genes_from_module.specificity.plot <- positive.confusion.matrix %>%
     plot.num_genes_from_module.specificity("Nonmutator")
-    
+
+nonmut.positive.sampling_interval.sensitivity.plot <- positive.confusion.matrix %>%
+    plot.sampling_interval.sensitivity("Nonmutator")
+
+nonmut.positive.sampling_interval.specificity.plot <- positive.confusion.matrix %>%
+    plot.sampling_interval.specificity("Nonmutator")
+
 nonmut.positive.timeseries_length.sensitivity.plot <- positive.confusion.matrix %>%
     plot.timeseries_length.sensitivity("Nonmutator")
 
@@ -270,9 +292,11 @@ nonmut.positive.plots <- plot_grid(
     nonmut.positive.filtering_threshold.specificity.plot,
     nonmut.positive.num_genes_from_module.sensitivity.plot,
     nonmut.positive.num_genes_from_module.specificity.plot,
+    nonmut.positive.sampling_interval.sensitivity.plot,
+    nonmut.positive.sampling_interval.specificity.plot,
     nonmut.positive.timeseries_length.sensitivity.plot,
     nonmut.positive.timeseries_length.specificity.plot,
-    nrow=3)
+    nrow=4)
 
 
 ## make negative selection nonmutator plots.
@@ -287,7 +311,13 @@ nonmut.negative.num_genes_from_module.sensitivity.plot <- negative.confusion.mat
 
 nonmut.negative.num_genes_from_module.specificity.plot <- negative.confusion.matrix %>%
     plot.num_genes_from_module.specificity("Nonmutator")
-    
+
+nonmut.negative.sampling_interval.sensitivity.plot <- negative.confusion.matrix %>%
+    plot.sampling_interval.sensitivity("Nonmutator")
+
+nonmut.negative.sampling_interval.specificity.plot <- negative.confusion.matrix %>%
+    plot.sampling_interval.specificity("Nonmutator")
+
 nonmut.negative.timeseries_length.sensitivity.plot <- negative.confusion.matrix %>%
     plot.timeseries_length.sensitivity("Nonmutator")
 
@@ -300,9 +330,11 @@ nonmut.negative.plots <- plot_grid(
     nonmut.negative.filtering_threshold.specificity.plot,
     nonmut.negative.num_genes_from_module.sensitivity.plot,
     nonmut.negative.num_genes_from_module.specificity.plot,
+    nonmut.negative.sampling_interval.sensitivity.plot,
+    nonmut.negative.sampling_interval.specificity.plot,
     nonmut.negative.timeseries_length.sensitivity.plot,
     nonmut.negative.timeseries_length.specificity.plot,
-    nrow=3)
+    nrow=4)
 
 
 positive.hypermut.plot <- plot.with.title(
@@ -324,17 +356,17 @@ negative.nonmut.plot <- plot.with.title(
 
 ggsave("../results/SLiM-results/figures/hypermutator-power-positive-selection.pdf",
        positive.hypermut.plot,
-       height = 4, width = 6.5)
+       height = 4.5, width = 6.5)
 
 ggsave("../results/SLiM-results/figures/hypermutator-power-negative-selection.pdf",
        negative.hypermut.plot,
-       height = 4, width = 6.5)
+       height = 4.5, width = 6.5)
 
 ggsave("../results/SLiM-results/figures/nonmutator-power-positive-selection.pdf",
        positive.nonmut.plot,
-       height = 4, width = 6.5)
+       height = 4.5, width = 6.5)
 
 ggsave("../results/SLiM-results/figures/nonmutator-power-negative-selection.pdf",
        negative.nonmut.plot,
-       height = 4, width = 6.5)
+       height = 4.5, width = 6.5)
 
