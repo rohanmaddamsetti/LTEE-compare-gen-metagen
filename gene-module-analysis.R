@@ -282,7 +282,7 @@ gene.mutation.densities <- REL606.genes %>%
 #### We need to keep track of genes that haven't been hit by any mutations
 #### in a given mutation class (sv, indels, dN, etc.)
 gene.mutation.densities[is.na(gene.mutation.densities)] <- 0
-gene.mutation.densities <- tbl_df(gene.mutation.densities)
+gene.mutation.densities <- as_tibble(gene.mutation.densities)
 
 ## need this next line to calculate p-values.
 no.dS.count <- sum(all.except.dS.density$all.except.dS.mut.count)
@@ -442,7 +442,7 @@ core.rando.layer <- plot.base.layer(gene.mutation.data, REL606.genes,
 coreFig <- core.rando.layer %>%
     add.cumulative.mut.layer(c.core.muts, my.color="black") %>%
     add.cumulative.mut.layer(c.noncore.muts,my.color="red")
-
+ggsave("../results/gene-modules/figures/core-genes.pdf", coreFig)
 ################
 ## re-run STIMS, summing mutations over all LTEE populations.
 
@@ -1130,19 +1130,20 @@ m1.blank.rando.layer <- plot.base.layer(m1.pop.gene.mutation.data, REL606.genes,
 
 m1.ribosome.associated.prot.Fig <- m1.blank.rando.layer %>%
     add.cumulative.mut.layer(c.m1.ribosome.associated.prot.muts, my.color="black")
+
 ggsave("../results/gene-modules/figures/Fig1-panels/Fig1-STIMS-1.pdf",
-       m1.ribosome.associated.prot.Fig,height=4.2, width=4.2)
+       m1.ribosome.associated.prot.Fig,height=3.25, width=3.25)
 
 ## plot this panel to add to the figure.
 m1.rando.layer <- plot.base.layer(m1.pop.gene.mutation.data, REL606.genes,
                                   subset.size=ribosome.associated.prot.subset.size)
 
-exampleFig <- m1.rando.layer %>%
+Fig1.example.panel <- m1.rando.layer %>%
     add.cumulative.mut.layer(
         c.m1.ribosome.associated.prot.muts, my.color="black")
 
 ggsave("../results/gene-modules/figures/Fig1-panels/Fig1-STIMS-2.pdf",
-       m1.rando.layer,height=4.2, width=4.2)
+       m1.rando.layer,height=3.25, width=3.25)
 
 ggsave("../results/gene-modules/figures/Fig1-panels/Fig1-STIMS-3.pdf",
-       exampleFig,height=4.2, width=4.2)
+       Fig1.example.panel,height=3.25, width=3.25)
