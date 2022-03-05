@@ -529,6 +529,12 @@ ggsave("../results/gene-modules/figures/S6Fig.pdf", S6Fig)
 rm(S6Fig)
 rm(proteome.rando.layer)
 
+## let's check U-sector p-values, for the manuscript.
+U.sector.pvals <- calc.traj.pvals(
+    gene.mutation.data, REL606.genes,
+    filter(proteome.assignments,Sector.assigned=='U')$Gene)
+
+
 ################
 ## re-run STIMS, summing mutations over all LTEE populations.
 
