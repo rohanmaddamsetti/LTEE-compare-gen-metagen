@@ -116,14 +116,14 @@ neutral.base.layer <- plot.base.layer(
     REL606.genes,
     subset.size=length(unique(neutral.genes$Gene)))
 
-## Figure 4: plot of "gold standard" neutral genes.
-Fig4 <- neutral.base.layer %>% 
+## Figure 5: plot of "gold standard" neutral genes.
+Fig5 <- neutral.base.layer %>% 
     add.cumulative.mut.layer(c.neutral.genes, my.color="black")
-ggsave("../results/gene-modules/figures/Fig4.pdf", Fig4)
+ggsave("../results/gene-modules/figures/Fig4.pdf", Fig5)
 
 ## remove from memory after saving to file.
 rm(neutral.base.layer)
-rm(Fig4)
+rm(Fig5)
 
 ## calculate more rigorous statistics than the figures.
 neutral.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
@@ -191,12 +191,12 @@ purifying.base.layer <- plot.base.layer(
     subset.size=length(unique(purifying.genes$Gene)))
 
 ##  Yes. evidence of purifying selection in these genes based on my test.
-Fig5 <- purifying.base.layer %>% 
+Fig6 <- purifying.base.layer %>% 
     add.cumulative.mut.layer(c.purifying.genes, my.color="black")
-ggsave("../results/gene-modules/figures/Fig5.pdf", Fig5)
+ggsave("../results/gene-modules/figures/Fig5.pdf", Fig6)
 
 rm(purifying.base.layer)
-rm(Fig5)
+rm(Fig6)
 
 ## calculate more rigorous statistics than the figures.
 purifying.pvals <- calc.traj.pvals(gene.mutation.data, REL606.genes,
@@ -349,10 +349,10 @@ top.nonmut.metadata <- REL606.genes %>% filter(Gene %in% top.nonmut.genomics$Gen
 
 c.top.nonmuts <- calc.LTEE.cumulative.muts(top.nonmut.mutation.data, top.nonmut.metadata)
 
-Fig6 <- rando.plot %>%
+Fig7 <- rando.plot %>%
     add.cumulative.mut.layer(c.top.nonmuts,my.color="black")
-ggsave("../results/gene-modules/figures/Fig6.pdf",Fig6)
-rm(Fig6)
+ggsave("../results/gene-modules/figures/Fig6.pdf",Fig7)
+rm(Fig7)
 
 ## calculate more rigorous statistics than the figures.
 top.nonmut.pvals <- calc.traj.pvals(gene.mutation.data,
@@ -758,17 +758,17 @@ Imodulon.regulators.base.layer <- plot.base.layer(
     subset.size=length(unique(Imodulon.regulators$regulator)))
 
 ## Figure for paper:  compare I-modulon regulators to the genes they regulate.
-Fig7 <- Imodulon.regulators.base.layer %>% ## null for regulators
+Fig8 <- Imodulon.regulators.base.layer %>% ## null for regulators
     add.LTEE.base.layer(gene.mutation.data, ## add null for regulated genes
                    REL606.genes,
                    subset.size=length(unique(Imodulon.regulated$Gene)),
                    my.color="pink") %>%
     add.cumulative.mut.layer(c.Imodulon.regulators, my.color="black") %>%
     add.cumulative.mut.layer(c.Imodulon.regulated, my.color="red")
-ggsave("../results/gene-modules/figures/Fig7.pdf", Fig7)
+ggsave("../results/gene-modules/figures/Fig8.pdf", Fig8)
 
 rm(Imodulon.regulators.base.layer)
-rm(Fig7)
+rm(Fig8)
 
 ################
 ## re-run STIMS, summing mutations over all LTEE populations.
@@ -1064,7 +1064,7 @@ ggsave("../results/gene-modules/figures/S11Fig.pdf", S11Fig, width=5, height=5)
 rm(Mehta.base.layer)
 rm(S11Fig)
 
-## combine both replicates for Figure 8.
+## combine both replicates for Figure 9.
 combined.Mehta.data <- Mehta.data %>%
     mutate(Population = recode(Population,
                                `Replicate 1` = "Replicate populations combined",
@@ -1082,12 +1082,12 @@ combined.Mehta.base.layer <- plot.base.layer(
     subset.size = nrow(PAO11.regulators),
     ltee.not.mehta = FALSE)
 
-Fig8 <- combined.Mehta.base.layer %>%
+Fig9 <- combined.Mehta.base.layer %>%
     add.cumulative.mut.layer(c.combined.Mehta.regulators, my.color="black")
-ggsave("../results/gene-modules/figures/Fig8.pdf", Fig8, width=5, height=5)
-rm(Fig8)
+ggsave("../results/gene-modules/figures/Fig9.pdf", Fig9, width=5, height=5)
+rm(Fig9)
 
-## calculate rigorous statistics for Figure 8.
+## calculate rigorous statistics for Figure 9.
 ## takes about 5 minutes to calculate.
 Mehta.pvals <- calc.traj.pvals(combined.Mehta.data, PAO11.genes,
                                unique(PAO11.regulators$Gene),
@@ -1095,8 +1095,8 @@ Mehta.pvals <- calc.traj.pvals(combined.Mehta.data, PAO11.genes,
 gc() ## garbage collect memory.
 
 ##########################################################################
-## Example plots for the new Figure 1.
-## The new figure 1 shows:
+## Example plots for Figure 2.
+## Figure 2 shows:
 ## 1) the nature of the input data,
 ## 2) the test statistic
 ## 3) what comparisons are being performed.
@@ -1137,19 +1137,19 @@ m1.blank.rando.layer <- plot.base.layer(m1.pop.gene.mutation.data, REL606.genes,
 m1.ribosome.associated.prot.Fig <- m1.blank.rando.layer %>%
     add.cumulative.mut.layer(c.m1.ribosome.associated.prot.muts, my.color="black")
 
-ggsave("../results/gene-modules/figures/Fig1-panels/Fig1-STIMS-1.pdf",
+ggsave("../results/gene-modules/figures/Fig2-panels/Fig2-STIMS-1.pdf",
        m1.ribosome.associated.prot.Fig,height=3.25, width=3.25)
 
 ## plot this panel to add to the figure.
 m1.rando.layer <- plot.base.layer(m1.pop.gene.mutation.data, REL606.genes,
                                   subset.size=ribosome.associated.prot.subset.size)
 
-Fig1.example.panel <- m1.rando.layer %>%
+Fig2.example.panel <- m1.rando.layer %>%
     add.cumulative.mut.layer(
         c.m1.ribosome.associated.prot.muts, my.color="black")
 
-ggsave("../results/gene-modules/figures/Fig1-panels/Fig1-STIMS-2.pdf",
+ggsave("../results/gene-modules/figures/Fig2-panels/Fig2-STIMS-2.pdf",
        m1.rando.layer,height=3.25, width=3.25)
 
-ggsave("../results/gene-modules/figures/Fig1-panels/Fig1-STIMS-3.pdf",
-       Fig1.example.panel,height=3.25, width=3.25)
+ggsave("../results/gene-modules/figures/Fig2-panels/Fig2-STIMS-3.pdf",
+       Fig2.example.panel,height=3.25, width=3.25)
