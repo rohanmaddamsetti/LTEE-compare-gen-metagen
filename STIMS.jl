@@ -522,7 +522,15 @@ end
 
 
 function run_examples()
-    RunSTIMS("../results/LTEE-metagenome-mutations.csv", "../results/REL606_IDs.csv", "../data/neutral_compilation.csv", "../results/gene-modules/STIMS-jl-test-figures/neutral.pdf")
+    RunSTIMS("../results/LTEE-metagenome-mutations.csv",
+             "../results/REL606_IDs.csv",
+             "../data/neutral_compilation.csv",
+             "../results/gene-modules/STIMS-jl-test-figures/neutral.pdf")
+
+        RunSTIMS("../results/LTEE-metagenome-mutations.csv",
+             "../results/REL606_IDs.csv",
+             "../results/gene-modules/non-Tenaillon-Imodulon-regulators.csv",
+             "../results/gene-modules/STIMS-jl-test-figures/nonTenaillonImodulonRegulators.pdf")
 end
 
 

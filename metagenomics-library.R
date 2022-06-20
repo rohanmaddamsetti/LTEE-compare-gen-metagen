@@ -851,7 +851,7 @@ calc.gene.mutation.density <- function(gene.mutation.data, mut_type_vec) {
     ## CRITICAL STEP: replace NAs with zeros.
     ## We need to keep track of genes that haven't been hit by any mutations
     density.df[is.na(density.df)] <- 0
-    density.df <- tbl_df(density.df)
+    density.df <- as_tibble(density.df)
 
     return(density.df)
 }
@@ -871,7 +871,7 @@ pop.calc.gene.mutation.density <- function(gene.mutation.data, mut_type_vec) {
     ## CRITICAL STEP: replace NAs with zeros.
     ## We need to keep track of genes that haven't been hit by any mutations
     density.df[is.na(density.df)] <- 0
-    density.df <- tbl_df(density.df)
+    density.df <- as_tibble(density.df)
     
     return(density.df)
 }

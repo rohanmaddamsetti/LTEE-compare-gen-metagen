@@ -5,7 +5,9 @@ reformat-I-modulons.py by Rohan Maddamsetti
 
 This script reads in the listing of genes in each I-modulon in
 precise-db-repo/data/imodulon_gene_names.txt,
-and reformats it into an R-friendly format for metagenomics-analysis.R.
+and reformats it into an R-friendly format for gene-module-analysis.R.
+
+NOTE: This set of genes still needs to be mapped from K-12 to REL606.
 
 Usage: python reformat-I-modulons.py > ../results/gene-modules/genes-to-I-modulons.csv
 '''

@@ -50,6 +50,14 @@ pop.sum.mutations <- gene.mutation.data %>%
     summarise(pop.mutation.total = n(),
               background.mut.density = pop.mutation.total/TOTAL_GENE_BP)
 
+## all mutations, including synonymous mutations are included.
+## when I EXCLUDE synonymous (but not any other type of mutation),
+## I find signals of purifying selection on the following genes:
+## acnB (aconitate hydratase), ybjL (hypothetical protein), 
+## yhdP (conserved membrane protein predicted transporter), recG (ATP-dependent DNA helicase),
+## cyoB (cytochrome o ubiquinol oxidase subunit I), wcaJ (predicted UDP-glucose lipid carrier transferase),
+## and atpD (F0F1 ATP synthase subunit beta).
+
 pop.poisson.data.analysis <- gene.mutation.data %>%
     group_by(Population,Gene,locus_tag,gene_length) %>%
     summarize(mut.count = n()) %>% ## keep empty groups!
@@ -91,8 +99,6 @@ gene.mutation.data.total <- gene.mutation.data %>%
 
 all.ltee.poisson.data.analysis <- gene.mutation.data %>%
     group_by(Gene,locus_tag,gene_length) %>%
-    ## filter out synonymous mutations.
-    filter(Annotation != "synonymous") %>%
     summarize(mut.count = n()) %>% ## keep empty groups!
     ungroup() %>%
     ## include genes with zero mutations by joining to REL606.genes.
@@ -186,7 +192,9 @@ neutral.gene.result <- Run.All.LTEE.Poisson.module.analysis(neutral.genes$Gene) 
 ## Note: this is a dataframe with one column, called regulator.
 Imodulon.regulators <- read.csv(
     "../data/rohans-I-modulons-to-regulators.csv", as.is =T) %>%
-    select(regulator) %>% drop_na() %>% distinct()
+    select(regulator) %>% drop_na() %>% distinct() %>%
+    ## This makes sure that all these genes are in the set of genes that pass filters in REL606.
+    filter(regulator %in% REL606.genes$Gene)
     
 Imodulon.regulator.result <- Run.All.LTEE.Poisson.module.analysis(
     Imodulon.regulators$regulator) %>%
